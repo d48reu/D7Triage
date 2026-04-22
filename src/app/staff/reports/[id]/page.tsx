@@ -30,27 +30,35 @@ export default async function StaffReportPage({
   const notes = listStaffNotes(report.id);
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 py-10 text-slate-900">
-      <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-md border border-slate-200 bg-white p-6 shadow-sm">
-          <Link href="/staff" className="text-sm text-slate-600 underline">
-            Back to inbox
+    <main className="min-h-screen bg-slate-100 text-slate-950">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
+          <div>
+            <Link href="/staff" className="text-sm font-medium text-sky-700">
+              Staff inbox
+            </Link>
+            <h1 className="mt-1 text-xl font-semibold">Case detail</h1>
+          </div>
+          <Link
+            href={`/report/${report.publicTrackingToken}`}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Tracking Page
           </Link>
+        </div>
+      </header>
+
+      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-700">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {report.category}
               </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight">
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight">
                 {formatStatus(report.status)}
-              </h1>
+              </h2>
             </div>
-            <Link
-              href={`/report/${report.publicTrackingToken}`}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
-            >
-              Tracking Page
-            </Link>
           </div>
 
           <div className="mt-6 grid gap-4 border-t border-slate-200 pt-6 sm:grid-cols-2">
@@ -76,7 +84,7 @@ export default async function StaffReportPage({
         </section>
 
         <aside className="space-y-6">
-          <section className="rounded-md border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Update status</h2>
             <form action={updateIssueStatusAction} className="mt-4 space-y-4">
               <input type="hidden" name="reportId" value={report.id} />
@@ -87,7 +95,7 @@ export default async function StaffReportPage({
                 <select
                   name="status"
                   defaultValue={report.status}
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-teal-600"
+                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                 >
                   {ISSUE_STATUSES.map((status) => (
                     <option key={status} value={status}>
@@ -102,27 +110,27 @@ export default async function StaffReportPage({
                 </span>
                 <textarea
                   name="publicNote"
-                  className="min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-teal-600"
+                  className="min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                   placeholder="Optional note shown on the tracking page"
                 />
               </label>
               <button
                 type="submit"
-                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
               >
                 Save Status
               </button>
             </form>
           </section>
 
-          <section className="rounded-md border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Internal note</h2>
             <form action={addStaffNoteAction} className="mt-4 space-y-4">
               <input type="hidden" name="reportId" value={report.id} />
               <textarea
                 name="body"
                 required
-                className="min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-teal-600"
+                className="min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                 placeholder="Add staff-only context, referral attempts, or next steps."
               />
               <button
@@ -135,7 +143,7 @@ export default async function StaffReportPage({
           </section>
         </aside>
 
-        <section className="rounded-md border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+        <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
           <h2 className="text-lg font-semibold">Timeline</h2>
           <div className="mt-4 grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
@@ -143,7 +151,7 @@ export default async function StaffReportPage({
                 Status events
               </h3>
               {events.map((event) => (
-                <div key={event.id} className="border-l-2 border-teal-600 pl-4">
+                <div key={event.id} className="border-l-2 border-sky-700 pl-4">
                   <div className="text-sm font-semibold">
                     {formatStatus(event.status)}
                   </div>

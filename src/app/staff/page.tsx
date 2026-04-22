@@ -7,70 +7,72 @@ export const dynamic = "force-dynamic";
 
 export default function StaffPage() {
   const reports = listIssueReports();
+  const needsReview = reports.filter((report) => report.status === "received");
+  const inProgress = reports.filter((report) =>
+    ["needs_review", "routed", "awaiting_agency"].includes(report.status),
+  );
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-6 py-10 text-slate-900">
-      <div className="mx-auto max-w-6xl">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+    <main className="min-h-screen bg-slate-100 text-slate-950">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
           <div>
-            <Link href="/" className="text-sm text-slate-600 underline">
-              Back
+            <Link href="/" className="text-sm font-medium text-sky-700">
+              District 7 Issue Reporter
             </Link>
-            <h1 className="mt-6 text-4xl font-semibold tracking-tight">
-              Staff inbox
-            </h1>
-            <p className="mt-3 text-slate-700">
-              Local-first triage queue for submitted constituent reports.
-            </p>
+            <h1 className="mt-1 text-xl font-semibold">Staff inbox</h1>
           </div>
           <Link
             href="/report"
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
           >
             New Report
           </Link>
         </div>
+      </header>
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mx-auto max-w-7xl px-5 py-6">
+        <section className="grid gap-3 sm:grid-cols-3">
           <Metric label="All reports" value={reports.length} />
-          <Metric
-            label="Needs review"
-            value={reports.filter((report) => report.status === "received").length}
-          />
-          <Metric
-            label="In progress"
-            value={
-              reports.filter((report) =>
-                ["needs_review", "routed", "awaiting_agency"].includes(
-                  report.status,
-                ),
-              ).length
-            }
-          />
+          <Metric label="Needs review" value={needsReview.length} />
+          <Metric label="In progress" value={inProgress.length} />
         </section>
 
-        <section className="mt-8 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+        <section className="mt-6 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+          <div className="grid grid-cols-[1fr_150px_170px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 max-md:hidden">
+            <div>Report</div>
+            <div>Status</div>
+            <div>Submitted</div>
+          </div>
+
           {reports.length > 0 ? (
             <div className="divide-y divide-slate-200">
               {reports.map((report) => (
                 <Link
                   key={report.id}
                   href={`/staff/reports/${report.id}`}
-                  className="grid gap-3 p-5 transition hover:bg-slate-50 md:grid-cols-[1fr_180px_160px]"
+                  className="grid gap-3 px-4 py-4 transition hover:bg-slate-50 md:grid-cols-[1fr_150px_170px]"
                 >
                   <div>
-                    <div className="font-semibold">{report.category}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-slate-950">
+                        {report.category}
+                      </span>
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600 md:hidden">
+                        {formatStatus(report.status)}
+                      </span>
+                    </div>
                     <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">
                       {report.description}
                     </p>
-                    <div className="mt-2 text-xs text-slate-500">
+                    <div className="mt-1 text-xs text-slate-500">
                       {report.addressText}
                     </div>
                   </div>
-                  <div className="text-sm text-slate-700">
+                  <div className="hidden text-sm text-slate-700 md:block">
                     {formatStatus(report.status)}
                   </div>
-                  <div className="text-sm text-slate-500">
+                  <div className="text-xs text-slate-500 md:text-sm">
                     {new Date(report.createdAt).toLocaleString()}
                   </div>
                 </Link>
@@ -90,9 +92,11 @@ export default function StaffPage() {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="text-3xl font-semibold">{value}</div>
-      <div className="mt-1 text-sm text-slate-600">{label}</div>
+    <div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-1 text-xs font-medium uppercase tracking-[0.08em] text-slate-500">
+        {label}
+      </div>
     </div>
   );
 }
