@@ -1,0 +1,181 @@
+"use client";
+
+import { useActionState } from "react";
+import { ISSUE_CATEGORIES } from "@/lib/issue-types";
+import {
+  submitIssueReportAction,
+  type SubmitIssueReportState,
+} from "@/server-actions/issues";
+
+const initialState: SubmitIssueReportState = {
+  status: "idle",
+  message: "Reports are saved locally and reviewed by staff.",
+};
+
+export function ReportForm() {
+  const [state, formAction, isPending] = useActionState(
+    submitIssueReportAction,
+    initialState,
+  );
+
+  return (
+    <form action={formAction} className="rounded-md border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 px-5 py-4">
+        <h2 className="text-lg font-semibold">Issue details</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Use plain language. Staff will review and route it.
+        </p>
+      </div>
+
+      <div className="space-y-5 p-5">
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium text-slate-800">
+            Category
+          </span>
+          <select
+            name="category"
+            required
+            defaultValue="Other / unsure"
+            className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+          >
+            {ISSUE_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium text-slate-800">
+            Description
+          </span>
+          <textarea
+            name="description"
+            required
+            minLength={12}
+            className="min-h-36 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+            placeholder="Example: There is a large pothole near the school entrance and cars are swerving around it."
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium text-slate-800">
+            Location or address
+          </span>
+          <input
+            name="addressText"
+            required
+            className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+            placeholder="Street address, intersection, park, or landmark"
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium text-slate-800">
+            Photos
+          </span>
+          <input
+            name="photos"
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+          />
+          <p className="mt-2 text-xs text-slate-500">
+            Optional. JPEG, PNG, WebP, or GIF. Max 8 MB each.
+          </p>
+        </label>
+      </div>
+
+      <div className="border-y border-slate-200 bg-slate-50 px-5 py-4">
+        <h2 className="text-lg font-semibold">Follow-up contact</h2>
+      </div>
+
+      <div className="space-y-5 p-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field name="residentName" label="Name" placeholder="Optional" />
+          <Field
+            name="residentEmail"
+            label="Email"
+            placeholder="you@example.com"
+            type="email"
+            required
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field name="residentPhone" label="Phone" placeholder="Optional" />
+          <Field
+            name="preferredLanguage"
+            label="Preferred language"
+            defaultValue="English"
+          />
+        </div>
+
+        <label className="flex gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+          <input
+            name="contactConsent"
+            type="checkbox"
+            required
+            defaultChecked
+            className="mt-1"
+          />
+          <span>I agree to receive email updates about this report.</span>
+        </label>
+
+        <div
+          className={`rounded-md px-3 py-2 text-sm ${
+            state.status === "error"
+              ? "bg-rose-50 text-rose-800"
+              : "bg-slate-50 text-slate-600"
+          }`}
+        >
+          {state.message}
+        </div>
+
+        <div className="flex justify-end border-t border-slate-200 pt-5">
+          <button
+            type="submit"
+            disabled={isPending}
+            className="rounded-md bg-sky-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-60"
+          >
+            {isPending ? "Submitting..." : "Submit Report"}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function Field({
+  name,
+  label,
+  placeholder,
+  type = "text",
+  required = false,
+  defaultValue,
+}: {
+  name: string;
+  label: string;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+  defaultValue?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-medium text-slate-800">
+        {label}
+      </span>
+      <input
+        name={name}
+        type={type}
+        required={required}
+        defaultValue={defaultValue}
+        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+        placeholder={placeholder}
+      />
+    </label>
+  );
+}

@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { ROUTING_RULES } from "@/lib/routing-matrix";
+import { requireStaffSession } from "@/lib/staff-auth";
 
-export default function RoutingGuidePage() {
+export default async function RoutingGuidePage() {
+  await requireStaffSession();
+
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <header className="border-b border-slate-200 bg-white">

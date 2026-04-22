@@ -1,12 +1,15 @@
 import Link from "next/link";
+import { logoutStaffAction } from "@/server-actions/auth";
 import { formatStatus } from "@/lib/issue-types";
 import { listIssueReports } from "@/lib/issues-repository";
 import { getRoutingRule } from "@/lib/routing-matrix";
+import { requireStaffSession } from "@/lib/staff-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export default function StaffPage() {
+export default async function StaffPage() {
+  await requireStaffSession();
   const reports = listIssueReports();
   const needsReview = reports.filter((report) => report.status === "received");
   const inProgress = reports.filter((report) =>
@@ -23,18 +26,28 @@ export default function StaffPage() {
             </Link>
             <h1 className="mt-1 text-xl font-semibold">Staff inbox</h1>
           </div>
-          <Link
-            href="/report"
-            className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
-          >
-            New Report
-          </Link>
-          <Link
-            href="/staff/routing"
-            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Routing Guide
-          </Link>
+          <nav className="flex flex-wrap gap-2">
+            <Link
+              href="/report"
+              className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+            >
+              New Report
+            </Link>
+            <Link
+              href="/staff/routing"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Routing Guide
+            </Link>
+            <form action={logoutStaffAction}>
+              <button
+                type="submit"
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Sign Out
+              </button>
+            </form>
+          </nav>
         </div>
       </header>
 

@@ -2,12 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatStatus, ISSUE_STATUSES } from "@/lib/issue-types";
 import {
+  findPotentialDuplicates,
   getIssueReportById,
+  listAttachments,
+  listNotificationEvents,
   listReferrals,
   listStaffNotes,
   listStatusEvents,
 } from "@/lib/issues-repository";
 import { getRoutingRule } from "@/lib/routing-matrix";
+import { requireStaffSession } from "@/lib/staff-auth";
 import {
   addReferralAction,
   addStaffNoteAction,
@@ -22,6 +26,7 @@ export default async function StaffReportPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireStaffSession();
   const { id } = await params;
   const report = getIssueReportById(id);
 
@@ -32,6 +37,9 @@ export default async function StaffReportPage({
   const events = listStatusEvents(report.id);
   const notes = listStaffNotes(report.id);
   const referrals = listReferrals(report.id);
+  const attachments = listAttachments(report.id);
+  const notifications = listNotificationEvents(report.id);
+  const duplicateCandidates = findPotentialDuplicates(report);
   const routingRule = getRoutingRule(report.category);
 
   return (
@@ -100,6 +108,63 @@ export default async function StaffReportPage({
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
               {report.description}
             </p>
+          </div>
+
+          <div className="mt-6 border-t border-slate-200 pt-5">
+            <h2 className="text-sm font-semibold text-slate-700">Photos</h2>
+            {attachments.length > 0 ? (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {attachments.map((attachment) => (
+                  <a
+                    key={attachment.id}
+                    href={`/attachments/${attachment.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block overflow-hidden rounded-md border border-slate-200 bg-slate-50"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/attachments/${attachment.id}`}
+                      alt={attachment.fileName}
+                      className="aspect-video w-full object-cover"
+                    />
+                    <div className="truncate px-3 py-2 text-xs text-slate-600">
+                      {attachment.fileName}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-slate-600">
+                No photos were attached to this report.
+              </p>
+            )}
+          </div>
+
+          <div className="mt-6 border-t border-slate-200 pt-5">
+            <h2 className="text-sm font-semibold text-slate-700">
+              Possible duplicates
+            </h2>
+            {duplicateCandidates.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {duplicateCandidates.map((candidate) => (
+                  <Link
+                    key={candidate.id}
+                    href={`/staff/reports/${candidate.id}`}
+                    className="block rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-slate-800"
+                  >
+                    <span className="font-medium">{candidate.category}</span>
+                    <span className="ml-2 text-slate-600">
+                      {candidate.addressText}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-slate-600">
+                No same-category reports at this location were found.
+              </p>
+            )}
           </div>
         </section>
 
@@ -334,6 +399,33 @@ export default async function StaffReportPage({
                 </p>
               )}
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+          <h2 className="text-lg font-semibold">Notification events</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Local stubs only. These records show what would become confirmation
+            and status emails when a provider is connected.
+          </p>
+          <div className="mt-4 divide-y divide-slate-200">
+            {notifications.map((notification) => (
+              <div key={notification.id} className="py-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-medium text-slate-900">
+                    {notification.subject}
+                  </div>
+                  <div className="text-xs uppercase tracking-[0.08em] text-slate-500">
+                    {notification.deliveryStatus}
+                  </div>
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {notification.eventType} |{" "}
+                  {new Date(notification.createdAt).toLocaleString()}
+                </div>
+                <p className="mt-2 text-slate-600">{notification.body}</p>
+              </div>
+            ))}
           </div>
         </section>
       </div>

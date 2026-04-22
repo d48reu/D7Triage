@@ -51,6 +51,27 @@ export type Referral = {
   createdAt: string;
 };
 
+export type IssueAttachment = {
+  id: string;
+  reportId: string;
+  fileName: string;
+  storagePath: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+};
+
+export type NotificationEvent = {
+  id: string;
+  reportId: string;
+  eventType: string;
+  recipient: string | null;
+  subject: string;
+  body: string;
+  deliveryStatus: string;
+  createdAt: string;
+};
+
 type IssueReportRow = {
   id: string;
   public_tracking_token: string;
@@ -90,6 +111,27 @@ type ReferralRow = {
   external_reference: string | null;
   follow_up_date: string | null;
   notes: string | null;
+  created_at: string;
+};
+
+type IssueAttachmentRow = {
+  id: string;
+  report_id: string;
+  file_name: string;
+  storage_path: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  created_at: string;
+};
+
+type NotificationEventRow = {
+  id: string;
+  report_id: string;
+  event_type: string;
+  recipient: string | null;
+  subject: string;
+  body: string;
+  delivery_status: string;
   created_at: string;
 };
 
@@ -189,11 +231,24 @@ function getDb() {
       created_at text not null
     );
 
+    create table if not exists notification_events (
+      id text primary key,
+      report_id text not null references issue_reports(id) on delete cascade,
+      event_type text not null,
+      recipient text,
+      subject text not null,
+      body text not null,
+      delivery_status text not null default 'local_stub',
+      created_at text not null
+    );
+
     create index if not exists idx_issue_reports_status on issue_reports(status);
     create index if not exists idx_issue_reports_created_at on issue_reports(created_at);
     create index if not exists idx_status_events_report on issue_status_events(report_id);
     create index if not exists idx_staff_notes_report on staff_notes(report_id);
     create index if not exists idx_referrals_report on referrals(report_id);
+    create index if not exists idx_attachments_report on issue_attachments(report_id);
+    create index if not exists idx_notification_events_report on notification_events(report_id);
   `);
 
   return db;
@@ -249,6 +304,31 @@ function mapReferral(row: ReferralRow): Referral {
   };
 }
 
+function mapAttachment(row: IssueAttachmentRow): IssueAttachment {
+  return {
+    id: row.id,
+    reportId: row.report_id,
+    fileName: row.file_name,
+    storagePath: row.storage_path,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+    createdAt: row.created_at,
+  };
+}
+
+function mapNotificationEvent(row: NotificationEventRow): NotificationEvent {
+  return {
+    id: row.id,
+    reportId: row.report_id,
+    eventType: row.event_type,
+    recipient: row.recipient,
+    subject: row.subject,
+    body: row.body,
+    deliveryStatus: row.delivery_status,
+    createdAt: row.created_at,
+  };
+}
+
 export function createIssueReport(input: CreateIssueReportInput) {
   const database = getDb();
   const id = makeId();
@@ -299,6 +379,24 @@ export function createIssueReport(input: CreateIssueReportInput) {
       publicNote: "Your report was received and is waiting for staff review.",
       createdAt,
     });
+
+    database
+      .prepare(
+        `insert into notification_events (
+          id, report_id, event_type, recipient, subject, body, delivery_status,
+          created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        makeId(),
+        id,
+        "confirmation",
+        input.residentEmail,
+        "District 7 received your report",
+        `Your report was received and is waiting for staff review. Tracking token: ${token}`,
+        "local_stub",
+        createdAt,
+      );
   })();
 
   return getIssueReportById(id);
@@ -360,6 +458,117 @@ export function listReferrals(reportId: string) {
   return rows.map(mapReferral);
 }
 
+export function listAttachments(reportId: string) {
+  const rows = getDb()
+    .prepare(
+      "select * from issue_attachments where report_id = ? order by datetime(created_at) desc",
+    )
+    .all(reportId) as IssueAttachmentRow[];
+
+  return rows.map(mapAttachment);
+}
+
+export function getAttachmentById(id: string) {
+  const row = getDb()
+    .prepare("select * from issue_attachments where id = ?")
+    .get(id) as IssueAttachmentRow | undefined;
+
+  return row ? mapAttachment(row) : null;
+}
+
+export function addAttachment(input: {
+  reportId: string;
+  fileName: string;
+  storagePath: string;
+  mimeType?: string;
+  sizeBytes?: number;
+}) {
+  const id = makeId();
+  getDb()
+    .prepare(
+      `insert into issue_attachments (
+        id, report_id, file_name, storage_path, mime_type, size_bytes, created_at
+      ) values (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      input.reportId,
+      input.fileName,
+      input.storagePath,
+      input.mimeType || null,
+      input.sizeBytes ?? null,
+      nowIso(),
+    );
+
+  return getAttachmentById(id);
+}
+
+export function listNotificationEvents(reportId: string) {
+  const rows = getDb()
+    .prepare(
+      "select * from notification_events where report_id = ? order by datetime(created_at) desc",
+    )
+    .all(reportId) as NotificationEventRow[];
+
+  return rows.map(mapNotificationEvent);
+}
+
+export function addNotificationEvent(input: {
+  reportId: string;
+  eventType: string;
+  recipient?: string | null;
+  subject: string;
+  body: string;
+  deliveryStatus?: string;
+}) {
+  getDb()
+    .prepare(
+      `insert into notification_events (
+        id, report_id, event_type, recipient, subject, body, delivery_status,
+        created_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      makeId(),
+      input.reportId,
+      input.eventType,
+      input.recipient || null,
+      input.subject,
+      input.body,
+      input.deliveryStatus || "local_stub",
+      nowIso(),
+    );
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function findPotentialDuplicates(report: IssueReport) {
+  const reportAddress = normalizeSearchText(report.addressText);
+
+  if (!reportAddress) {
+    return [];
+  }
+
+  return listIssueReports()
+    .filter((candidate) => candidate.id !== report.id)
+    .filter((candidate) => candidate.category === report.category)
+    .filter((candidate) => {
+      const candidateAddress = normalizeSearchText(candidate.addressText);
+      return (
+        candidateAddress === reportAddress ||
+        candidateAddress.includes(reportAddress) ||
+        reportAddress.includes(candidateAddress)
+      );
+    })
+    .slice(0, 5);
+}
+
 export function updateIssueStatus(input: {
   reportId: string;
   status: IssueStatus;
@@ -382,6 +591,24 @@ export function updateIssueStatus(input: {
         input.reportId,
         input.status,
         input.publicNote?.trim() || null,
+        updatedAt,
+      );
+
+    database
+      .prepare(
+        `insert into notification_events (
+          id, report_id, event_type, recipient, subject, body, delivery_status,
+          created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        makeId(),
+        input.reportId,
+        "status_update",
+        null,
+        `Report status updated to ${input.status}`,
+        input.publicNote?.trim() || `Report status updated to ${input.status}.`,
+        "local_stub",
         updatedAt,
       );
   })();
@@ -438,5 +665,23 @@ export function addReferral(input: {
         "insert into issue_status_events (id, report_id, status, public_note, created_at) values (?, ?, ?, ?, ?)",
       )
       .run(makeId(), input.reportId, "routed", publicNote, createdAt);
+
+    database
+      .prepare(
+        `insert into notification_events (
+          id, report_id, event_type, recipient, subject, body, delivery_status,
+          created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        makeId(),
+        input.reportId,
+        "referral",
+        null,
+        `Report referred to ${input.agencyName}`,
+        publicNote,
+        "local_stub",
+        createdAt,
+      );
   })();
 }
