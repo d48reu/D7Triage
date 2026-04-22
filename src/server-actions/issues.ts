@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ISSUE_STATUSES, type IssueStatus } from "@/lib/issue-types";
 import {
+  addReferral,
   addStaffNote,
   createIssueReport,
   getIssueReportById,
@@ -85,5 +86,31 @@ export async function addStaffNoteAction(formData: FormData) {
 
   addStaffNote({ reportId, body });
   revalidatePath(`/staff/reports/${reportId}`);
+  redirect(`/staff/reports/${reportId}`);
+}
+
+export async function addReferralAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const agencyName = readRequiredText(formData, "agencyName");
+  const referralMethod = readRequiredText(formData, "referralMethod");
+  const report = getIssueReportById(reportId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  addReferral({
+    reportId,
+    agencyName,
+    referralMethod,
+    externalReference: String(formData.get("externalReference") ?? "").trim(),
+    followUpDate: String(formData.get("followUpDate") ?? "").trim(),
+    notes: String(formData.get("notes") ?? "").trim(),
+    publicNote: String(formData.get("publicNote") ?? "").trim(),
+  });
+
+  revalidatePath("/staff");
+  revalidatePath(`/staff/reports/${reportId}`);
+  revalidatePath(`/report/${report.publicTrackingToken}`);
   redirect(`/staff/reports/${reportId}`);
 }

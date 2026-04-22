@@ -40,6 +40,17 @@ export type StaffNote = {
   createdAt: string;
 };
 
+export type Referral = {
+  id: string;
+  reportId: string;
+  agencyName: string;
+  referralMethod: string;
+  externalReference: string | null;
+  followUpDate: string | null;
+  notes: string | null;
+  createdAt: string;
+};
+
 type IssueReportRow = {
   id: string;
   public_tracking_token: string;
@@ -68,6 +79,17 @@ type StaffNoteRow = {
   id: string;
   report_id: string;
   body: string;
+  created_at: string;
+};
+
+type ReferralRow = {
+  id: string;
+  report_id: string;
+  agency_name: string;
+  referral_method: string;
+  external_reference: string | null;
+  follow_up_date: string | null;
+  notes: string | null;
   created_at: string;
 };
 
@@ -171,6 +193,7 @@ function getDb() {
     create index if not exists idx_issue_reports_created_at on issue_reports(created_at);
     create index if not exists idx_status_events_report on issue_status_events(report_id);
     create index if not exists idx_staff_notes_report on staff_notes(report_id);
+    create index if not exists idx_referrals_report on referrals(report_id);
   `);
 
   return db;
@@ -209,6 +232,19 @@ function mapStaffNote(row: StaffNoteRow): StaffNote {
     id: row.id,
     reportId: row.report_id,
     body: row.body,
+    createdAt: row.created_at,
+  };
+}
+
+function mapReferral(row: ReferralRow): Referral {
+  return {
+    id: row.id,
+    reportId: row.report_id,
+    agencyName: row.agency_name,
+    referralMethod: row.referral_method,
+    externalReference: row.external_reference,
+    followUpDate: row.follow_up_date,
+    notes: row.notes,
     createdAt: row.created_at,
   };
 }
@@ -314,6 +350,16 @@ export function listStaffNotes(reportId: string) {
   return rows.map(mapStaffNote);
 }
 
+export function listReferrals(reportId: string) {
+  const rows = getDb()
+    .prepare(
+      "select * from referrals where report_id = ? order by datetime(created_at) desc",
+    )
+    .all(reportId) as ReferralRow[];
+
+  return rows.map(mapReferral);
+}
+
 export function updateIssueStatus(input: {
   reportId: string;
   status: IssueStatus;
@@ -347,4 +393,50 @@ export function addStaffNote(input: { reportId: string; body: string }) {
       "insert into staff_notes (id, report_id, body, created_at) values (?, ?, ?, ?)",
     )
     .run(makeId(), input.reportId, input.body, nowIso());
+}
+
+export function addReferral(input: {
+  reportId: string;
+  agencyName: string;
+  referralMethod: string;
+  externalReference?: string;
+  followUpDate?: string;
+  notes?: string;
+  publicNote?: string;
+}) {
+  const database = getDb();
+  const createdAt = nowIso();
+  const publicNote =
+    input.publicNote?.trim() ||
+    `This report was referred to ${input.agencyName} for review.`;
+
+  database.transaction(() => {
+    database
+      .prepare(
+        `insert into referrals (
+          id, report_id, agency_name, referral_method, external_reference,
+          follow_up_date, notes, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        makeId(),
+        input.reportId,
+        input.agencyName,
+        input.referralMethod,
+        input.externalReference?.trim() || null,
+        input.followUpDate?.trim() || null,
+        input.notes?.trim() || null,
+        createdAt,
+      );
+
+    database
+      .prepare("update issue_reports set status = ?, updated_at = ? where id = ?")
+      .run("routed", createdAt, input.reportId);
+
+    database
+      .prepare(
+        "insert into issue_status_events (id, report_id, status, public_note, created_at) values (?, ?, ?, ?, ?)",
+      )
+      .run(makeId(), input.reportId, "routed", publicNote, createdAt);
+  })();
 }

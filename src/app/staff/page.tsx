@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { formatStatus } from "@/lib/issue-types";
 import { listIssueReports } from "@/lib/issues-repository";
+import { getRoutingRule } from "@/lib/routing-matrix";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,12 @@ export default function StaffPage() {
           >
             New Report
           </Link>
+          <Link
+            href="/staff/routing"
+            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Routing Guide
+          </Link>
         </div>
       </header>
 
@@ -39,8 +46,9 @@ export default function StaffPage() {
         </section>
 
         <section className="mt-6 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[1fr_150px_170px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 max-md:hidden">
+          <div className="grid grid-cols-[1fr_220px_140px_160px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 max-lg:hidden">
             <div>Report</div>
+            <div>Likely owner</div>
             <div>Status</div>
             <div>Submitted</div>
           </div>
@@ -51,7 +59,7 @@ export default function StaffPage() {
                 <Link
                   key={report.id}
                   href={`/staff/reports/${report.id}`}
-                  className="grid gap-3 px-4 py-4 transition hover:bg-slate-50 md:grid-cols-[1fr_150px_170px]"
+                  className="grid gap-3 px-4 py-4 transition hover:bg-slate-50 lg:grid-cols-[1fr_220px_140px_160px]"
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -69,10 +77,13 @@ export default function StaffPage() {
                       {report.addressText}
                     </div>
                   </div>
-                  <div className="hidden text-sm text-slate-700 md:block">
+                  <div className="text-sm text-slate-600">
+                    {getRoutingRule(report.category).likelyResponsibleParty}
+                  </div>
+                  <div className="hidden text-sm text-slate-700 lg:block">
                     {formatStatus(report.status)}
                   </div>
-                  <div className="text-xs text-slate-500 md:text-sm">
+                  <div className="text-xs text-slate-500 lg:text-sm">
                     {new Date(report.createdAt).toLocaleString()}
                   </div>
                 </Link>

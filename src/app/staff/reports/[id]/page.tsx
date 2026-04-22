@@ -3,10 +3,13 @@ import { notFound } from "next/navigation";
 import { formatStatus, ISSUE_STATUSES } from "@/lib/issue-types";
 import {
   getIssueReportById,
+  listReferrals,
   listStaffNotes,
   listStatusEvents,
 } from "@/lib/issues-repository";
+import { getRoutingRule } from "@/lib/routing-matrix";
 import {
+  addReferralAction,
   addStaffNoteAction,
   updateIssueStatusAction,
 } from "@/server-actions/issues";
@@ -28,6 +31,8 @@ export default async function StaffReportPage({
 
   const events = listStatusEvents(report.id);
   const notes = listStaffNotes(report.id);
+  const referrals = listReferrals(report.id);
+  const routingRule = getRoutingRule(report.category);
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -50,7 +55,7 @@ export default async function StaffReportPage({
 
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {report.category}
@@ -61,7 +66,22 @@ export default async function StaffReportPage({
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 border-t border-slate-200 pt-6 sm:grid-cols-2">
+          <div className="mt-5 rounded-md border border-sky-100 bg-sky-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-800">
+              Routing suggestion
+            </div>
+            <div className="mt-2 text-sm font-semibold text-slate-950">
+              {routingRule.likelyResponsibleParty}
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
+              {routingRule.staffGuidance}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Resident explanation: {routingRule.residentExplanation}
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
             <Detail label="Location" value={report.addressText} />
             <Detail label="Email" value={report.residentEmail} />
             <Detail label="Name" value={report.residentName || "Not provided"} />
@@ -84,6 +104,88 @@ export default async function StaffReportPage({
         </section>
 
         <aside className="space-y-6">
+          <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold">Record referral</h2>
+            <form action={addReferralAction} className="mt-4 space-y-4">
+              <input type="hidden" name="reportId" value={report.id} />
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Responsible party
+                </span>
+                <input
+                  name="agencyName"
+                  required
+                  defaultValue={routingRule.likelyResponsibleParty}
+                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                />
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Method
+                  </span>
+                  <select
+                    name="referralMethod"
+                    defaultValue="Email"
+                    className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  >
+                    <option>Email</option>
+                    <option>Phone</option>
+                    <option>Portal</option>
+                    <option>311</option>
+                    <option>Other</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Follow-up date
+                  </span>
+                  <input
+                    name="followUpDate"
+                    type="date"
+                    className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  />
+                </label>
+              </div>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  External reference
+                </span>
+                <input
+                  name="externalReference"
+                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Case number, ticket ID, or portal reference"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Internal referral notes
+                </span>
+                <textarea
+                  name="notes"
+                  className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Who was contacted, what was sent, next follow-up."
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Public status note
+                </span>
+                <textarea
+                  name="publicNote"
+                  className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  defaultValue={`This report was referred to ${routingRule.likelyResponsibleParty} for review.`}
+                />
+              </label>
+              <button
+                type="submit"
+                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+              >
+                Save Referral
+              </button>
+            </form>
+          </section>
+
           <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Update status</h2>
             <form action={updateIssueStatusAction} className="mt-4 space-y-4">
@@ -145,7 +247,7 @@ export default async function StaffReportPage({
 
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
           <h2 className="text-lg font-semibold">Timeline</h2>
-          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+          <div className="mt-4 grid gap-6 lg:grid-cols-3">
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-700">
                 Status events
@@ -165,6 +267,47 @@ export default async function StaffReportPage({
                   ) : null}
                 </div>
               ))}
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-slate-700">
+                Referrals
+              </h3>
+              {referrals.length > 0 ? (
+                referrals.map((referral) => (
+                  <div
+                    key={referral.id}
+                    className="rounded-md border border-slate-200 bg-slate-50 p-4"
+                  >
+                    <div className="text-sm font-semibold">
+                      {referral.agencyName}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {referral.referralMethod} |{" "}
+                      {new Date(referral.createdAt).toLocaleString()}
+                    </div>
+                    {referral.externalReference ? (
+                      <div className="mt-2 text-sm text-slate-700">
+                        Reference: {referral.externalReference}
+                      </div>
+                    ) : null}
+                    {referral.followUpDate ? (
+                      <div className="mt-1 text-sm text-slate-700">
+                        Follow-up: {referral.followUpDate}
+                      </div>
+                    ) : null}
+                    {referral.notes ? (
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                        {referral.notes}
+                      </p>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-600">
+                  No referrals have been recorded yet.
+                </p>
+              )}
             </div>
 
             <div className="space-y-4">
