@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { logoutStaffAction } from "@/server-actions/auth";
 import { formatStatus } from "@/lib/issue-types";
-import { listIssueReports } from "@/lib/issues-repository";
-import { getRoutingRule } from "@/lib/routing-matrix";
+import { getManagedRoutingRule, listIssueReports } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 
 export const runtime = "nodejs";
@@ -91,7 +90,8 @@ export default async function StaffPage() {
                     </div>
                   </div>
                   <div className="text-sm text-slate-600">
-                    {getRoutingRule(report.category).likelyResponsibleParty}
+                    {getManagedRoutingRule(report.category)?.ownerLabel ??
+                      "District 7 triage"}
                   </div>
                   <div className="hidden text-sm text-slate-700 lg:block">
                     {formatStatus(report.status)}

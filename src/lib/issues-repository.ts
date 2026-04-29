@@ -2,7 +2,8 @@ import Database from "better-sqlite3";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { IssueStatus } from "@/lib/issue-types";
+import { ISSUE_CATEGORIES, type IssueStatus } from "@/lib/issue-types";
+import { ROUTING_RULES } from "@/lib/routing-matrix";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const DB_PATH = path.join(DATA_DIR, "issues.db");
@@ -72,6 +73,33 @@ export type NotificationEvent = {
   createdAt: string;
 };
 
+export type Agency = {
+  id: string;
+  name: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  contactUrl: string | null;
+  defaultReferralMethod: string | null;
+  escalationNotes: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ManagedRoutingRule = {
+  id: string;
+  category: string;
+  agencyId: string | null;
+  ownerLabel: string;
+  staffGuidance: string;
+  residentExplanation: string;
+  escalationNotes: string;
+  createdAt: string;
+  updatedAt: string;
+  agency: Agency | null;
+};
+
 type IssueReportRow = {
   id: string;
   public_tracking_token: string;
@@ -135,6 +163,42 @@ type NotificationEventRow = {
   created_at: string;
 };
 
+type AgencyRow = {
+  id: string;
+  name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_url: string | null;
+  default_referral_method: string | null;
+  escalation_notes: string | null;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type ManagedRoutingRuleRow = {
+  id: string;
+  category: string;
+  agency_id: string | null;
+  owner_label: string;
+  staff_guidance: string;
+  resident_explanation: string;
+  escalation_notes: string;
+  created_at: string;
+  updated_at: string;
+  agency_name: string | null;
+  agency_contact_name: string | null;
+  agency_contact_email: string | null;
+  agency_contact_phone: string | null;
+  agency_contact_url: string | null;
+  agency_default_referral_method: string | null;
+  agency_escalation_notes: string | null;
+  agency_is_active: number | null;
+  agency_created_at: string | null;
+  agency_updated_at: string | null;
+};
+
 export type CreateIssueReportInput = {
   category: string;
   description: string;
@@ -156,6 +220,102 @@ function makeId() {
 
 function makeTrackingToken() {
   return crypto.randomBytes(12).toString("hex");
+}
+
+function hasColumn(
+  database: Database.Database,
+  table: string,
+  column: string,
+) {
+  const rows = database.prepare(`pragma table_info(${table})`).all() as {
+    name: string;
+  }[];
+
+  return rows.some((row) => row.name === column);
+}
+
+function ensureSchemaMigrations(database: Database.Database) {
+  if (!hasColumn(database, "referrals", "agency_id")) {
+    database.exec("alter table referrals add column agency_id text;");
+  }
+}
+
+function seedRoutingData(database: Database.Database) {
+  const agencyCount = (
+    database.prepare("select count(*) as count from agencies").get() as {
+      count: number;
+    }
+  ).count;
+
+  if (agencyCount === 0) {
+    const insertAgency = database.prepare(`
+      insert into agencies (
+        id, name, contact_name, contact_email, contact_phone, contact_url,
+        default_referral_method, escalation_notes, is_active, created_at,
+        updated_at
+      ) values (
+        @id, @name, null, null, null, null, @defaultReferralMethod,
+        @escalationNotes, 1, @createdAt, @updatedAt
+      )
+    `);
+
+    const now = nowIso();
+    const uniqueNames = Array.from(
+      new Set(ROUTING_RULES.map((rule) => rule.likelyResponsibleParty)),
+    );
+
+    for (const name of uniqueNames) {
+      const matchingRule = ROUTING_RULES.find(
+        (rule) => rule.likelyResponsibleParty === name,
+      );
+
+      insertAgency.run({
+        id: makeId(),
+        name,
+        defaultReferralMethod: "Email",
+        escalationNotes: matchingRule?.escalationNotes ?? null,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
+
+  const routingRuleCount = (
+    database.prepare("select count(*) as count from routing_rules").get() as {
+      count: number;
+    }
+  ).count;
+
+  if (routingRuleCount === 0) {
+    const agencies = database
+      .prepare("select id, name from agencies")
+      .all() as { id: string; name: string }[];
+    const agencyMap = new Map(agencies.map((agency) => [agency.name, agency.id]));
+    const insertRule = database.prepare(`
+      insert into routing_rules (
+        id, category, agency_id, owner_label, staff_guidance,
+        resident_explanation, escalation_notes, created_at, updated_at
+      ) values (
+        @id, @category, @agencyId, @ownerLabel, @staffGuidance,
+        @residentExplanation, @escalationNotes, @createdAt, @updatedAt
+      )
+    `);
+    const now = nowIso();
+
+    for (const rule of ROUTING_RULES) {
+      insertRule.run({
+        id: makeId(),
+        category: rule.category,
+        agencyId: agencyMap.get(rule.likelyResponsibleParty) ?? null,
+        ownerLabel: rule.likelyResponsibleParty,
+        staffGuidance: rule.staffGuidance,
+        residentExplanation: rule.residentExplanation,
+        escalationNotes: rule.escalationNotes,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
 }
 
 function getDb() {
@@ -242,6 +402,32 @@ function getDb() {
       created_at text not null
     );
 
+    create table if not exists agencies (
+      id text primary key,
+      name text not null unique,
+      contact_name text,
+      contact_email text,
+      contact_phone text,
+      contact_url text,
+      default_referral_method text,
+      escalation_notes text,
+      is_active integer not null default 1,
+      created_at text not null,
+      updated_at text not null
+    );
+
+    create table if not exists routing_rules (
+      id text primary key,
+      category text not null unique,
+      agency_id text references agencies(id) on delete set null,
+      owner_label text not null,
+      staff_guidance text not null,
+      resident_explanation text not null,
+      escalation_notes text not null,
+      created_at text not null,
+      updated_at text not null
+    );
+
     create index if not exists idx_issue_reports_status on issue_reports(status);
     create index if not exists idx_issue_reports_created_at on issue_reports(created_at);
     create index if not exists idx_status_events_report on issue_status_events(report_id);
@@ -249,7 +435,11 @@ function getDb() {
     create index if not exists idx_referrals_report on referrals(report_id);
     create index if not exists idx_attachments_report on issue_attachments(report_id);
     create index if not exists idx_notification_events_report on notification_events(report_id);
+    create index if not exists idx_routing_rules_category on routing_rules(category);
   `);
+
+  ensureSchemaMigrations(db);
+  seedRoutingData(db);
 
   return db;
 }
@@ -326,6 +516,53 @@ function mapNotificationEvent(row: NotificationEventRow): NotificationEvent {
     body: row.body,
     deliveryStatus: row.delivery_status,
     createdAt: row.created_at,
+  };
+}
+
+function mapAgency(row: AgencyRow): Agency {
+  return {
+    id: row.id,
+    name: row.name,
+    contactName: row.contact_name,
+    contactEmail: row.contact_email,
+    contactPhone: row.contact_phone,
+    contactUrl: row.contact_url,
+    defaultReferralMethod: row.default_referral_method,
+    escalationNotes: row.escalation_notes,
+    isActive: row.is_active === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapManagedRoutingRule(row: ManagedRoutingRuleRow): ManagedRoutingRule {
+  const hasAgency = Boolean(row.agency_name);
+
+  return {
+    id: row.id,
+    category: row.category,
+    agencyId: row.agency_id,
+    ownerLabel: row.owner_label,
+    staffGuidance: row.staff_guidance,
+    residentExplanation: row.resident_explanation,
+    escalationNotes: row.escalation_notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    agency: hasAgency
+      ? {
+          id: row.agency_id!,
+          name: row.agency_name!,
+          contactName: row.agency_contact_name,
+          contactEmail: row.agency_contact_email,
+          contactPhone: row.agency_contact_phone,
+          contactUrl: row.agency_contact_url,
+          defaultReferralMethod: row.agency_default_referral_method,
+          escalationNotes: row.agency_escalation_notes,
+          isActive: row.agency_is_active === 1,
+          createdAt: row.agency_created_at!,
+          updatedAt: row.agency_updated_at!,
+        }
+      : null,
   };
 }
 
@@ -410,6 +647,185 @@ export function listIssueReports() {
     .all() as IssueReportRow[];
 
   return rows.map(mapReport);
+}
+
+export function listAgencies() {
+  const rows = getDb()
+    .prepare("select * from agencies order by lower(name) asc")
+    .all() as AgencyRow[];
+
+  return rows.map(mapAgency);
+}
+
+export function getAgencyById(id: string) {
+  const row = getDb()
+    .prepare("select * from agencies where id = ?")
+    .get(id) as AgencyRow | undefined;
+
+  return row ? mapAgency(row) : null;
+}
+
+export function upsertAgency(input: {
+  id?: string;
+  name: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  contactUrl?: string;
+  defaultReferralMethod?: string;
+  escalationNotes?: string;
+  isActive?: boolean;
+}) {
+  const database = getDb();
+  const now = nowIso();
+
+  if (input.id) {
+    database
+      .prepare(
+        `update agencies
+         set name = ?, contact_name = ?, contact_email = ?, contact_phone = ?,
+             contact_url = ?, default_referral_method = ?, escalation_notes = ?,
+             is_active = ?, updated_at = ?
+         where id = ?`,
+      )
+      .run(
+        input.name.trim(),
+        input.contactName?.trim() || null,
+        input.contactEmail?.trim() || null,
+        input.contactPhone?.trim() || null,
+        input.contactUrl?.trim() || null,
+        input.defaultReferralMethod?.trim() || null,
+        input.escalationNotes?.trim() || null,
+        input.isActive === false ? 0 : 1,
+        now,
+        input.id,
+      );
+
+    return getAgencyById(input.id);
+  }
+
+  const id = makeId();
+  database
+    .prepare(
+      `insert into agencies (
+        id, name, contact_name, contact_email, contact_phone, contact_url,
+        default_referral_method, escalation_notes, is_active, created_at,
+        updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      input.name.trim(),
+      input.contactName?.trim() || null,
+      input.contactEmail?.trim() || null,
+      input.contactPhone?.trim() || null,
+      input.contactUrl?.trim() || null,
+      input.defaultReferralMethod?.trim() || null,
+      input.escalationNotes?.trim() || null,
+      input.isActive === false ? 0 : 1,
+      now,
+      now,
+    );
+
+  return getAgencyById(id);
+}
+
+export function listManagedRoutingRules() {
+  const rows = getDb()
+    .prepare(
+      `select
+         routing_rules.*,
+         agencies.name as agency_name,
+         agencies.contact_name as agency_contact_name,
+         agencies.contact_email as agency_contact_email,
+         agencies.contact_phone as agency_contact_phone,
+         agencies.contact_url as agency_contact_url,
+         agencies.default_referral_method as agency_default_referral_method,
+         agencies.escalation_notes as agency_escalation_notes,
+         agencies.is_active as agency_is_active,
+         agencies.created_at as agency_created_at,
+         agencies.updated_at as agency_updated_at
+       from routing_rules
+       left join agencies on agencies.id = routing_rules.agency_id`,
+    )
+    .all() as ManagedRoutingRuleRow[];
+
+  const mapped = rows.map(mapManagedRoutingRule);
+  const orderMap = new Map<string, number>(
+    ISSUE_CATEGORIES.map((category, index) => [category, index]),
+  );
+  mapped.sort(
+    (a, b) =>
+      (orderMap.get(a.category) ?? Number.MAX_SAFE_INTEGER) -
+      (orderMap.get(b.category) ?? Number.MAX_SAFE_INTEGER),
+  );
+  return mapped;
+}
+
+export function getManagedRoutingRule(category: string) {
+  const rules = listManagedRoutingRules();
+  return (
+    rules.find((rule) => rule.category === category) ??
+    rules.find((rule) => rule.category === "Other / unsure") ??
+    null
+  );
+}
+
+export function upsertRoutingRule(input: {
+  category: string;
+  agencyId?: string;
+  ownerLabel?: string;
+  staffGuidance: string;
+  residentExplanation: string;
+  escalationNotes: string;
+}) {
+  const database = getDb();
+  const now = nowIso();
+  const agency = input.agencyId ? getAgencyById(input.agencyId) : null;
+  const ownerLabel = agency?.name || input.ownerLabel?.trim() || "District 7 triage";
+  const existing = database
+    .prepare("select id from routing_rules where category = ?")
+    .get(input.category) as { id: string } | undefined;
+
+  if (existing) {
+    database
+      .prepare(
+        `update routing_rules
+         set agency_id = ?, owner_label = ?, staff_guidance = ?,
+             resident_explanation = ?, escalation_notes = ?, updated_at = ?
+         where category = ?`,
+      )
+      .run(
+        input.agencyId || null,
+        ownerLabel,
+        input.staffGuidance.trim(),
+        input.residentExplanation.trim(),
+        input.escalationNotes.trim(),
+        now,
+        input.category,
+      );
+  } else {
+    database
+      .prepare(
+        `insert into routing_rules (
+          id, category, agency_id, owner_label, staff_guidance,
+          resident_explanation, escalation_notes, created_at, updated_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        makeId(),
+        input.category,
+        input.agencyId || null,
+        ownerLabel,
+        input.staffGuidance.trim(),
+        input.residentExplanation.trim(),
+        input.escalationNotes.trim(),
+        now,
+        now,
+      );
+  }
+
+  return getManagedRoutingRule(input.category);
 }
 
 export function getIssueReportById(id: string) {
@@ -624,6 +1040,7 @@ export function addStaffNote(input: { reportId: string; body: string }) {
 
 export function addReferral(input: {
   reportId: string;
+  agencyId?: string;
   agencyName: string;
   referralMethod: string;
   externalReference?: string;
@@ -641,13 +1058,14 @@ export function addReferral(input: {
     database
       .prepare(
         `insert into referrals (
-          id, report_id, agency_name, referral_method, external_reference,
-          follow_up_date, notes, created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, report_id, agency_id, agency_name, referral_method,
+          external_reference, follow_up_date, notes, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         makeId(),
         input.reportId,
+        input.agencyId || null,
         input.agencyName,
         input.referralMethod,
         input.externalReference?.trim() || null,

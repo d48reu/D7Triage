@@ -3,14 +3,15 @@ import { notFound } from "next/navigation";
 import { formatStatus, ISSUE_STATUSES } from "@/lib/issue-types";
 import {
   findPotentialDuplicates,
+  getManagedRoutingRule,
   getIssueReportById,
+  listAgencies,
   listAttachments,
   listNotificationEvents,
   listReferrals,
   listStaffNotes,
   listStatusEvents,
 } from "@/lib/issues-repository";
-import { getRoutingRule } from "@/lib/routing-matrix";
 import { requireStaffSession } from "@/lib/staff-auth";
 import {
   addReferralAction,
@@ -37,10 +38,12 @@ export default async function StaffReportPage({
   const events = listStatusEvents(report.id);
   const notes = listStaffNotes(report.id);
   const referrals = listReferrals(report.id);
+  const agencies = listAgencies().filter((agency) => agency.isActive);
   const attachments = listAttachments(report.id);
   const notifications = listNotificationEvents(report.id);
   const duplicateCandidates = findPotentialDuplicates(report);
-  const routingRule = getRoutingRule(report.category);
+  const routingRule = getManagedRoutingRule(report.category);
+  const defaultOwnerLabel = routingRule?.ownerLabel ?? "District 7 triage";
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -79,14 +82,33 @@ export default async function StaffReportPage({
               Routing suggestion
             </div>
             <div className="mt-2 text-sm font-semibold text-slate-950">
-              {routingRule.likelyResponsibleParty}
+              {defaultOwnerLabel}
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-700">
-              {routingRule.staffGuidance}
+              {routingRule?.staffGuidance ??
+                "Review manually and determine the best responsible party."}
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Resident explanation: {routingRule.residentExplanation}
+              Resident explanation:{" "}
+              {routingRule?.residentExplanation ??
+                "Staff will review the report and determine the most appropriate routing path."}
             </p>
+            {routingRule?.agency ? (
+              <div className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                <div>
+                  Contact: {routingRule.agency.contactName || "Not set"}
+                </div>
+                <div>
+                  Email: {routingRule.agency.contactEmail || "Not set"}
+                </div>
+                <div>
+                  Phone: {routingRule.agency.contactPhone || "Not set"}
+                </div>
+                <div>
+                  Method: {routingRule.agency.defaultReferralMethod || "Not set"}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-5 grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
@@ -175,12 +197,29 @@ export default async function StaffReportPage({
               <input type="hidden" name="reportId" value={report.id} />
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Responsible party
+                  Managed agency
+                </span>
+                <select
+                  name="agencyId"
+                  defaultValue={routingRule?.agencyId ?? ""}
+                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                >
+                  <option value="">No linked agency</option>
+                  {agencies.map((agency) => (
+                    <option key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Responsible party label
                 </span>
                 <input
                   name="agencyName"
                   required
-                  defaultValue={routingRule.likelyResponsibleParty}
+                  defaultValue={defaultOwnerLabel}
                   className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                 />
               </label>
@@ -191,7 +230,7 @@ export default async function StaffReportPage({
                   </span>
                   <select
                     name="referralMethod"
-                    defaultValue="Email"
+                    defaultValue={routingRule?.agency?.defaultReferralMethod || "Email"}
                     className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                   >
                     <option>Email</option>
@@ -239,7 +278,7 @@ export default async function StaffReportPage({
                 <textarea
                   name="publicNote"
                   className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-                  defaultValue={`This report was referred to ${routingRule.likelyResponsibleParty} for review.`}
+                  defaultValue={`This report was referred to ${defaultOwnerLabel} for review.`}
                 />
               </label>
               <button

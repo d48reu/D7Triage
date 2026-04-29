@@ -10,6 +10,7 @@ import {
   addReferral,
   addStaffNote,
   createIssueReport,
+  getAgencyById,
   getIssueReportById,
   updateIssueStatus,
 } from "@/lib/issues-repository";
@@ -166,7 +167,8 @@ export async function addStaffNoteAction(formData: FormData) {
 
 export async function addReferralAction(formData: FormData) {
   const reportId = readRequiredText(formData, "reportId");
-  const agencyName = readRequiredText(formData, "agencyName");
+  const agencyId = String(formData.get("agencyId") ?? "").trim();
+  const manualAgencyName = String(formData.get("agencyName") ?? "").trim();
   const referralMethod = readRequiredText(formData, "referralMethod");
   const report = getIssueReportById(reportId);
 
@@ -174,8 +176,16 @@ export async function addReferralAction(formData: FormData) {
     throw new Error("Report not found");
   }
 
+  const agency = agencyId ? getAgencyById(agencyId) : null;
+  const agencyName = agency?.name || manualAgencyName;
+
+  if (!agencyName) {
+    throw new Error("Responsible party is required");
+  }
+
   addReferral({
     reportId,
+    agencyId: agency?.id,
     agencyName,
     referralMethod,
     externalReference: String(formData.get("externalReference") ?? "").trim(),
