@@ -43,6 +43,12 @@ export default async function StaffAnalyticsPage() {
   const aiReviewed = allSuggestions.filter(
     (suggestion) => suggestion.feedbackDisposition !== null,
   );
+  const duplicateReviewed = reports.filter(
+    (report) => report.duplicateReviewDecision !== null,
+  );
+  const closedAsDuplicate = reports.filter(
+    (report) => report.status === "closed_duplicate",
+  );
   const aiAccepted = aiReviewed.filter(
     (suggestion) =>
       suggestion.feedbackDisposition === "accepted" ||
@@ -71,6 +77,17 @@ export default async function StaffAnalyticsPage() {
       formatDistrictHintStatus(item.assessment.districtHintStatus),
     ),
   );
+  const duplicateDecisionCounts = countBy(
+    duplicateReviewed.map((report) =>
+      report.duplicateReviewDecision === "linked_to_master"
+        ? "Linked to primary case"
+        : "Kept separate",
+    ),
+  );
+  const linkedDuplicateCount =
+    duplicateDecisionCounts.find(
+      (item) => item.label === "Linked to primary case",
+    )?.count ?? 0;
 
   const recentContacts = reports
     .filter((report) => report.residentEmail)
@@ -123,6 +140,12 @@ export default async function StaffAnalyticsPage() {
           />
         </section>
 
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <Metric label="Duplicate reviews" value={duplicateReviewed.length} />
+          <Metric label="Closed as duplicate" value={closedAsDuplicate.length} />
+          <Metric label="Linked duplicate cases" value={linkedDuplicateCount} />
+        </section>
+
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <Panel title="Reports by category">
             <CountList items={categoryCounts} emptyLabel="No reports yet." />
@@ -149,6 +172,47 @@ export default async function StaffAnalyticsPage() {
               items={districtHintCounts}
               emptyLabel="No district hints yet."
             />
+          </Panel>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <Panel title="Duplicate review outcomes">
+            <CountList
+              items={duplicateDecisionCounts}
+              emptyLabel="No duplicate reviews recorded yet."
+            />
+          </Panel>
+
+          <Panel title="Recent duplicate decisions">
+            {duplicateReviewed.length > 0 ? (
+              <div className="space-y-2">
+                {duplicateReviewed.slice(0, 8).map((report) => (
+                  <Link
+                    key={report.id}
+                    href={`/staff/reports/${report.id}`}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 hover:bg-slate-100"
+                  >
+                    <div>
+                      <div className="font-medium text-slate-900">
+                        {report.category}
+                      </div>
+                      <div className="mt-1 text-sm text-slate-600">
+                        {report.addressText}
+                      </div>
+                    </div>
+                    <div className="text-sm text-slate-700">
+                      {report.duplicateReviewDecision === "linked_to_master"
+                        ? "Linked to primary case"
+                        : "Kept separate"}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">
+                No duplicate decisions have been recorded yet.
+              </p>
+            )}
           </Panel>
         </section>
 

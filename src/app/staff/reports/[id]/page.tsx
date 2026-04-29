@@ -14,6 +14,7 @@ import {
   getLatestAiSuggestion,
   getManagedRoutingRule,
   getIssueReportById,
+  listLinkedDuplicateReports,
   listAgencies,
   listAttachments,
   listNotificationEvents,
@@ -25,6 +26,8 @@ import { requireStaffSession } from "@/lib/staff-auth";
 import {
   addReferralAction,
   addStaffNoteAction,
+  markDistinctAction,
+  markDuplicateAction,
   updateReferralOutcomeAction,
   updateIssueStatusAction,
 } from "@/server-actions/issues";
@@ -52,12 +55,16 @@ export default async function StaffReportPage({
   const attachments = listAttachments(report.id);
   const notifications = listNotificationEvents(report.id);
   const duplicateCandidates = findPotentialDuplicates(report);
+  const linkedDuplicates = listLinkedDuplicateReports(report.id);
   const routingRule = getManagedRoutingRule(report.category);
   const latestSuggestion = getLatestAiSuggestion(report.id);
   const aiRoutingAvailability = getAiRoutingAvailability();
   const jurisdictionConfig = getJurisdictionConfig();
   const jurisdiction = analyzeReportJurisdiction(report, jurisdictionConfig);
   const defaultOwnerLabel = routingRule?.ownerLabel ?? "District 7 triage";
+  const masterReport = report.duplicateOfReportId
+    ? getIssueReportById(report.duplicateOfReportId)
+    : null;
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -223,21 +230,107 @@ export default async function StaffReportPage({
 
           <div className="mt-6 border-t border-slate-200 pt-5">
             <h2 className="text-sm font-semibold text-slate-700">
-              Possible duplicates
+              Duplicate review
             </h2>
+            {masterReport ? (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+                <div className="text-sm font-semibold text-slate-900">
+                  This case is linked to a primary case.
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  Primary case:{" "}
+                  <Link
+                    href={`/staff/reports/${masterReport.id}`}
+                    className="font-medium text-sky-700 hover:underline"
+                  >
+                    {masterReport.category} at {masterReport.addressText}
+                  </Link>
+                </p>
+                {report.duplicateReviewNote ? (
+                  <p className="mt-2 text-sm leading-6 text-slate-700">
+                    Review note: {report.duplicateReviewNote}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {linkedDuplicates.length > 0 ? (
+              <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm font-semibold text-slate-900">
+                  Linked duplicate cases
+                </div>
+                <div className="mt-3 space-y-2">
+                  {linkedDuplicates.map((duplicate) => (
+                    <Link
+                      key={duplicate.id}
+                      href={`/staff/reports/${duplicate.id}`}
+                      className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
+                    >
+                      <span>
+                        <span className="font-medium">{duplicate.category}</span>
+                        <span className="ml-2 text-slate-600">
+                          {duplicate.addressText}
+                        </span>
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {formatStatus(duplicate.status)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             {duplicateCandidates.length > 0 ? (
               <div className="mt-3 space-y-2">
                 {duplicateCandidates.map((candidate) => (
-                  <Link
+                  <div
                     key={candidate.id}
-                    href={`/staff/reports/${candidate.id}`}
-                    className="block rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-slate-800"
+                    className="rounded-md border border-amber-200 bg-amber-50 p-3"
                   >
-                    <span className="font-medium">{candidate.category}</span>
-                    <span className="ml-2 text-slate-600">
-                      {candidate.addressText}
-                    </span>
-                  </Link>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="text-sm text-slate-800">
+                        <Link
+                          href={`/staff/reports/${candidate.id}`}
+                          className="font-medium text-sky-700 hover:underline"
+                        >
+                          {candidate.category}
+                        </Link>
+                        <span className="ml-2 text-slate-600">
+                          {candidate.addressText}
+                        </span>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Submitted {new Date(candidate.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600">
+                        {formatStatus(candidate.status)}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <form action={markDuplicateAction}>
+                        <input type="hidden" name="reportId" value={report.id} />
+                        <input
+                          type="hidden"
+                          name="masterReportId"
+                          value={candidate.id}
+                        />
+                        <button
+                          type="submit"
+                          className="rounded-md bg-amber-700 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-800"
+                        >
+                          Link To This Primary Case
+                        </button>
+                      </form>
+                      <Link
+                        href={`/staff/reports/${candidate.id}`}
+                        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Open Case
+                      </Link>
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -245,6 +338,33 @@ export default async function StaffReportPage({
                 No same-category reports at this location were found.
               </p>
             )}
+
+            <form action={markDistinctAction} className="mt-4 space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+              <input type="hidden" name="reportId" value={report.id} />
+              <div className="text-sm font-semibold text-slate-900">
+                Keep this case separate
+              </div>
+              <p className="text-sm text-slate-600">
+                Use this when staff reviewed duplicate candidates and decided this report still needs its own case.
+              </p>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Review note
+                </span>
+                <textarea
+                  name="note"
+                  defaultValue={report.duplicateReviewDecision === "kept_separate" ? report.duplicateReviewNote ?? "" : ""}
+                  className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Optional context for why this case should stay separate."
+                />
+              </label>
+              <button
+                type="submit"
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Keep Separate
+              </button>
+            </form>
           </div>
         </section>
 

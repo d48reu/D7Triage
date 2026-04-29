@@ -16,6 +16,8 @@ import {
   getIssueReportById,
   getLatestAiSuggestion,
   listReferrals,
+  markIssueAsDistinct,
+  markIssueAsDuplicate,
   updateAiSuggestionFeedback,
   updateReferralOutcome,
   updateIssueStatus,
@@ -294,6 +296,55 @@ export async function updateReferralOutcomeAction(formData: FormData) {
   revalidatePath("/staff");
   revalidatePath("/staff/analytics");
   revalidatePath(`/staff/reports/${reportId}`);
+  redirect(`/staff/reports/${reportId}`);
+}
+
+export async function markDuplicateAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const masterReportId = readRequiredText(formData, "masterReportId");
+  const note = String(formData.get("note") ?? "").trim();
+  const report = getIssueReportById(reportId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  markIssueAsDuplicate({
+    reportId,
+    masterReportId,
+    note,
+  });
+
+  revalidatePath("/staff");
+  revalidatePath("/staff/analytics");
+  revalidatePath(`/staff/reports/${reportId}`);
+  revalidatePath(`/staff/reports/${masterReportId}`);
+  revalidatePath(`/report/${report.publicTrackingToken}`);
+  redirect(`/staff/reports/${reportId}`);
+}
+
+export async function markDistinctAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const note = String(formData.get("note") ?? "").trim();
+  const report = getIssueReportById(reportId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  markIssueAsDistinct({
+    reportId,
+    note,
+  });
+
+  if (report.duplicateOfReportId) {
+    revalidatePath(`/staff/reports/${report.duplicateOfReportId}`);
+  }
+
+  revalidatePath("/staff");
+  revalidatePath("/staff/analytics");
+  revalidatePath(`/staff/reports/${reportId}`);
+  revalidatePath(`/report/${report.publicTrackingToken}`);
   redirect(`/staff/reports/${reportId}`);
 }
 

@@ -24,6 +24,10 @@ export type IssueReport = {
   contactConsent: boolean;
   newsletterOptIn: boolean;
   newsletterOptInAt: string | null;
+  duplicateOfReportId: string | null;
+  duplicateReviewDecision: "linked_to_master" | "kept_separate" | null;
+  duplicateReviewedAt: string | null;
+  duplicateReviewNote: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -160,6 +164,10 @@ type IssueReportRow = {
   contact_consent: number;
   newsletter_opt_in: number;
   newsletter_opt_in_at: string | null;
+  duplicate_of_report_id: string | null;
+  duplicate_review_decision: "linked_to_master" | "kept_separate" | null;
+  duplicate_reviewed_at: string | null;
+  duplicate_review_note: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -342,6 +350,22 @@ function ensureSchemaMigrations(database: Database.Database) {
     database.exec("alter table issue_reports add column newsletter_opt_in_at text;");
   }
 
+  if (!hasColumn(database, "issue_reports", "duplicate_of_report_id")) {
+    database.exec("alter table issue_reports add column duplicate_of_report_id text references issue_reports(id) on delete set null;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "duplicate_review_decision")) {
+    database.exec("alter table issue_reports add column duplicate_review_decision text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "duplicate_reviewed_at")) {
+    database.exec("alter table issue_reports add column duplicate_reviewed_at text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "duplicate_review_note")) {
+    database.exec("alter table issue_reports add column duplicate_review_note text;");
+  }
+
   if (!hasColumn(database, "referrals", "agency_id")) {
     database.exec("alter table referrals add column agency_id text;");
   }
@@ -521,6 +545,10 @@ function getDb() {
       contact_consent integer not null default 1,
       newsletter_opt_in integer not null default 0,
       newsletter_opt_in_at text,
+      duplicate_of_report_id text references issue_reports(id) on delete set null,
+      duplicate_review_decision text,
+      duplicate_reviewed_at text,
+      duplicate_review_note text,
       created_at text not null,
       updated_at text not null
     );
@@ -633,6 +661,7 @@ function getDb() {
 
     create index if not exists idx_issue_reports_status on issue_reports(status);
     create index if not exists idx_issue_reports_created_at on issue_reports(created_at);
+    create index if not exists idx_issue_reports_duplicate_master on issue_reports(duplicate_of_report_id);
     create index if not exists idx_status_events_report on issue_status_events(report_id);
     create index if not exists idx_staff_notes_report on staff_notes(report_id);
     create index if not exists idx_referrals_report on referrals(report_id);
@@ -664,6 +693,10 @@ function mapReport(row: IssueReportRow): IssueReport {
     contactConsent: row.contact_consent === 1,
     newsletterOptIn: row.newsletter_opt_in === 1,
     newsletterOptInAt: row.newsletter_opt_in_at,
+    duplicateOfReportId: row.duplicate_of_report_id,
+    duplicateReviewDecision: row.duplicate_review_decision,
+    duplicateReviewedAt: row.duplicate_reviewed_at,
+    duplicateReviewNote: row.duplicate_review_note,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -830,11 +863,14 @@ export function createIssueReport(input: CreateIssueReportInput) {
     insert into issue_reports (
       id, public_tracking_token, status, category, description, address_text,
       resident_name, resident_email, resident_phone, preferred_language,
-      contact_consent, newsletter_opt_in, newsletter_opt_in_at, created_at, updated_at
+      contact_consent, newsletter_opt_in, newsletter_opt_in_at,
+      duplicate_of_report_id, duplicate_review_decision, duplicate_reviewed_at,
+      duplicate_review_note, created_at, updated_at
     ) values (
       @id, @publicTrackingToken, @status, @category, @description, @addressText,
       @residentName, @residentEmail, @residentPhone, @preferredLanguage,
-      @contactConsent, @newsletterOptIn, @newsletterOptInAt, @createdAt, @updatedAt
+      @contactConsent, @newsletterOptIn, @newsletterOptInAt, null, null, null,
+      null, @createdAt, @updatedAt
     )
   `);
 
@@ -1197,6 +1233,19 @@ export function getIssueReportById(id: string) {
   return row ? mapReport(row) : null;
 }
 
+export function listLinkedDuplicateReports(masterReportId: string) {
+  const rows = getDb()
+    .prepare(
+      `select *
+       from issue_reports
+       where duplicate_of_report_id = ?
+       order by datetime(updated_at) desc, datetime(created_at) desc`,
+    )
+    .all(masterReportId) as IssueReportRow[];
+
+  return rows.map(mapReport);
+}
+
 export function getIssueReportByToken(token: string) {
   const row = getDb()
     .prepare("select * from issue_reports where public_tracking_token = ?")
@@ -1482,6 +1531,144 @@ export function findPotentialDuplicates(report: IssueReport) {
       );
     })
     .slice(0, 5);
+}
+
+export function markIssueAsDuplicate(input: {
+  reportId: string;
+  masterReportId: string;
+  note?: string;
+}) {
+  const database = getDb();
+  const updatedAt = nowIso();
+  const report = getIssueReportById(input.reportId);
+  const masterReport = getIssueReportById(input.masterReportId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  if (!masterReport) {
+    throw new Error("Primary case not found");
+  }
+
+  if (report.id === masterReport.id) {
+    throw new Error("A case cannot be linked to itself");
+  }
+
+  const publicNote =
+    "This report was linked to an existing case so staff can track follow-up in one place.";
+  const reviewNote = input.note?.trim() || null;
+
+  database.transaction(() => {
+    database
+      .prepare(
+        `update issue_reports
+         set status = ?, duplicate_of_report_id = ?, duplicate_review_decision = ?,
+             duplicate_reviewed_at = ?, duplicate_review_note = ?, updated_at = ?
+         where id = ?`,
+      )
+      .run(
+        "closed_duplicate",
+        masterReport.id,
+        "linked_to_master",
+        updatedAt,
+        reviewNote,
+        updatedAt,
+        report.id,
+      );
+
+    database
+      .prepare(
+        `insert into issue_status_events (
+          id, report_id, status, public_note, created_at
+        ) values (?, ?, ?, ?, ?)`,
+      )
+      .run(makeId(), report.id, "closed_duplicate", publicNote, updatedAt);
+
+    database
+      .prepare(
+        `insert into notification_events (
+          id, report_id, event_type, recipient, subject, body, delivery_status,
+          created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        makeId(),
+        report.id,
+        "duplicate_linked",
+        report.residentEmail,
+        "District 7 linked your report to an existing case",
+        `${publicNote} Primary case: ${masterReport.category} at ${masterReport.addressText}.`,
+        "local_stub",
+        updatedAt,
+      );
+  })();
+}
+
+export function markIssueAsDistinct(input: {
+  reportId: string;
+  note?: string;
+}) {
+  const database = getDb();
+  const updatedAt = nowIso();
+  const report = getIssueReportById(input.reportId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  const nextStatus = report.status === "closed_duplicate" ? "needs_review" : report.status;
+  const publicNote =
+    report.status === "closed_duplicate"
+      ? "Staff reviewed this report and kept it as a separate case."
+      : null;
+  const reviewNote = input.note?.trim() || null;
+
+  database.transaction(() => {
+    database
+      .prepare(
+        `update issue_reports
+         set status = ?, duplicate_of_report_id = null, duplicate_review_decision = ?,
+             duplicate_reviewed_at = ?, duplicate_review_note = ?, updated_at = ?
+         where id = ?`,
+      )
+      .run(
+        nextStatus,
+        "kept_separate",
+        updatedAt,
+        reviewNote,
+        updatedAt,
+        report.id,
+      );
+
+    if (publicNote) {
+      database
+        .prepare(
+          `insert into issue_status_events (
+            id, report_id, status, public_note, created_at
+          ) values (?, ?, ?, ?, ?)`,
+        )
+        .run(makeId(), report.id, nextStatus, publicNote, updatedAt);
+
+      database
+        .prepare(
+          `insert into notification_events (
+            id, report_id, event_type, recipient, subject, body, delivery_status,
+            created_at
+          ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          makeId(),
+          report.id,
+          "duplicate_reopened",
+          report.residentEmail,
+          "District 7 kept your report as a separate case",
+          publicNote,
+          "local_stub",
+          updatedAt,
+        );
+    }
+  })();
 }
 
 export function updateIssueStatus(input: {
