@@ -123,6 +123,10 @@ export default async function StaffReportPage({
             <Detail label="Phone" value={report.residentPhone || "Not provided"} />
             <Detail label="Language" value={report.preferredLanguage} />
             <Detail
+              label="Newsletter"
+              value={report.newsletterOptIn ? "Opted in" : "Case updates only"}
+            />
+            <Detail
               label="Submitted"
               value={new Date(report.createdAt).toLocaleString()}
             />

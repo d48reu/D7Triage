@@ -22,8 +22,21 @@ export type IssueReport = {
   residentPhone: string | null;
   preferredLanguage: string;
   contactConsent: boolean;
+  newsletterOptIn: boolean;
+  newsletterOptInAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type NewsletterContact = {
+  residentEmail: string;
+  residentName: string | null;
+  residentPhone: string | null;
+  preferredLanguage: string;
+  firstOptedInAt: string;
+  lastOptedInAt: string;
+  latestReportId: string;
+  reportCount: number;
 };
 
 export type IssueStatusEvent = {
@@ -136,6 +149,8 @@ type IssueReportRow = {
   resident_phone: string | null;
   preferred_language: string;
   contact_consent: number;
+  newsletter_opt_in: number;
+  newsletter_opt_in_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -265,6 +280,7 @@ export type CreateIssueReportInput = {
   residentPhone?: string;
   preferredLanguage?: string;
   contactConsent: boolean;
+  newsletterOptIn?: boolean;
 };
 
 function nowIso() {
@@ -292,6 +308,14 @@ function hasColumn(
 }
 
 function ensureSchemaMigrations(database: Database.Database) {
+  if (!hasColumn(database, "issue_reports", "newsletter_opt_in")) {
+    database.exec("alter table issue_reports add column newsletter_opt_in integer not null default 0;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "newsletter_opt_in_at")) {
+    database.exec("alter table issue_reports add column newsletter_opt_in_at text;");
+  }
+
   if (!hasColumn(database, "referrals", "agency_id")) {
     database.exec("alter table referrals add column agency_id text;");
   }
@@ -435,6 +459,8 @@ function getDb() {
       resident_phone text,
       preferred_language text not null default 'English',
       contact_consent integer not null default 1,
+      newsletter_opt_in integer not null default 0,
+      newsletter_opt_in_at text,
       created_at text not null,
       updated_at text not null
     );
@@ -565,6 +591,8 @@ function mapReport(row: IssueReportRow): IssueReport {
     residentPhone: row.resident_phone,
     preferredLanguage: row.preferred_language,
     contactConsent: row.contact_consent === 1,
+    newsletterOptIn: row.newsletter_opt_in === 1,
+    newsletterOptInAt: row.newsletter_opt_in_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -728,11 +756,11 @@ export function createIssueReport(input: CreateIssueReportInput) {
     insert into issue_reports (
       id, public_tracking_token, status, category, description, address_text,
       resident_name, resident_email, resident_phone, preferred_language,
-      contact_consent, created_at, updated_at
+      contact_consent, newsletter_opt_in, newsletter_opt_in_at, created_at, updated_at
     ) values (
       @id, @publicTrackingToken, @status, @category, @description, @addressText,
       @residentName, @residentEmail, @residentPhone, @preferredLanguage,
-      @contactConsent, @createdAt, @updatedAt
+      @contactConsent, @newsletterOptIn, @newsletterOptInAt, @createdAt, @updatedAt
     )
   `);
 
@@ -757,6 +785,8 @@ export function createIssueReport(input: CreateIssueReportInput) {
       residentPhone: input.residentPhone || null,
       preferredLanguage: input.preferredLanguage || "English",
       contactConsent: input.contactConsent ? 1 : 0,
+      newsletterOptIn: input.newsletterOptIn ? 1 : 0,
+      newsletterOptInAt: input.newsletterOptIn ? createdAt : null,
       createdAt,
       updatedAt: createdAt,
     });
@@ -799,6 +829,61 @@ export function listIssueReports() {
     .all() as IssueReportRow[];
 
   return rows.map(mapReport);
+}
+
+export function listNewsletterContacts() {
+  const rows = getDb()
+    .prepare(
+      `select
+         resident_email,
+         max(resident_name) as resident_name,
+         max(resident_phone) as resident_phone,
+         max(preferred_language) as preferred_language,
+         min(newsletter_opt_in_at) as first_opted_in_at,
+         max(newsletter_opt_in_at) as last_opted_in_at,
+         count(*) as report_count
+       from issue_reports
+       where newsletter_opt_in = 1
+         and resident_email is not null
+         and trim(resident_email) <> ''
+       group by lower(resident_email)
+       order by datetime(max(newsletter_opt_in_at)) desc`,
+    )
+    .all() as {
+      resident_email: string;
+      resident_name: string | null;
+      resident_phone: string | null;
+      preferred_language: string;
+      first_opted_in_at: string;
+      last_opted_in_at: string;
+      report_count: number;
+    }[];
+
+  const latestReportByEmail = new Map(
+    listIssueReports()
+      .filter((report) => report.newsletterOptIn)
+      .reduce((map, report) => {
+        const key = report.residentEmail.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, report.id);
+        }
+        return map;
+      }, new Map<string, string>()),
+  );
+
+  return rows.map(
+    (row): NewsletterContact => ({
+      residentEmail: row.resident_email,
+      residentName: row.resident_name,
+      residentPhone: row.resident_phone,
+      preferredLanguage: row.preferred_language,
+      firstOptedInAt: row.first_opted_in_at,
+      lastOptedInAt: row.last_opted_in_at,
+      latestReportId:
+        latestReportByEmail.get(row.resident_email.toLowerCase()) || "",
+      reportCount: row.report_count,
+    }),
+  );
 }
 
 export function listAgencies() {

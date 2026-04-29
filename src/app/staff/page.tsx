@@ -38,6 +38,12 @@ export default async function StaffPage() {
             >
               Routing Guide
             </Link>
+            <Link
+              href="/staff/analytics"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Analytics
+            </Link>
             <form action={logoutStaffAction}>
               <button
                 type="submit"

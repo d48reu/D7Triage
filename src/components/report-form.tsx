@@ -124,6 +124,18 @@ export function ReportForm() {
           <span>I agree to receive email updates about this report.</span>
         </label>
 
+        <label className="flex gap-3 rounded-md border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
+          <input
+            name="newsletterOptIn"
+            type="checkbox"
+            className="mt-1"
+          />
+          <span>
+            I would also like to receive District 7 newsletter and community
+            updates by email.
+          </span>
+        </label>
+
         <div
           className={`rounded-md px-3 py-2 text-sm ${
             state.status === "error"

@@ -21,12 +21,20 @@ export default async function RoutingGuidePage() {
             </Link>
             <h1 className="mt-1 text-xl font-semibold">Routing guide</h1>
           </div>
-          <Link
-            href="/report"
-            className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
-          >
-            New Report
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/staff/analytics"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Analytics
+            </Link>
+            <Link
+              href="/report"
+              className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+            >
+              New Report
+            </Link>
+          </div>
         </div>
       </header>
 

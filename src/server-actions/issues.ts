@@ -135,6 +135,7 @@ export async function submitIssueReportAction(
   const residentEmail = String(formData.get("residentEmail") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
   const contactConsent = formData.get("contactConsent") === "on";
+  const newsletterOptIn = formData.get("newsletterOptIn") === "on";
   const photos = formData
     .getAll("photos")
     .filter((value): value is File => value instanceof File && value.size > 0);
@@ -180,6 +181,7 @@ export async function submitIssueReportAction(
     residentPhone: String(formData.get("residentPhone") ?? "").trim(),
     preferredLanguage:
       String(formData.get("preferredLanguage") ?? "").trim() || "English",
+    newsletterOptIn,
   });
 
   if (!report) {
