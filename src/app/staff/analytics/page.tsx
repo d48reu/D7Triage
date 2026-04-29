@@ -9,6 +9,7 @@ import {
 } from "@/lib/jurisdiction";
 import {
   listAiSuggestions,
+  getJurisdictionConfig,
   listIssueReports,
   listNewsletterContacts,
   listReferrals,
@@ -22,12 +23,13 @@ export default async function StaffAnalyticsPage() {
   await requireStaffSession();
 
   const reports = listIssueReports();
+  const jurisdictionConfig = getJurisdictionConfig();
   const allSuggestions = reports.flatMap((report) => listAiSuggestions(report.id));
   const allReferrals = reports.flatMap((report) => listReferrals(report.id));
   const newsletterContacts = listNewsletterContacts();
   const jurisdictionAssessments = reports.map((report) => ({
     report,
-    assessment: analyzeReportJurisdiction(report),
+    assessment: analyzeReportJurisdiction(report, jurisdictionConfig),
   }));
 
   const unresolvedReports = reports.filter((report) =>

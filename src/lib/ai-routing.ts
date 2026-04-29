@@ -5,6 +5,7 @@ import { analyzeReportJurisdiction } from "@/lib/jurisdiction";
 import {
   type Agency,
   type IssueReport,
+  getJurisdictionConfig,
   type ManagedRoutingRule,
   addAiSuggestion,
   countAiSuggestionsSince,
@@ -167,6 +168,10 @@ function getResponseSchema(agencyIds: string[]) {
 
 function buildPrompt(input: {
   report: IssueReport;
+  jurisdictionConfig: {
+    districtMatchKeywords: string[];
+    districtOutsideKeywords: string[];
+  };
   currentRule: ManagedRoutingRule | null;
   agencies: Agency[];
   routingRules: ManagedRoutingRule[];
@@ -185,7 +190,11 @@ function buildPrompt(input: {
     ),
     "",
     "Jurisdiction assessment:",
-    JSON.stringify(analyzeReportJurisdiction(input.report), null, 2),
+    JSON.stringify(
+      analyzeReportJurisdiction(input.report, input.jurisdictionConfig),
+      null,
+      2,
+    ),
     "",
     "Current routing rule for the report category:",
     JSON.stringify(input.currentRule, null, 2),
@@ -263,6 +272,7 @@ export async function generateAiRoutingSuggestion(reportId: string) {
   const currentRule = getManagedRoutingRule(report.category);
   const agencies = listAgencies().filter((agency) => agency.isActive);
   const routingRules = listManagedRoutingRules();
+  const jurisdictionConfig = getJurisdictionConfig();
   const client = getOpenAIClient();
 
   const response = (await client.responses.create({
@@ -275,7 +285,13 @@ export async function generateAiRoutingSuggestion(reportId: string) {
       },
       {
         role: "user",
-        content: buildPrompt({ report, currentRule, agencies, routingRules }),
+        content: buildPrompt({
+          report,
+          jurisdictionConfig,
+          currentRule,
+          agencies,
+          routingRules,
+        }),
       },
     ],
     text: {

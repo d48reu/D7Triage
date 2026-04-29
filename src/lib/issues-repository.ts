@@ -39,6 +39,12 @@ export type NewsletterContact = {
   reportCount: number;
 };
 
+export type JurisdictionConfig = {
+  districtMatchKeywords: string[];
+  districtOutsideKeywords: string[];
+  updatedAt: string | null;
+};
+
 export type IssueStatusEvent = {
   id: string;
   reportId: string;
@@ -277,6 +283,13 @@ type ManagedRoutingRuleRow = {
   agency_updated_at: string | null;
 };
 
+type JurisdictionSettingsRow = {
+  id: number;
+  district_match_keywords: string | null;
+  district_outside_keywords: string | null;
+  updated_at: string | null;
+};
+
 export type CreateIssueReportInput = {
   category: string;
   description: string;
@@ -291,6 +304,13 @@ export type CreateIssueReportInput = {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function parseKeywordList(value: string | null | undefined) {
+  return (value ?? "")
+    .split(/\r?\n|,/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 function makeId() {
@@ -458,6 +478,27 @@ function seedRoutingData(database: Database.Database) {
   }
 }
 
+function seedJurisdictionSettings(database: Database.Database) {
+  const row = database
+    .prepare("select id from jurisdiction_settings where id = 1")
+    .get() as { id: number } | undefined;
+
+  if (row) return;
+
+  database
+    .prepare(
+      `insert into jurisdiction_settings (
+        id, district_match_keywords, district_outside_keywords, updated_at
+      ) values (?, ?, ?, ?)`,
+    )
+    .run(
+      1,
+      process.env.DISTRICT_7_MATCH_KEYWORDS ?? "",
+      process.env.DISTRICT_7_OUTSIDE_KEYWORDS ?? "",
+      nowIso(),
+    );
+}
+
 function getDb() {
   if (db) return db;
 
@@ -583,6 +624,13 @@ function getDb() {
       updated_at text not null
     );
 
+    create table if not exists jurisdiction_settings (
+      id integer primary key,
+      district_match_keywords text,
+      district_outside_keywords text,
+      updated_at text
+    );
+
     create index if not exists idx_issue_reports_status on issue_reports(status);
     create index if not exists idx_issue_reports_created_at on issue_reports(created_at);
     create index if not exists idx_status_events_report on issue_status_events(report_id);
@@ -596,6 +644,7 @@ function getDb() {
 
   ensureSchemaMigrations(db);
   seedRoutingData(db);
+  seedJurisdictionSettings(db);
 
   return db;
 }
@@ -909,6 +958,56 @@ export function listNewsletterContacts() {
       reportCount: row.report_count,
     }),
   );
+}
+
+export function getJurisdictionConfig(): JurisdictionConfig {
+  const row = getDb()
+    .prepare("select * from jurisdiction_settings where id = 1")
+    .get() as JurisdictionSettingsRow | undefined;
+
+  if (!row) {
+    return {
+      districtMatchKeywords: parseKeywordList(
+        process.env.DISTRICT_7_MATCH_KEYWORDS ?? "",
+      ),
+      districtOutsideKeywords: parseKeywordList(
+        process.env.DISTRICT_7_OUTSIDE_KEYWORDS ?? "",
+      ),
+      updatedAt: null,
+    };
+  }
+
+  return {
+    districtMatchKeywords: parseKeywordList(row.district_match_keywords),
+    districtOutsideKeywords: parseKeywordList(row.district_outside_keywords),
+    updatedAt: row.updated_at,
+  };
+}
+
+export function saveJurisdictionConfig(input: {
+  districtMatchKeywords: string;
+  districtOutsideKeywords: string;
+}) {
+  const updatedAt = nowIso();
+
+  getDb()
+    .prepare(
+      `insert into jurisdiction_settings (
+        id, district_match_keywords, district_outside_keywords, updated_at
+      ) values (?, ?, ?, ?)
+      on conflict(id) do update set
+        district_match_keywords = excluded.district_match_keywords,
+        district_outside_keywords = excluded.district_outside_keywords,
+        updated_at = excluded.updated_at`,
+    )
+    .run(
+      1,
+      input.districtMatchKeywords.trim(),
+      input.districtOutsideKeywords.trim(),
+      updatedAt,
+    );
+
+  return getJurisdictionConfig();
 }
 
 export function listAgencies() {

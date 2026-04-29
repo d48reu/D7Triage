@@ -1,7 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { upsertAgency, upsertRoutingRule } from "@/lib/issues-repository";
+import {
+  saveJurisdictionConfig,
+  upsertAgency,
+  upsertRoutingRule,
+} from "@/lib/issues-repository";
 
 function readRequiredText(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -44,4 +48,19 @@ export async function saveRoutingRuleAction(formData: FormData) {
 
   revalidatePath("/staff/routing");
   revalidatePath("/staff");
+}
+
+export async function saveJurisdictionConfigAction(formData: FormData) {
+  saveJurisdictionConfig({
+    districtMatchKeywords: String(
+      formData.get("districtMatchKeywords") ?? "",
+    ).trim(),
+    districtOutsideKeywords: String(
+      formData.get("districtOutsideKeywords") ?? "",
+    ).trim(),
+  });
+
+  revalidatePath("/staff/routing");
+  revalidatePath("/staff");
+  revalidatePath("/staff/analytics");
 }

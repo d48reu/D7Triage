@@ -10,6 +10,7 @@ import {
 } from "@/lib/jurisdiction";
 import {
   findPotentialDuplicates,
+  getJurisdictionConfig,
   getLatestAiSuggestion,
   getManagedRoutingRule,
   getIssueReportById,
@@ -54,7 +55,8 @@ export default async function StaffReportPage({
   const routingRule = getManagedRoutingRule(report.category);
   const latestSuggestion = getLatestAiSuggestion(report.id);
   const aiRoutingAvailability = getAiRoutingAvailability();
-  const jurisdiction = analyzeReportJurisdiction(report);
+  const jurisdictionConfig = getJurisdictionConfig();
+  const jurisdiction = analyzeReportJurisdiction(report, jurisdictionConfig);
   const defaultOwnerLabel = routingRule?.ownerLabel ?? "District 7 triage";
 
   return (

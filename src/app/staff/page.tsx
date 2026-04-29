@@ -6,7 +6,11 @@ import {
   formatDistrictHintStatus,
   formatOwnershipHint,
 } from "@/lib/jurisdiction";
-import { getManagedRoutingRule, listIssueReports } from "@/lib/issues-repository";
+import {
+  getJurisdictionConfig,
+  getManagedRoutingRule,
+  listIssueReports,
+} from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 
 export const runtime = "nodejs";
@@ -15,9 +19,10 @@ export const dynamic = "force-dynamic";
 export default async function StaffPage() {
   await requireStaffSession();
   const reports = listIssueReports();
+  const jurisdictionConfig = getJurisdictionConfig();
   const reportRows = reports.map((report) => ({
     report,
-    jurisdiction: analyzeReportJurisdiction(report),
+    jurisdiction: analyzeReportJurisdiction(report, jurisdictionConfig),
   }));
   const needsReview = reports.filter((report) => report.status === "received");
   const inProgress = reports.filter((report) =>

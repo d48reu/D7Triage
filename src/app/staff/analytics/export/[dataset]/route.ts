@@ -5,6 +5,7 @@ import {
   formatOwnershipHint,
 } from "@/lib/jurisdiction";
 import {
+  getJurisdictionConfig,
   listAiSuggestions,
   listIssueReports,
   listNewsletterContacts,
@@ -39,6 +40,7 @@ export async function GET(
 
 function buildCsv(dataset: string) {
   const reports = listIssueReports();
+  const jurisdictionConfig = getJurisdictionConfig();
 
   switch (dataset) {
     case "newsletter-contacts": {
@@ -94,7 +96,7 @@ function buildCsv(dataset: string) {
             "created_at",
           ],
           openReports.map((report) => {
-            const jurisdiction = analyzeReportJurisdiction(report);
+            const jurisdiction = analyzeReportJurisdiction(report, jurisdictionConfig);
             return [
               formatOwnershipHint(jurisdiction.ownershipHint),
               formatDistrictHintStatus(jurisdiction.districtHintStatus),

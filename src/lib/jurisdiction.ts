@@ -1,4 +1,8 @@
-import type { IssueReport } from "@/lib/issues-repository";
+type ReportLike = {
+  category: string;
+  description: string;
+  addressText: string;
+};
 
 export type JurisdictionOwnershipHint =
   | "municipal"
@@ -26,12 +30,10 @@ export type JurisdictionAssessment = {
   matchedClues: string[];
 };
 
-const DISTRICT_MATCH_KEYWORDS = parseKeywords(
-  process.env.DISTRICT_7_MATCH_KEYWORDS,
-);
-const DISTRICT_OUTSIDE_KEYWORDS = parseKeywords(
-  process.env.DISTRICT_7_OUTSIDE_KEYWORDS,
-);
+export type JurisdictionKeywordConfig = {
+  districtMatchKeywords: string[];
+  districtOutsideKeywords: string[];
+};
 
 const OWNERSHIP_RULES: Array<{
   ownershipHint: Exclude<JurisdictionOwnershipHint, "municipal" | "unclear">;
@@ -110,7 +112,10 @@ const OWNERSHIP_RULES: Array<{
   },
 ];
 
-export function analyzeReportJurisdiction(report: Pick<IssueReport, "category" | "description" | "addressText">): JurisdictionAssessment {
+export function analyzeReportJurisdiction(
+  report: ReportLike,
+  config?: JurisdictionKeywordConfig,
+): JurisdictionAssessment {
   const combinedText = `${report.addressText}\n${report.description}`;
   const normalized = combinedText.toLowerCase();
 
@@ -135,7 +140,11 @@ export function analyzeReportJurisdiction(report: Pick<IssueReport, "category" |
   const ownershipHint = topOwnership?.[0] ?? "municipal";
   const ownershipScore = topOwnership?.[1] ?? 0;
 
-  const districtHintStatus = getDistrictHintStatus(normalized, matchedClues);
+  const districtHintStatus = getDistrictHintStatus(
+    normalized,
+    matchedClues,
+    config ?? getEnvJurisdictionKeywordConfig(),
+  );
   const confidence = getConfidence(ownershipHint, ownershipScore, districtHintStatus);
 
   return {
@@ -225,11 +234,22 @@ function applyCategoryBias(
   }
 }
 
-function getDistrictHintStatus(normalizedText: string, matchedClues: string[]) {
-  const matchesDistrict = DISTRICT_MATCH_KEYWORDS.some((keyword) =>
+function getEnvJurisdictionKeywordConfig(): JurisdictionKeywordConfig {
+  return {
+    districtMatchKeywords: parseKeywords(process.env.DISTRICT_7_MATCH_KEYWORDS),
+    districtOutsideKeywords: parseKeywords(process.env.DISTRICT_7_OUTSIDE_KEYWORDS),
+  };
+}
+
+function getDistrictHintStatus(
+  normalizedText: string,
+  matchedClues: string[],
+  config: JurisdictionKeywordConfig,
+) {
+  const matchesDistrict = config.districtMatchKeywords.some((keyword) =>
     normalizedText.includes(keyword),
   );
-  const matchesOutside = DISTRICT_OUTSIDE_KEYWORDS.some((keyword) =>
+  const matchesOutside = config.districtOutsideKeywords.some((keyword) =>
     normalizedText.includes(keyword),
   );
 
