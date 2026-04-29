@@ -3,6 +3,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { ISSUE_CATEGORIES, type IssueStatus } from "@/lib/issue-types";
+import {
+  NOTIFICATION_TEMPLATE_DEFINITIONS,
+  type NotificationTemplateKey,
+} from "@/lib/notification-template-definitions";
 import { ROUTING_RULES } from "@/lib/routing-matrix";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
@@ -97,6 +101,14 @@ export type NotificationEvent = {
   body: string;
   deliveryStatus: string;
   createdAt: string;
+};
+
+export type NotificationTemplate = {
+  key: NotificationTemplateKey;
+  label: string;
+  subjectTemplate: string;
+  bodyTemplate: string;
+  updatedAt: string;
 };
 
 export type AiSuggestion = {
@@ -220,6 +232,14 @@ type NotificationEventRow = {
   body: string;
   delivery_status: string;
   created_at: string;
+};
+
+type NotificationTemplateRow = {
+  key: NotificationTemplateKey;
+  label: string;
+  subject_template: string;
+  body_template: string;
+  updated_at: string;
 };
 
 type AiSuggestionRow = {
@@ -523,6 +543,28 @@ function seedJurisdictionSettings(database: Database.Database) {
     );
 }
 
+function seedNotificationTemplates(database: Database.Database) {
+  const upsertTemplate = database.prepare(
+    `insert into notification_templates (
+      key, label, subject_template, body_template, updated_at
+    ) values (?, ?, ?, ?, ?)
+    on conflict(key) do update set
+      label = excluded.label,
+      subject_template = coalesce(notification_templates.subject_template, excluded.subject_template),
+      body_template = coalesce(notification_templates.body_template, excluded.body_template)`,
+  );
+
+  for (const template of NOTIFICATION_TEMPLATE_DEFINITIONS) {
+    upsertTemplate.run(
+      template.key,
+      template.label,
+      template.subjectTemplate,
+      template.bodyTemplate,
+      nowIso(),
+    );
+  }
+}
+
 function getDb() {
   if (db) return db;
 
@@ -626,6 +668,14 @@ function getDb() {
       created_at text not null
     );
 
+    create table if not exists notification_templates (
+      key text primary key,
+      label text not null,
+      subject_template text not null,
+      body_template text not null,
+      updated_at text not null
+    );
+
     create table if not exists agencies (
       id text primary key,
       name text not null unique,
@@ -674,6 +724,7 @@ function getDb() {
   ensureSchemaMigrations(db);
   seedRoutingData(db);
   seedJurisdictionSettings(db);
+  seedNotificationTemplates(db);
 
   return db;
 }
@@ -759,6 +810,16 @@ function mapNotificationEvent(row: NotificationEventRow): NotificationEvent {
     body: row.body,
     deliveryStatus: row.delivery_status,
     createdAt: row.created_at,
+  };
+}
+
+function mapNotificationTemplate(row: NotificationTemplateRow): NotificationTemplate {
+  return {
+    key: row.key,
+    label: row.label,
+    subjectTemplate: row.subject_template,
+    bodyTemplate: row.body_template,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -1337,6 +1398,69 @@ export function listNotificationEvents(reportId: string) {
     .all(reportId) as NotificationEventRow[];
 
   return rows.map(mapNotificationEvent);
+}
+
+export function listNotificationTemplates() {
+  const rows = getDb()
+    .prepare(
+      "select * from notification_templates order by label asc",
+    )
+    .all() as NotificationTemplateRow[];
+
+  return rows.map(mapNotificationTemplate);
+}
+
+export function getNotificationTemplateMap() {
+  const savedTemplates = new Map(
+    listNotificationTemplates().map((template) => [template.key, template]),
+  );
+
+  return new Map(
+    NOTIFICATION_TEMPLATE_DEFINITIONS.map((definition) => [
+      definition.key,
+      savedTemplates.get(definition.key) ?? {
+        key: definition.key,
+        label: definition.label,
+        subjectTemplate: definition.subjectTemplate,
+        bodyTemplate: definition.bodyTemplate,
+        updatedAt: nowIso(),
+      },
+    ]),
+  );
+}
+
+export function upsertNotificationTemplate(input: {
+  key: NotificationTemplateKey;
+  subjectTemplate: string;
+  bodyTemplate: string;
+}) {
+  const definition = NOTIFICATION_TEMPLATE_DEFINITIONS.find(
+    (template) => template.key === input.key,
+  );
+
+  if (!definition) {
+    throw new Error("Unknown notification template");
+  }
+
+  const updatedAt = nowIso();
+  getDb()
+    .prepare(
+      `insert into notification_templates (
+        key, label, subject_template, body_template, updated_at
+      ) values (?, ?, ?, ?, ?)
+      on conflict(key) do update set
+        label = excluded.label,
+        subject_template = excluded.subject_template,
+        body_template = excluded.body_template,
+        updated_at = excluded.updated_at`,
+    )
+    .run(
+      input.key,
+      definition.label,
+      input.subjectTemplate.trim(),
+      input.bodyTemplate.trim(),
+      updatedAt,
+    );
 }
 
 export function listAiSuggestions(reportId: string) {

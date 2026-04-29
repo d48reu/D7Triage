@@ -1,13 +1,16 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { logoutStaffAction } from "@/server-actions/auth";
+import { saveNotificationTemplateAction } from "@/server-actions/notifications";
 import {
   buildNotificationPreview,
   getLastNotificationSummary,
 } from "@/lib/notification-previews";
 import {
+  getNotificationTemplateMap,
   listIssueReports,
   listNotificationEvents,
+  listNotificationTemplates,
   listReferrals,
   listStatusEvents,
 } from "@/lib/issues-repository";
@@ -20,6 +23,8 @@ export default async function StaffNotificationsPage() {
   await requireStaffSession();
 
   const reports = listIssueReports();
+  const templates = listNotificationTemplates();
+  const templateMap = getNotificationTemplateMap();
   const rows = reports.map((report) => {
     const events = listStatusEvents(report.id);
     const referrals = listReferrals(report.id);
@@ -28,6 +33,7 @@ export default async function StaffNotificationsPage() {
       report,
       events,
       referrals,
+      templates: templateMap,
     });
 
     return {
@@ -150,6 +156,67 @@ export default async function StaffNotificationsPage() {
               </p>
             </div>
           </Panel>
+        </section>
+
+        <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">Message templates</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Adjust the default constituent wording here. The live previews below update from these templates.
+              </p>
+            </div>
+            <div className="max-w-xl text-xs leading-6 text-slate-500">
+              Available placeholders: <code>{`{{address}}`}</code>, <code>{`{{category}}`}</code>, <code>{`{{category_lower}}`}</code>, <code>{`{{status}}`}</code>, <code>{`{{trackingToken}}`}</code>, <code>{`{{agencyName}}`}</code>, <code>{`{{referralMethod}}`}</code>, <code>{`{{referralMethod_lower}}`}</code>, and <code>{`{{publicNote_or_default}}`}</code>.
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+            {templates.map((template) => (
+              <form
+                key={template.key}
+                action={saveNotificationTemplateAction}
+                className="rounded-md border border-slate-200 bg-slate-50 p-4"
+              >
+                <input type="hidden" name="templateKey" value={template.key} />
+                <div className="text-sm font-semibold text-slate-900">
+                  {template.label}
+                </div>
+                <div className="mt-1 text-xs uppercase tracking-[0.08em] text-slate-500">
+                  {template.key}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Updated {new Date(template.updatedAt).toLocaleString()}
+                </div>
+                <label className="mt-4 block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Subject template
+                  </span>
+                  <input
+                    name="subjectTemplate"
+                    defaultValue={template.subjectTemplate}
+                    className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  />
+                </label>
+                <label className="mt-4 block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Body template
+                  </span>
+                  <textarea
+                    name="bodyTemplate"
+                    defaultValue={template.bodyTemplate}
+                    className="min-h-32 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="mt-4 rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+                >
+                  Save Template
+                </button>
+              </form>
+            ))}
+          </div>
         </section>
 
         <section className="space-y-4">
