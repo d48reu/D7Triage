@@ -19,14 +19,32 @@ import { requireStaffSession } from "@/lib/staff-auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export default async function StaffAnalyticsPage() {
+export default async function StaffAnalyticsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireStaffSession();
+  const params = (await searchParams) ?? {};
+  const selectedPreset = readSearchParam(params, "preset") || "all";
+  const dateFrom = readSearchParam(params, "dateFrom");
+  const dateTo = readSearchParam(params, "dateTo");
+  const filterRange = resolveFilterRange({
+    preset: selectedPreset,
+    dateFrom,
+    dateTo,
+  });
 
-  const reports = listIssueReports();
+  const allReports = listIssueReports();
   const jurisdictionConfig = getJurisdictionConfig();
+  const reports = allReports.filter((report) =>
+    isIsoWithinRange(report.createdAt, filterRange.start, filterRange.end),
+  );
   const allSuggestions = reports.flatMap((report) => listAiSuggestions(report.id));
   const allReferrals = reports.flatMap((report) => listReferrals(report.id));
-  const newsletterContacts = listNewsletterContacts();
+  const newsletterContacts = listNewsletterContacts().filter((contact) =>
+    isIsoWithinRange(contact.lastOptedInAt, filterRange.start, filterRange.end),
+  );
   const jurisdictionAssessments = reports.map((report) => ({
     report,
     assessment: analyzeReportJurisdiction(report, jurisdictionConfig),
@@ -92,6 +110,35 @@ export default async function StaffAnalyticsPage() {
   const recentContacts = reports
     .filter((report) => report.residentEmail)
     .slice(0, 12);
+  const resolvedThisWindow = reports.filter((report) =>
+    ["resolved", "closed_outside_jurisdiction"].includes(report.status),
+  );
+  const reportsWithReferrals = new Set(allReferrals.map((referral) => referral.reportId));
+  const reportsRoutedThisWindow = reports.filter((report) =>
+    reportsWithReferrals.has(report.id),
+  );
+  const reportTrend = buildDailyTrend(reports.map((report) => report.createdAt), filterRange, "Reports");
+  const referralTrend = buildDailyTrend(
+    allReferrals.map((referral) => referral.createdAt),
+    filterRange,
+    "Referrals",
+  );
+  const aiReviewTrend = buildDailyTrend(
+    aiReviewed
+      .map((suggestion) => suggestion.feedbackCreatedAt)
+      .filter((value): value is string => Boolean(value)),
+    filterRange,
+    "AI reviews",
+  );
+  const referralOutcomeCounts = countBy(
+    allReferrals.map((referral) => formatStatus(referral.outcomeStatus)),
+  );
+  const windowLabel = formatWindowLabel(filterRange, selectedPreset);
+  const quickRanges = buildQuickRangeLinks({
+    currentPreset: selectedPreset,
+    dateFrom,
+    dateTo,
+  });
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -135,6 +182,90 @@ export default async function StaffAnalyticsPage() {
       </header>
 
       <div className="mx-auto max-w-7xl space-y-6 px-5 py-6">
+        <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">Date filters</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Analytics below reflect reports created inside the selected window.
+              </p>
+            </div>
+            <div className="text-sm text-slate-600">
+              Current window: <span className="font-semibold text-slate-900">{windowLabel}</span>
+            </div>
+          </div>
+
+          <form className="mt-5 grid gap-4 lg:grid-cols-[160px_1fr_1fr_auto]">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">
+                Preset
+              </span>
+              <select
+                name="preset"
+                defaultValue={selectedPreset}
+                className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              >
+                <option value="all">All time</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">
+                From
+              </span>
+              <input
+                type="date"
+                name="dateFrom"
+                defaultValue={dateFrom}
+                className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">
+                To
+              </span>
+              <input
+                type="date"
+                name="dateTo"
+                defaultValue={dateTo}
+                className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
+            <div className="flex items-end gap-2">
+              <button
+                type="submit"
+                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+              >
+                Apply
+              </button>
+              <Link
+                href="/staff/analytics"
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Reset
+              </Link>
+            </div>
+          </form>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {quickRanges.map((range) => (
+              <Link
+                key={range.label}
+                href={range.href}
+                className={`rounded-full px-3 py-1 text-sm font-medium ${
+                  range.active
+                    ? "bg-sky-700 text-white"
+                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {range.label}
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <Metric label="All reports" value={reports.length} />
           <Metric label="Unresolved" value={unresolvedReports.length} />
@@ -150,6 +281,36 @@ export default async function StaffAnalyticsPage() {
           <Metric label="Duplicate reviews" value={duplicateReviewed.length} />
           <Metric label="Closed as duplicate" value={closedAsDuplicate.length} />
           <Metric label="Linked duplicate cases" value={linkedDuplicateCount} />
+        </section>
+
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Metric label="Resolved this window" value={resolvedThisWindow.length} />
+          <Metric label="Reports with referrals" value={reportsRoutedThisWindow.length} />
+          <Metric label="Referrals logged" value={allReferrals.length} />
+          <Metric label="AI reviews logged" value={aiReviewed.length} />
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-[1fr_1fr_1fr]">
+          <Panel title="Report trend">
+            <TrendList
+              items={reportTrend}
+              emptyLabel="No report activity in this window."
+            />
+          </Panel>
+
+          <Panel title="Referral trend">
+            <TrendList
+              items={referralTrend}
+              emptyLabel="No referrals logged in this window."
+            />
+          </Panel>
+
+          <Panel title="AI review trend">
+            <TrendList
+              items={aiReviewTrend}
+              emptyLabel="No AI reviews in this window."
+            />
+          </Panel>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -189,36 +350,11 @@ export default async function StaffAnalyticsPage() {
             />
           </Panel>
 
-          <Panel title="Recent duplicate decisions">
-            {duplicateReviewed.length > 0 ? (
-              <div className="space-y-2">
-                {duplicateReviewed.slice(0, 8).map((report) => (
-                  <Link
-                    key={report.id}
-                    href={`/staff/reports/${report.id}`}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 hover:bg-slate-100"
-                  >
-                    <div>
-                      <div className="font-medium text-slate-900">
-                        {report.category}
-                      </div>
-                      <div className="mt-1 text-sm text-slate-600">
-                        {report.addressText}
-                      </div>
-                    </div>
-                    <div className="text-sm text-slate-700">
-                      {report.duplicateReviewDecision === "linked_to_master"
-                        ? "Linked to primary case"
-                        : "Kept separate"}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-600">
-                No duplicate decisions have been recorded yet.
-              </p>
-            )}
+          <Panel title="Referral outcomes">
+            <CountList
+              items={referralOutcomeCounts}
+              emptyLabel="No referral outcomes recorded yet."
+            />
           </Panel>
         </section>
 
@@ -400,6 +536,183 @@ export default async function StaffAnalyticsPage() {
   );
 }
 
+function readSearchParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+) {
+  const value = params[key];
+  if (Array.isArray(value)) {
+    return value[0] ?? "";
+  }
+  return value ?? "";
+}
+
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function parseDateInput(value: string) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolveFilterRange(input: {
+  preset: string;
+  dateFrom: string;
+  dateTo: string;
+}): {
+  start: Date | null;
+  end: Date | null;
+  kind: "all" | "preset" | "custom";
+} {
+  const now = new Date();
+  const hasManualDates = Boolean(input.dateFrom || input.dateTo);
+
+  if (hasManualDates) {
+    return {
+      start: input.dateFrom ? startOfDay(parseDateInput(input.dateFrom) ?? now) : null,
+      end: input.dateTo ? endOfDay(parseDateInput(input.dateTo) ?? now) : null,
+      kind: "custom" as const,
+    };
+  }
+
+  if (input.preset === "7d" || input.preset === "30d" || input.preset === "90d") {
+    const days = Number.parseInt(input.preset.replace("d", ""), 10);
+    const start = startOfDay(new Date(now));
+    start.setDate(start.getDate() - (days - 1));
+    return {
+      start,
+      end: endOfDay(now),
+      kind: "preset" as const,
+    };
+  }
+
+  return {
+    start: null,
+    end: null,
+    kind: "all" as const,
+  };
+}
+
+function isIsoWithinRange(
+  value: string,
+  start: Date | null,
+  end: Date | null,
+) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
+  if (start && parsed < start) {
+    return false;
+  }
+  if (end && parsed > end) {
+    return false;
+  }
+  return true;
+}
+
+function formatWindowLabel(
+  range: { start: Date | null; end: Date | null; kind: "all" | "preset" | "custom" },
+  preset: string,
+) {
+  if (range.kind === "all") {
+    return "All time";
+  }
+
+  if (range.start && range.end) {
+    return `${range.start.toLocaleDateString()} to ${range.end.toLocaleDateString()}`;
+  }
+
+  if (range.start) {
+    return `From ${range.start.toLocaleDateString()}`;
+  }
+
+  if (range.end) {
+    return `Through ${range.end.toLocaleDateString()}`;
+  }
+
+  return preset === "all" ? "All time" : preset;
+}
+
+function buildQuickRangeLinks(input: {
+  currentPreset: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const options = [
+    { label: "All time", preset: "all" },
+    { label: "7 days", preset: "7d" },
+    { label: "30 days", preset: "30d" },
+    { label: "90 days", preset: "90d" },
+  ];
+
+  return options.map((option) => ({
+    label: option.label,
+    href: `/staff/analytics?preset=${option.preset}`,
+    active:
+      !input.dateFrom &&
+      !input.dateTo &&
+      input.currentPreset === option.preset,
+  }));
+}
+
+function buildDailyTrend(
+  timestamps: string[],
+  range: { start: Date | null; end: Date | null; kind: "all" | "preset" | "custom" },
+  labelPrefix: string,
+) {
+  const filteredDates = timestamps
+    .map((timestamp) => new Date(timestamp))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .filter((date) => (!range.start || date >= range.start) && (!range.end || date <= range.end));
+
+  if (filteredDates.length === 0) {
+    return [] as Array<{ label: string; count: number; fullLabel: string }>;
+  }
+
+  const maxBuckets = 14;
+  const sorted = filteredDates.sort((a, b) => a.getTime() - b.getTime());
+  const lastDate = range.end ? endOfDay(range.end) : endOfDay(sorted[sorted.length - 1]);
+  const firstDate = range.start
+    ? startOfDay(range.start)
+    : startOfDay(new Date(lastDate.getTime() - (maxBuckets - 1) * 24 * 60 * 60 * 1000));
+
+  const counts = new Map<string, number>();
+  const cursor = startOfDay(firstDate);
+
+  while (cursor <= lastDate) {
+    counts.set(cursor.toISOString().slice(0, 10), 0);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  for (const date of filteredDates) {
+    const key = startOfDay(date).toISOString().slice(0, 10);
+    if (counts.has(key)) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+
+  const entries = Array.from(counts.entries()).slice(-maxBuckets);
+  return entries.map(([dateKey, count]) => ({
+    label: new Date(`${dateKey}T00:00:00`).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    }),
+    count,
+    fullLabel: `${labelPrefix} on ${dateKey}`,
+  }));
+}
+
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -447,6 +760,47 @@ function CountList({
           <div className="text-sm text-slate-800">{item.label}</div>
           <div className="text-sm font-semibold tabular-nums text-slate-950">
             {item.count}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TrendList({
+  items,
+  emptyLabel,
+}: {
+  items: Array<{ label: string; count: number; fullLabel: string }>;
+  emptyLabel: string;
+}) {
+  if (items.length === 0) {
+    return <p className="text-sm text-slate-600">{emptyLabel}</p>;
+  }
+
+  const maxCount = Math.max(...items.map((item) => item.count), 1);
+
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.fullLabel}>
+          <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+            <span className="text-slate-700">{item.label}</span>
+            <span className="font-semibold tabular-nums text-slate-900">
+              {item.count}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-sky-700"
+              style={{
+                width: `${Math.max(
+                  (item.count / maxCount) * 100,
+                  item.count > 0 ? 10 : 0,
+                )}%`,
+              }}
+              aria-label={item.fullLabel}
+            />
           </div>
         </div>
       ))}
