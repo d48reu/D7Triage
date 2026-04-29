@@ -3,6 +3,11 @@ import Link from "next/link";
 import { logoutStaffAction } from "@/server-actions/auth";
 import { formatStatus } from "@/lib/issue-types";
 import {
+  analyzeReportJurisdiction,
+  formatDistrictHintStatus,
+  formatOwnershipHint,
+} from "@/lib/jurisdiction";
+import {
   listAiSuggestions,
   listIssueReports,
   listNewsletterContacts,
@@ -20,6 +25,10 @@ export default async function StaffAnalyticsPage() {
   const allSuggestions = reports.flatMap((report) => listAiSuggestions(report.id));
   const allReferrals = reports.flatMap((report) => listReferrals(report.id));
   const newsletterContacts = listNewsletterContacts();
+  const jurisdictionAssessments = reports.map((report) => ({
+    report,
+    assessment: analyzeReportJurisdiction(report),
+  }));
 
   const unresolvedReports = reports.filter((report) =>
     !["resolved", "closed_outside_jurisdiction", "closed_duplicate"].includes(
@@ -49,6 +58,16 @@ export default async function StaffAnalyticsPage() {
   );
   const aiFeedbackCounts = countBy(
     aiReviewed.map((suggestion) => formatDisposition(suggestion.feedbackDisposition!)),
+  );
+  const ownershipHintCounts = countBy(
+    jurisdictionAssessments.map((item) =>
+      formatOwnershipHint(item.assessment.ownershipHint),
+    ),
+  );
+  const districtHintCounts = countBy(
+    jurisdictionAssessments.map((item) =>
+      formatDistrictHintStatus(item.assessment.districtHintStatus),
+    ),
   );
 
   const recentContacts = reports
@@ -111,6 +130,22 @@ export default async function StaffAnalyticsPage() {
             <CountList
               items={agencyReferralCounts}
               emptyLabel="No referrals recorded yet."
+            />
+          </Panel>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <Panel title="Jurisdiction ownership hints">
+            <CountList
+              items={ownershipHintCounts}
+              emptyLabel="No jurisdiction hints yet."
+            />
+          </Panel>
+
+          <Panel title="District match hints">
+            <CountList
+              items={districtHintCounts}
+              emptyLabel="No district hints yet."
             />
           </Panel>
         </section>

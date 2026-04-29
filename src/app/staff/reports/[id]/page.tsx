@@ -4,6 +4,11 @@ import { AiSuggestionPanel } from "@/components/ai-suggestion-panel";
 import { getAiRoutingAvailability } from "@/lib/ai-routing";
 import { formatStatus, ISSUE_STATUSES } from "@/lib/issue-types";
 import {
+  analyzeReportJurisdiction,
+  formatDistrictHintStatus,
+  formatOwnershipHint,
+} from "@/lib/jurisdiction";
+import {
   findPotentialDuplicates,
   getLatestAiSuggestion,
   getManagedRoutingRule,
@@ -49,6 +54,7 @@ export default async function StaffReportPage({
   const routingRule = getManagedRoutingRule(report.category);
   const latestSuggestion = getLatestAiSuggestion(report.id);
   const aiRoutingAvailability = getAiRoutingAvailability();
+  const jurisdiction = analyzeReportJurisdiction(report);
   const defaultOwnerLabel = routingRule?.ownerLabel ?? "District 7 triage";
 
   return (
@@ -112,6 +118,46 @@ export default async function StaffReportPage({
                 </div>
                 <div>
                   Method: {routingRule.agency.defaultReferralMethod || "Not set"}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-5 rounded-md border border-amber-200 bg-amber-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800">
+              Jurisdiction hints
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-sm font-medium text-slate-900">
+              <span className="rounded-full bg-white px-3 py-1">
+                {formatOwnershipHint(jurisdiction.ownershipHint)}
+              </span>
+              <span className="rounded-full bg-white px-3 py-1">
+                {formatDistrictHintStatus(jurisdiction.districtHintStatus)}
+              </span>
+              <span className="rounded-full bg-white px-3 py-1">
+                Confidence: {formatStatus(jurisdiction.confidence)}
+              </span>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-700">
+              {jurisdiction.summary}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
+              {jurisdiction.staffGuidance}
+            </p>
+            {jurisdiction.matchedClues.length > 0 ? (
+              <div className="mt-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  Matched clues
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {jurisdiction.matchedClues.map((clue) => (
+                    <span
+                      key={clue}
+                      className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs text-slate-700"
+                    >
+                      {clue}
+                    </span>
+                  ))}
                 </div>
               </div>
             ) : null}

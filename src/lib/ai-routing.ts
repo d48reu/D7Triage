@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { Response as OpenAIResponse } from "openai/resources/responses/responses";
 import { ISSUE_CATEGORIES } from "@/lib/issue-types";
+import { analyzeReportJurisdiction } from "@/lib/jurisdiction";
 import {
   type Agency,
   type IssueReport,
@@ -182,6 +183,9 @@ function buildPrompt(input: {
       null,
       2,
     ),
+    "",
+    "Jurisdiction assessment:",
+    JSON.stringify(analyzeReportJurisdiction(input.report), null, 2),
     "",
     "Current routing rule for the report category:",
     JSON.stringify(input.currentRule, null, 2),

@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { logoutStaffAction } from "@/server-actions/auth";
 import { formatStatus } from "@/lib/issue-types";
+import {
+  analyzeReportJurisdiction,
+  formatDistrictHintStatus,
+  formatOwnershipHint,
+} from "@/lib/jurisdiction";
 import { getManagedRoutingRule, listIssueReports } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 
@@ -10,6 +15,10 @@ export const dynamic = "force-dynamic";
 export default async function StaffPage() {
   await requireStaffSession();
   const reports = listIssueReports();
+  const reportRows = reports.map((report) => ({
+    report,
+    jurisdiction: analyzeReportJurisdiction(report),
+  }));
   const needsReview = reports.filter((report) => report.status === "received");
   const inProgress = reports.filter((report) =>
     ["needs_review", "routed", "awaiting_agency"].includes(report.status),
@@ -73,7 +82,7 @@ export default async function StaffPage() {
 
           {reports.length > 0 ? (
             <div className="divide-y divide-slate-200">
-              {reports.map((report) => (
+              {reportRows.map(({ report, jurisdiction }) => (
                 <Link
                   key={report.id}
                   href={`/staff/reports/${report.id}`}
@@ -96,8 +105,14 @@ export default async function StaffPage() {
                     </div>
                   </div>
                   <div className="text-sm text-slate-600">
-                    {getManagedRoutingRule(report.category)?.ownerLabel ??
-                      "District 7 triage"}
+                    <div>
+                      {getManagedRoutingRule(report.category)?.ownerLabel ??
+                        "District 7 triage"}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {formatOwnershipHint(jurisdiction.ownershipHint)} |{" "}
+                      {formatDistrictHintStatus(jurisdiction.districtHintStatus)}
+                    </div>
                   </div>
                   <div className="hidden text-sm text-slate-700 lg:block">
                     {formatStatus(report.status)}

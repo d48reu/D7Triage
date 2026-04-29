@@ -69,6 +69,10 @@ export function ReportForm() {
             className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
             placeholder="Street address, intersection, park, or landmark"
           />
+          <p className="mt-2 text-xs text-slate-500">
+            Cross streets, school names, park names, route numbers, and nearby
+            landmarks help staff determine jurisdiction faster.
+          </p>
         </label>
 
         <label className="block">

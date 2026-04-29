@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import {
+  analyzeReportJurisdiction,
+  formatDistrictHintStatus,
+  formatOwnershipHint,
+} from "@/lib/jurisdiction";
+import {
   listAiSuggestions,
   listIssueReports,
   listNewsletterContacts,
@@ -74,6 +79,8 @@ function buildCsv(dataset: string) {
         fileName: "open-reports.csv",
         body: toCsv(
           [
+            "jurisdiction_ownership_hint",
+            "district_hint_status",
             "report_id",
             "tracking_token",
             "status",
@@ -86,19 +93,24 @@ function buildCsv(dataset: string) {
             "newsletter_opt_in",
             "created_at",
           ],
-          openReports.map((report) => [
-            report.id,
-            report.publicTrackingToken,
-            report.status,
-            report.category,
-            report.addressText,
-            report.residentName ?? "",
-            report.residentEmail,
-            report.residentPhone ?? "",
-            report.preferredLanguage,
-            report.newsletterOptIn ? "yes" : "no",
-            report.createdAt,
-          ]),
+          openReports.map((report) => {
+            const jurisdiction = analyzeReportJurisdiction(report);
+            return [
+              formatOwnershipHint(jurisdiction.ownershipHint),
+              formatDistrictHintStatus(jurisdiction.districtHintStatus),
+              report.id,
+              report.publicTrackingToken,
+              report.status,
+              report.category,
+              report.addressText,
+              report.residentName ?? "",
+              report.residentEmail,
+              report.residentPhone ?? "",
+              report.preferredLanguage,
+              report.newsletterOptIn ? "yes" : "no",
+              report.createdAt,
+            ];
+          }),
         ),
       };
     }
