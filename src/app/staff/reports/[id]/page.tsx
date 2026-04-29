@@ -19,6 +19,7 @@ import { requireStaffSession } from "@/lib/staff-auth";
 import {
   addReferralAction,
   addStaffNoteAction,
+  updateReferralOutcomeAction,
   updateIssueStatusAction,
 } from "@/server-actions/issues";
 
@@ -292,6 +293,22 @@ export default async function StaffReportPage({
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Initial outcome
+                  </span>
+                  <select
+                    name="outcomeStatus"
+                    defaultValue="sent"
+                    className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  >
+                    <option value="sent">Sent</option>
+                    <option value="acknowledged">Acknowledged</option>
+                    <option value="work_scheduled">Work scheduled</option>
+                    <option value="resolved_by_agency">Resolved by agency</option>
+                    <option value="outside_jurisdiction">Outside jurisdiction</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
                     Follow-up date
                   </span>
                   <input
@@ -319,6 +336,16 @@ export default async function StaffReportPage({
                   name="notes"
                   className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                   placeholder="Who was contacted, what was sent, next follow-up."
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Outcome note
+                </span>
+                <textarea
+                  name="outcomeNote"
+                  className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Acknowledgement received, scheduled date, or jurisdiction notes."
                 />
               </label>
               <label className="block">
@@ -440,6 +467,9 @@ export default async function StaffReportPage({
                       {referral.referralMethod} |{" "}
                       {new Date(referral.createdAt).toLocaleString()}
                     </div>
+                    <div className="mt-2 text-sm text-slate-700">
+                      Outcome: {formatStatus(referral.outcomeStatus)}
+                    </div>
                     {referral.externalReference ? (
                       <div className="mt-2 text-sm text-slate-700">
                         Reference: {referral.externalReference}
@@ -450,11 +480,78 @@ export default async function StaffReportPage({
                         Follow-up: {referral.followUpDate}
                       </div>
                     ) : null}
+                    {referral.outcomeNote ? (
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                        {referral.outcomeNote}
+                      </p>
+                    ) : null}
                     {referral.notes ? (
                       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                         {referral.notes}
                       </p>
                     ) : null}
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-sm font-medium text-sky-700">
+                        Update referral outcome
+                      </summary>
+                      <form action={updateReferralOutcomeAction} className="mt-3 space-y-3">
+                        <input type="hidden" name="reportId" value={report.id} />
+                        <input type="hidden" name="referralId" value={referral.id} />
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-semibold text-slate-700">
+                            Outcome
+                          </span>
+                          <select
+                            name="outcomeStatus"
+                            defaultValue={referral.outcomeStatus}
+                            className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                          >
+                            <option value="sent">Sent</option>
+                            <option value="acknowledged">Acknowledged</option>
+                            <option value="work_scheduled">Work scheduled</option>
+                            <option value="resolved_by_agency">Resolved by agency</option>
+                            <option value="outside_jurisdiction">Outside jurisdiction</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-semibold text-slate-700">
+                            Follow-up date
+                          </span>
+                          <input
+                            name="followUpDate"
+                            type="date"
+                            defaultValue={referral.followUpDate ?? ""}
+                            className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-semibold text-slate-700">
+                            Outcome note
+                          </span>
+                          <textarea
+                            name="outcomeNote"
+                            defaultValue={referral.outcomeNote ?? ""}
+                            className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-2 block text-sm font-semibold text-slate-700">
+                            Internal notes
+                          </span>
+                          <textarea
+                            name="notes"
+                            defaultValue={referral.notes ?? ""}
+                            className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Save outcome
+                        </button>
+                      </form>
+                    </details>
                   </div>
                 ))
               ) : (

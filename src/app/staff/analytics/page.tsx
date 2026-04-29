@@ -115,6 +115,31 @@ export default async function StaffAnalyticsPage() {
           </Panel>
         </section>
 
+        <Panel title="Exports">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <ExportLink
+              href="/staff/analytics/export/newsletter-contacts"
+              label="Newsletter contacts CSV"
+              description="Only explicit newsletter opt-ins."
+            />
+            <ExportLink
+              href="/staff/analytics/export/open-reports"
+              label="Open reports CSV"
+              description="All unresolved casework."
+            />
+            <ExportLink
+              href="/staff/analytics/export/referrals"
+              label="Referrals CSV"
+              description="Agency handoffs and outcome tracking."
+            />
+            <ExportLink
+              href="/staff/analytics/export/ai-feedback"
+              label="AI feedback CSV"
+              description="Suggestion quality and review outcomes."
+            />
+          </div>
+        </Panel>
+
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <Panel title="AI feedback outcomes">
             <CountList
@@ -319,6 +344,26 @@ function CountList({
         </div>
       ))}
     </div>
+  );
+}
+
+function ExportLink({
+  href,
+  label,
+  description,
+}: {
+  href: string;
+  label: string;
+  description: string;
+}) {
+  return (
+    <a
+      href={href}
+      className="rounded-md border border-slate-200 bg-slate-50 px-4 py-4 hover:bg-slate-100"
+    >
+      <div className="text-sm font-semibold text-slate-900">{label}</div>
+      <div className="mt-1 text-sm text-slate-600">{description}</div>
+    </a>
   );
 }
 

@@ -59,9 +59,12 @@ export type Referral = {
   reportId: string;
   agencyName: string;
   referralMethod: string;
+  outcomeStatus: string;
   externalReference: string | null;
   followUpDate: string | null;
   notes: string | null;
+  outcomeNote: string | null;
+  updatedAt: string;
   createdAt: string;
 };
 
@@ -175,9 +178,12 @@ type ReferralRow = {
   report_id: string;
   agency_name: string;
   referral_method: string;
+  outcome_status: string;
   external_reference: string | null;
   follow_up_date: string | null;
   notes: string | null;
+  outcome_note: string | null;
+  updated_at: string;
   created_at: string;
 };
 
@@ -318,6 +324,19 @@ function ensureSchemaMigrations(database: Database.Database) {
 
   if (!hasColumn(database, "referrals", "agency_id")) {
     database.exec("alter table referrals add column agency_id text;");
+  }
+
+  if (!hasColumn(database, "referrals", "outcome_status")) {
+    database.exec("alter table referrals add column outcome_status text not null default 'sent';");
+  }
+
+  if (!hasColumn(database, "referrals", "outcome_note")) {
+    database.exec("alter table referrals add column outcome_note text;");
+  }
+
+  if (!hasColumn(database, "referrals", "updated_at")) {
+    database.exec("alter table referrals add column updated_at text;");
+    database.exec("update referrals set updated_at = created_at where updated_at is null;");
   }
 
   if (!hasColumn(database, "ai_suggestions", "suggested_agency_id")) {
@@ -495,9 +514,12 @@ function getDb() {
       report_id text not null references issue_reports(id) on delete cascade,
       agency_name text not null,
       referral_method text not null,
+      outcome_status text not null default 'sent',
       external_reference text,
       follow_up_date text,
       notes text,
+      outcome_note text,
+      updated_at text not null,
       created_at text not null
     );
 
@@ -623,9 +645,12 @@ function mapReferral(row: ReferralRow): Referral {
     reportId: row.report_id,
     agencyName: row.agency_name,
     referralMethod: row.referral_method,
+    outcomeStatus: row.outcome_status,
     externalReference: row.external_reference,
     followUpDate: row.follow_up_date,
     notes: row.notes,
+    outcomeNote: row.outcome_note,
+    updatedAt: row.updated_at,
     createdAt: row.created_at,
   };
 }
@@ -1418,9 +1443,11 @@ export function addReferral(input: {
   agencyId?: string;
   agencyName: string;
   referralMethod: string;
+  outcomeStatus?: string;
   externalReference?: string;
   followUpDate?: string;
   notes?: string;
+  outcomeNote?: string;
   publicNote?: string;
 }) {
   const database = getDb();
@@ -1434,8 +1461,9 @@ export function addReferral(input: {
       .prepare(
         `insert into referrals (
           id, report_id, agency_id, agency_name, referral_method,
-          external_reference, follow_up_date, notes, created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          outcome_status, external_reference, follow_up_date, notes,
+          outcome_note, updated_at, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         makeId(),
@@ -1443,9 +1471,12 @@ export function addReferral(input: {
         input.agencyId || null,
         input.agencyName,
         input.referralMethod,
+        input.outcomeStatus?.trim() || "sent",
         input.externalReference?.trim() || null,
         input.followUpDate?.trim() || null,
         input.notes?.trim() || null,
+        input.outcomeNote?.trim() || null,
+        createdAt,
         createdAt,
       );
 
@@ -1477,4 +1508,29 @@ export function addReferral(input: {
         createdAt,
       );
   })();
+}
+
+export function updateReferralOutcome(input: {
+  referralId: string;
+  outcomeStatus: string;
+  followUpDate?: string;
+  outcomeNote?: string;
+  notes?: string;
+}) {
+  const updatedAt = nowIso();
+
+  getDb()
+    .prepare(
+      `update referrals
+       set outcome_status = ?, follow_up_date = ?, outcome_note = ?, notes = ?, updated_at = ?
+       where id = ?`,
+    )
+    .run(
+      input.outcomeStatus.trim(),
+      input.followUpDate?.trim() || null,
+      input.outcomeNote?.trim() || null,
+      input.notes?.trim() || null,
+      updatedAt,
+      input.referralId,
+    );
 }

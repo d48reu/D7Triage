@@ -15,7 +15,9 @@ import {
   getAiSuggestionById,
   getIssueReportById,
   getLatestAiSuggestion,
+  listReferrals,
   updateAiSuggestionFeedback,
+  updateReferralOutcome,
   updateIssueStatus,
 } from "@/lib/issues-repository";
 
@@ -252,15 +254,46 @@ export async function addReferralAction(formData: FormData) {
     agencyId: agency?.id,
     agencyName,
     referralMethod,
+    outcomeStatus: String(formData.get("outcomeStatus") ?? "").trim() || "sent",
     externalReference: String(formData.get("externalReference") ?? "").trim(),
     followUpDate: String(formData.get("followUpDate") ?? "").trim(),
     notes: String(formData.get("notes") ?? "").trim(),
+    outcomeNote: String(formData.get("outcomeNote") ?? "").trim(),
     publicNote: String(formData.get("publicNote") ?? "").trim(),
   });
 
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
   revalidatePath(`/report/${report.publicTrackingToken}`);
+  redirect(`/staff/reports/${reportId}`);
+}
+
+export async function updateReferralOutcomeAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const referralId = readRequiredText(formData, "referralId");
+  const outcomeStatus = readRequiredText(formData, "outcomeStatus");
+  const report = getIssueReportById(reportId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  const referral = listReferrals(reportId).find((item) => item.id === referralId);
+  if (!referral) {
+    throw new Error("Referral not found");
+  }
+
+  updateReferralOutcome({
+    referralId,
+    outcomeStatus,
+    followUpDate: String(formData.get("followUpDate") ?? "").trim(),
+    outcomeNote: String(formData.get("outcomeNote") ?? "").trim(),
+    notes: String(formData.get("notes") ?? "").trim(),
+  });
+
+  revalidatePath("/staff");
+  revalidatePath("/staff/analytics");
+  revalidatePath(`/staff/reports/${reportId}`);
   redirect(`/staff/reports/${reportId}`);
 }
 
