@@ -90,6 +90,9 @@ export type AiSuggestion = {
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
+  feedbackDisposition: "accepted" | "accepted_with_edits" | "rejected" | null;
+  feedbackNote: string | null;
+  feedbackCreatedAt: string | null;
   createdAt: string;
   agency: Agency | null;
 };
@@ -201,6 +204,9 @@ type AiSuggestionRow = {
   input_tokens: number | null;
   output_tokens: number | null;
   total_tokens: number | null;
+  feedback_disposition: "accepted" | "accepted_with_edits" | "rejected" | null;
+  feedback_note: string | null;
+  feedback_created_at: string | null;
   created_at: string;
   agency_name: string | null;
   agency_contact_name: string | null;
@@ -316,6 +322,18 @@ function ensureSchemaMigrations(database: Database.Database) {
 
   if (!hasColumn(database, "ai_suggestions", "total_tokens")) {
     database.exec("alter table ai_suggestions add column total_tokens integer;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "feedback_disposition")) {
+    database.exec("alter table ai_suggestions add column feedback_disposition text;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "feedback_note")) {
+    database.exec("alter table ai_suggestions add column feedback_note text;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "feedback_created_at")) {
+    database.exec("alter table ai_suggestions add column feedback_created_at text;");
   }
 }
 
@@ -474,6 +492,9 @@ function getDb() {
       input_tokens integer,
       output_tokens integer,
       total_tokens integer,
+      feedback_disposition text,
+      feedback_note text,
+      feedback_created_at text,
       created_at text not null
     );
 
@@ -628,6 +649,9 @@ function mapAiSuggestion(row: AiSuggestionRow): AiSuggestion {
     inputTokens: row.input_tokens,
     outputTokens: row.output_tokens,
     totalTokens: row.total_tokens,
+    feedbackDisposition: row.feedback_disposition,
+    feedbackNote: row.feedback_note,
+    feedbackCreatedAt: row.feedback_created_at,
     createdAt: row.created_at,
     agency: hasAgency
       ? {
@@ -1086,6 +1110,30 @@ export function getLatestAiSuggestion(reportId: string) {
   return listAiSuggestions(reportId)[0] ?? null;
 }
 
+export function getAiSuggestionById(id: string) {
+  const row = getDb()
+    .prepare(
+      `select
+         ai_suggestions.*,
+         agencies.name as agency_name,
+         agencies.contact_name as agency_contact_name,
+         agencies.contact_email as agency_contact_email,
+         agencies.contact_phone as agency_contact_phone,
+         agencies.contact_url as agency_contact_url,
+         agencies.default_referral_method as agency_default_referral_method,
+         agencies.escalation_notes as agency_escalation_notes,
+         agencies.is_active as agency_is_active,
+         agencies.created_at as agency_created_at,
+         agencies.updated_at as agency_updated_at
+       from ai_suggestions
+       left join agencies on agencies.id = ai_suggestions.suggested_agency_id
+       where ai_suggestions.id = ?`,
+    )
+    .get(id) as AiSuggestionRow | undefined;
+
+  return row ? mapAiSuggestion(row) : null;
+}
+
 export function countAiSuggestionsSince(reportId: string, sinceIso: string) {
   const row = getDb()
     .prepare(
@@ -1146,6 +1194,29 @@ export function addAiSuggestion(input: {
     );
 
   return getLatestAiSuggestion(input.reportId);
+}
+
+export function updateAiSuggestionFeedback(input: {
+  suggestionId: string;
+  feedbackDisposition: "accepted" | "accepted_with_edits" | "rejected";
+  feedbackNote?: string;
+}) {
+  const feedbackCreatedAt = nowIso();
+
+  getDb()
+    .prepare(
+      `update ai_suggestions
+       set feedback_disposition = ?, feedback_note = ?, feedback_created_at = ?
+       where id = ?`,
+    )
+    .run(
+      input.feedbackDisposition,
+      input.feedbackNote?.trim() || null,
+      feedbackCreatedAt,
+      input.suggestionId,
+    );
+
+  return getAiSuggestionById(input.suggestionId);
 }
 
 export function addNotificationEvent(input: {

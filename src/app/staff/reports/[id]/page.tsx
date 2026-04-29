@@ -217,6 +217,9 @@ export default async function StaffReportPage({
                     inputTokens: latestSuggestion.inputTokens,
                     outputTokens: latestSuggestion.outputTokens,
                     totalTokens: latestSuggestion.totalTokens,
+                    feedbackDisposition: latestSuggestion.feedbackDisposition,
+                    feedbackNote: latestSuggestion.feedbackNote,
+                    feedbackCreatedAt: latestSuggestion.feedbackCreatedAt,
                     createdAt: latestSuggestion.createdAt,
                   }
                 : null

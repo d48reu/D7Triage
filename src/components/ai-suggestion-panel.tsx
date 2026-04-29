@@ -5,6 +5,8 @@ import { formatStatus } from "@/lib/issue-types";
 import {
   generateAiRoutingSuggestionAction,
   type GenerateAiSuggestionState,
+  reviewAiSuggestionAction,
+  type ReviewAiSuggestionState,
 } from "@/server-actions/issues";
 
 type Suggestion = NonNullable<GenerateAiSuggestionState["suggestion"]>;
@@ -36,8 +38,19 @@ export function AiSuggestionPanel({
     generateAiRoutingSuggestionAction,
     initialState,
   );
+  const reviewInitialState: ReviewAiSuggestionState = {
+    status: "idle",
+    message: initialSuggestion?.feedbackDisposition
+      ? "Staff feedback has been saved for this suggestion."
+      : "Mark whether this suggestion was useful after review.",
+    suggestion: initialSuggestion,
+  };
+  const [reviewState, reviewFormAction, isReviewPending] = useActionState(
+    reviewAiSuggestionAction,
+    reviewInitialState,
+  );
 
-  const suggestion = state.suggestion;
+  const suggestion = reviewState.suggestion ?? state.suggestion;
 
   return (
     <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
@@ -119,6 +132,78 @@ export function AiSuggestionPanel({
             />
           </div>
 
+          <section className="rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">
+                  Staff feedback
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Capture whether the suggestion helped and what needed correction.
+                </p>
+              </div>
+              {suggestion.feedbackDisposition ? (
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  {formatDisposition(suggestion.feedbackDisposition)}
+                </span>
+              ) : null}
+            </div>
+
+            <div
+              className={`mt-3 rounded-md px-3 py-2 text-sm ${
+                reviewState.status === "error"
+                  ? "bg-rose-50 text-rose-800"
+                  : reviewState.status === "success"
+                    ? "bg-emerald-50 text-emerald-800"
+                    : "bg-white text-slate-600"
+              }`}
+            >
+              {reviewState.message}
+            </div>
+
+            <form action={reviewFormAction} className="mt-3 space-y-3">
+              <input type="hidden" name="reportId" value={reportId} />
+              <input type="hidden" name="suggestionId" value={suggestion.id} />
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Outcome
+                </span>
+                <select
+                  name="feedbackDisposition"
+                  defaultValue={suggestion.feedbackDisposition || "accepted"}
+                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                >
+                  <option value="accepted">Accepted</option>
+                  <option value="accepted_with_edits">Accepted with edits</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Feedback note
+                </span>
+                <textarea
+                  name="feedbackNote"
+                  defaultValue={suggestion.feedbackNote || ""}
+                  className="min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  placeholder="What was right, what needed editing, or why the suggestion missed."
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={isReviewPending}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+              >
+                {isReviewPending ? "Saving..." : "Save feedback"}
+              </button>
+              {suggestion.feedbackCreatedAt ? (
+                <p className="text-xs text-slate-500">
+                  Last reviewed {new Date(suggestion.feedbackCreatedAt).toLocaleString()}
+                </p>
+              ) : null}
+            </form>
+          </section>
+
           <div>
             <h3 className="text-sm font-semibold text-slate-800">
               Missing information
@@ -145,6 +230,13 @@ export function AiSuggestionPanel({
       ) : null}
     </section>
   );
+}
+
+function formatDisposition(value: "accepted" | "accepted_with_edits" | "rejected") {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

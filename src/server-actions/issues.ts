@@ -7,13 +7,15 @@ import { redirect } from "next/navigation";
 import { ISSUE_STATUSES, type IssueStatus } from "@/lib/issue-types";
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
 import {
-  getLatestAiSuggestion,
   addAttachment,
   addReferral,
   addStaffNote,
   createIssueReport,
   getAgencyById,
+  getAiSuggestionById,
   getIssueReportById,
+  getLatestAiSuggestion,
+  updateAiSuggestionFeedback,
   updateIssueStatus,
 } from "@/lib/issues-repository";
 
@@ -41,8 +43,17 @@ export type GenerateAiSuggestionState = {
     inputTokens: number | null;
     outputTokens: number | null;
     totalTokens: number | null;
+    feedbackDisposition: "accepted" | "accepted_with_edits" | "rejected" | null;
+    feedbackNote: string | null;
+    feedbackCreatedAt: string | null;
     createdAt: string;
   } | null;
+};
+
+export type ReviewAiSuggestionState = {
+  status: "idle" | "error" | "success";
+  message: string;
+  suggestion: GenerateAiSuggestionState["suggestion"];
 };
 
 const UPLOAD_DIR = path.join(process.cwd(), ".data", "uploads");
@@ -64,6 +75,32 @@ function readRequiredText(formData: FormData, key: string) {
 
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
+function serializeSuggestion(
+  suggestion: NonNullable<ReturnType<typeof getLatestAiSuggestion>>,
+): NonNullable<GenerateAiSuggestionState["suggestion"]> {
+  return {
+    id: suggestion.id,
+    summary: suggestion.summary,
+    suggestedCategory: suggestion.suggestedCategory,
+    suggestedUrgency: suggestion.suggestedUrgency,
+    suggestedResponsibleParty: suggestion.suggestedResponsibleParty,
+    suggestedAgencyId: suggestion.suggestedAgencyId,
+    confidence: suggestion.confidence,
+    explanation: suggestion.explanation,
+    recommendedNextStep: suggestion.recommendedNextStep,
+    missingInformation: suggestion.missingInformation,
+    draftResponse: suggestion.draftResponse,
+    model: suggestion.model,
+    inputTokens: suggestion.inputTokens,
+    outputTokens: suggestion.outputTokens,
+    totalTokens: suggestion.totalTokens,
+    feedbackDisposition: suggestion.feedbackDisposition,
+    feedbackNote: suggestion.feedbackNote,
+    feedbackCreatedAt: suggestion.feedbackCreatedAt,
+    createdAt: suggestion.createdAt,
+  };
 }
 
 async function savePhotoAttachments(reportId: string, photos: File[]) {
@@ -247,24 +284,7 @@ export async function generateAiRoutingSuggestionAction(
     return {
       status: "success",
       message: "AI routing suggestion generated.",
-      suggestion: {
-        id: suggestion.id,
-        summary: suggestion.summary,
-        suggestedCategory: suggestion.suggestedCategory,
-        suggestedUrgency: suggestion.suggestedUrgency,
-        suggestedResponsibleParty: suggestion.suggestedResponsibleParty,
-        suggestedAgencyId: suggestion.suggestedAgencyId,
-        confidence: suggestion.confidence,
-        explanation: suggestion.explanation,
-        recommendedNextStep: suggestion.recommendedNextStep,
-        missingInformation: suggestion.missingInformation,
-        draftResponse: suggestion.draftResponse,
-        model: suggestion.model,
-        inputTokens: suggestion.inputTokens,
-        outputTokens: suggestion.outputTokens,
-        totalTokens: suggestion.totalTokens,
-        createdAt: suggestion.createdAt,
-      },
+      suggestion: serializeSuggestion(suggestion),
     };
   } catch (error) {
     const latestSuggestion = getLatestAiSuggestion(reportId);
@@ -274,26 +294,54 @@ export async function generateAiRoutingSuggestionAction(
         error instanceof Error
           ? error.message
           : "AI routing suggestion failed.",
-      suggestion: latestSuggestion
-        ? {
-            id: latestSuggestion.id,
-            summary: latestSuggestion.summary,
-            suggestedCategory: latestSuggestion.suggestedCategory,
-            suggestedUrgency: latestSuggestion.suggestedUrgency,
-            suggestedResponsibleParty: latestSuggestion.suggestedResponsibleParty,
-            suggestedAgencyId: latestSuggestion.suggestedAgencyId,
-            confidence: latestSuggestion.confidence,
-            explanation: latestSuggestion.explanation,
-            recommendedNextStep: latestSuggestion.recommendedNextStep,
-            missingInformation: latestSuggestion.missingInformation,
-            draftResponse: latestSuggestion.draftResponse,
-            model: latestSuggestion.model,
-            inputTokens: latestSuggestion.inputTokens,
-            outputTokens: latestSuggestion.outputTokens,
-            totalTokens: latestSuggestion.totalTokens,
-            createdAt: latestSuggestion.createdAt,
-          }
+      suggestion: latestSuggestion ? serializeSuggestion(latestSuggestion) : null,
+    };
+  }
+}
+
+export async function reviewAiSuggestionAction(
+  _previousState: ReviewAiSuggestionState,
+  formData: FormData,
+): Promise<ReviewAiSuggestionState> {
+  const suggestionId = readRequiredText(formData, "suggestionId");
+  const reportId = readRequiredText(formData, "reportId");
+  const feedbackDisposition = readRequiredText(
+    formData,
+    "feedbackDisposition",
+  ) as "accepted" | "accepted_with_edits" | "rejected";
+
+  if (!["accepted", "accepted_with_edits", "rejected"].includes(feedbackDisposition)) {
+    return {
+      status: "error",
+      message: "Choose a valid feedback option.",
+      suggestion: getLatestAiSuggestion(reportId)
+        ? serializeSuggestion(getLatestAiSuggestion(reportId)!)
         : null,
     };
   }
+
+  const suggestion = getAiSuggestionById(suggestionId);
+  if (!suggestion || suggestion.reportId !== reportId) {
+    return {
+      status: "error",
+      message: "Suggestion not found.",
+      suggestion: getLatestAiSuggestion(reportId)
+        ? serializeSuggestion(getLatestAiSuggestion(reportId)!)
+        : null,
+    };
+  }
+
+  const updatedSuggestion = updateAiSuggestionFeedback({
+    suggestionId,
+    feedbackDisposition,
+    feedbackNote: String(formData.get("feedbackNote") ?? "").trim(),
+  });
+
+  revalidatePath(`/staff/reports/${reportId}`);
+
+  return {
+    status: "success",
+    message: "AI feedback saved.",
+    suggestion: updatedSuggestion ? serializeSuggestion(updatedSuggestion) : null,
+  };
 }
