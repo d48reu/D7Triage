@@ -17,13 +17,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ dataset: string }> },
 ) {
   await requireStaffSession();
   const { dataset } = await context.params;
+  const url = new URL(request.url);
 
-  const csv = buildCsv(dataset);
+  const csv = buildCsv(dataset, {
+    preset: url.searchParams.get("preset") ?? "all",
+    dateFrom: url.searchParams.get("dateFrom") ?? "",
+    dateTo: url.searchParams.get("dateTo") ?? "",
+  });
   if (!csv) {
     return NextResponse.json({ error: "Unknown export dataset." }, { status: 404 });
   }
@@ -38,13 +43,21 @@ export async function GET(
   });
 }
 
-function buildCsv(dataset: string) {
-  const reports = listIssueReports();
+function buildCsv(
+  dataset: string,
+  filters: { preset: string; dateFrom: string; dateTo: string },
+) {
+  const range = resolveFilterRange(filters);
+  const reports = listIssueReports().filter((report) =>
+    isIsoWithinRange(report.createdAt, range.start, range.end),
+  );
   const jurisdictionConfig = getJurisdictionConfig();
 
   switch (dataset) {
     case "newsletter-contacts": {
-      const contacts = listNewsletterContacts();
+      const contacts = listNewsletterContacts().filter((contact) =>
+        isIsoWithinRange(contact.lastOptedInAt, range.start, range.end),
+      );
       return {
         fileName: "newsletter-contacts.csv",
         body: toCsv(
@@ -118,7 +131,11 @@ function buildCsv(dataset: string) {
     }
     case "referrals": {
       const rows = reports.flatMap((report) =>
-        listReferrals(report.id).map((referral) => ({
+        listReferrals(report.id)
+          .filter((referral) =>
+            isIsoWithinRange(referral.createdAt, range.start, range.end),
+          )
+          .map((referral) => ({
           reportId: report.id,
           trackingToken: report.publicTrackingToken,
           category: report.category,
@@ -166,6 +183,13 @@ function buildCsv(dataset: string) {
       const rows = reports.flatMap((report) =>
         listAiSuggestions(report.id)
           .filter((suggestion) => suggestion.feedbackDisposition !== null)
+          .filter((suggestion) =>
+            isIsoWithinRange(
+              suggestion.feedbackCreatedAt ?? suggestion.createdAt,
+              range.start,
+              range.end,
+            ),
+          )
           .map((suggestion) => ({
             reportId: report.id,
             trackingToken: report.publicTrackingToken,
@@ -229,4 +253,71 @@ function toCsv(headers: string[], rows: string[][]) {
 function escapeCsvCell(value: string) {
   const normalized = value.replaceAll('"', '""');
   return /[",\r\n]/.test(normalized) ? `"${normalized}"` : normalized;
+}
+
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function parseDateInput(value: string) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolveFilterRange(input: {
+  preset: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const now = new Date();
+  const hasManualDates = Boolean(input.dateFrom || input.dateTo);
+
+  if (hasManualDates) {
+    return {
+      start: input.dateFrom ? startOfDay(parseDateInput(input.dateFrom) ?? now) : null,
+      end: input.dateTo ? endOfDay(parseDateInput(input.dateTo) ?? now) : null,
+    };
+  }
+
+  if (input.preset === "7d" || input.preset === "30d" || input.preset === "90d") {
+    const days = Number.parseInt(input.preset.replace("d", ""), 10);
+    const start = startOfDay(new Date(now));
+    start.setDate(start.getDate() - (days - 1));
+    return {
+      start,
+      end: endOfDay(now),
+    };
+  }
+
+  return {
+    start: null,
+    end: null,
+  };
+}
+
+function isIsoWithinRange(
+  value: string,
+  start: Date | null,
+  end: Date | null,
+) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
+  if (start && parsed < start) {
+    return false;
+  }
+  if (end && parsed > end) {
+    return false;
+  }
+  return true;
 }

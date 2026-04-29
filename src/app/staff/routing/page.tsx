@@ -69,7 +69,7 @@ export default async function RoutingGuidePage() {
 
           <form
             action={saveJurisdictionConfigAction}
-            className="mt-5 grid gap-4 lg:grid-cols-2"
+            className="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-3"
           >
             <TextArea
               name="districtMatchKeywords"
@@ -83,12 +83,54 @@ export default async function RoutingGuidePage() {
               defaultValue={jurisdictionConfig.districtOutsideKeywords.join("\n")}
               helperText="One per line or comma-separated. Use neighboring areas, jurisdictions, or landmarks that usually mean the report sits outside District 7."
             />
-            <div className="lg:col-span-2">
+            <TextArea
+              name="stateKeywords"
+              label="State ownership keywords"
+              defaultValue={jurisdictionConfig.stateKeywords.join("\n")}
+              helperText="Use route names, freeway labels, or landmarks that usually signal state ownership."
+            />
+            <TextArea
+              name="countyKeywords"
+              label="County ownership keywords"
+              defaultValue={jurisdictionConfig.countyKeywords.join("\n")}
+              helperText="Use county facility names, unincorporated areas, or county-specific service clues."
+            />
+            <TextArea
+              name="utilityKeywords"
+              label="Utility keywords"
+              defaultValue={jurisdictionConfig.utilityKeywords.join("\n")}
+              helperText="Use provider names, water districts, or recurring utility asset phrases."
+            />
+            <TextArea
+              name="privatePropertyKeywords"
+              label="Private property keywords"
+              defaultValue={jurisdictionConfig.privatePropertyKeywords.join("\n")}
+              helperText="Use HOA names, apartment complexes, shopping centers, or privately managed facilities."
+            />
+            <TextArea
+              name="schoolKeywords"
+              label="School keywords"
+              defaultValue={jurisdictionConfig.schoolKeywords.join("\n")}
+              helperText="Use school names, district facilities, or campus landmarks."
+            />
+            <TextArea
+              name="transitKeywords"
+              label="Transit keywords"
+              defaultValue={jurisdictionConfig.transitKeywords.join("\n")}
+              helperText="Use transit line names, station names, or operator-specific stop references."
+            />
+            <TextArea
+              name="parksKeywords"
+              label="Parks keywords"
+              defaultValue={jurisdictionConfig.parksKeywords.join("\n")}
+              helperText="Use park names, trail names, recreation centers, or facility names."
+            />
+            <div className="xl:col-span-3 lg:col-span-2">
               <button
                 type="submit"
                 className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
               >
-                Save Jurisdiction Hints
+                Save Jurisdiction Rules
               </button>
             </div>
           </form>

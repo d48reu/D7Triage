@@ -139,6 +139,11 @@ export default async function StaffAnalyticsPage({
     dateFrom,
     dateTo,
   });
+  const exportQuerySuffix = buildExportQuerySuffix({
+    preset: selectedPreset,
+    dateFrom,
+    dateTo,
+  });
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -361,22 +366,22 @@ export default async function StaffAnalyticsPage({
         <Panel title="Exports">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <ExportLink
-              href="/staff/analytics/export/newsletter-contacts"
+              href={`/staff/analytics/export/newsletter-contacts${exportQuerySuffix}`}
               label="Newsletter contacts CSV"
               description="Only explicit newsletter opt-ins."
             />
             <ExportLink
-              href="/staff/analytics/export/open-reports"
+              href={`/staff/analytics/export/open-reports${exportQuerySuffix}`}
               label="Open reports CSV"
               description="All unresolved casework."
             />
             <ExportLink
-              href="/staff/analytics/export/referrals"
+              href={`/staff/analytics/export/referrals${exportQuerySuffix}`}
               label="Referrals CSV"
               description="Agency handoffs and outcome tracking."
             />
             <ExportLink
-              href="/staff/analytics/export/ai-feedback"
+              href={`/staff/analytics/export/ai-feedback${exportQuerySuffix}`}
               label="AI feedback CSV"
               description="Suggestion quality and review outcomes."
             />
@@ -664,6 +669,29 @@ function buildQuickRangeLinks(input: {
       !input.dateTo &&
       input.currentPreset === option.preset,
   }));
+}
+
+function buildExportQuerySuffix(input: {
+  preset: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const query = new URLSearchParams();
+
+  if (input.dateFrom) {
+    query.set("dateFrom", input.dateFrom);
+  }
+
+  if (input.dateTo) {
+    query.set("dateTo", input.dateTo);
+  }
+
+  if (!input.dateFrom && !input.dateTo && input.preset && input.preset !== "all") {
+    query.set("preset", input.preset);
+  }
+
+  const serialized = query.toString();
+  return serialized ? `?${serialized}` : "";
 }
 
 function buildDailyTrend(

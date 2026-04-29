@@ -10,7 +10,6 @@ import {
   getNotificationTemplateMap,
   listIssueReports,
   listNotificationEvents,
-  listNotificationTemplates,
   listReferrals,
   listStatusEvents,
 } from "@/lib/issues-repository";
@@ -23,8 +22,10 @@ export default async function StaffNotificationsPage() {
   await requireStaffSession();
 
   const reports = listIssueReports();
-  const templates = listNotificationTemplates();
   const templateMap = getNotificationTemplateMap();
+  const templates = Array.from(templateMap.values()).sort((a, b) =>
+    a.label.localeCompare(b.label),
+  );
   const rows = reports.map((report) => {
     const events = listStatusEvents(report.id);
     const referrals = listReferrals(report.id);
@@ -303,6 +304,13 @@ export default async function StaffNotificationsPage() {
                       <div className="mt-2 text-xs text-slate-500">
                         Delivery: {row.lastNotification.deliveryStatus}
                       </div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        {describeTemplateVersion(
+                          row.lastNotification.templateKey,
+                          row.lastNotification.templateUpdatedAt,
+                          templateMap,
+                        )}
+                      </div>
                       <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                         {row.lastNotification.body}
                       </p>
@@ -350,4 +358,42 @@ function Panel({
 
 function toTitle(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function describeTemplateVersion(
+  templateKey: string | null,
+  templateUpdatedAt: string | null,
+  templateMap: Map<
+    string,
+    {
+      key: string;
+      label: string;
+      subjectTemplate: string;
+      bodyTemplate: string;
+      updatedAt: string;
+    }
+  >,
+) {
+  if (!templateKey) {
+    return "Legacy stub with no template version recorded.";
+  }
+
+  const currentTemplate = templateMap.get(templateKey);
+  if (!currentTemplate) {
+    return `Template key: ${templateKey}. Current template is unavailable.`;
+  }
+
+  if (!templateUpdatedAt) {
+    return `${currentTemplate.label}: version not recorded on this stub.`;
+  }
+
+  if (currentTemplate.updatedAt === templateUpdatedAt) {
+    return `${currentTemplate.label}: matches the current saved template.`;
+  }
+
+  return `${currentTemplate.label}: this stub used an older template version from ${new Date(
+    templateUpdatedAt,
+  ).toLocaleString()}. Current template was updated ${new Date(
+    currentTemplate.updatedAt,
+  ).toLocaleString()}.`;
 }

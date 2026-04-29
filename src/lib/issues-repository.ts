@@ -50,6 +50,13 @@ export type NewsletterContact = {
 export type JurisdictionConfig = {
   districtMatchKeywords: string[];
   districtOutsideKeywords: string[];
+  stateKeywords: string[];
+  countyKeywords: string[];
+  utilityKeywords: string[];
+  privatePropertyKeywords: string[];
+  schoolKeywords: string[];
+  transitKeywords: string[];
+  parksKeywords: string[];
   updatedAt: string | null;
 };
 
@@ -96,6 +103,8 @@ export type NotificationEvent = {
   id: string;
   reportId: string;
   eventType: string;
+  templateKey: NotificationTemplateKey | null;
+  templateUpdatedAt: string | null;
   recipient: string | null;
   subject: string;
   body: string;
@@ -227,6 +236,8 @@ type NotificationEventRow = {
   id: string;
   report_id: string;
   event_type: string;
+  template_key: NotificationTemplateKey | null;
+  template_updated_at: string | null;
   recipient: string | null;
   subject: string;
   body: string;
@@ -315,6 +326,13 @@ type JurisdictionSettingsRow = {
   id: number;
   district_match_keywords: string | null;
   district_outside_keywords: string | null;
+  state_keywords: string | null;
+  county_keywords: string | null;
+  utility_keywords: string | null;
+  private_property_keywords: string | null;
+  school_keywords: string | null;
+  transit_keywords: string | null;
+  parks_keywords: string | null;
   updated_at: string | null;
 };
 
@@ -442,6 +460,42 @@ function ensureSchemaMigrations(database: Database.Database) {
   if (!hasColumn(database, "ai_suggestions", "feedback_created_at")) {
     database.exec("alter table ai_suggestions add column feedback_created_at text;");
   }
+
+  if (!hasColumn(database, "notification_events", "template_key")) {
+    database.exec("alter table notification_events add column template_key text;");
+  }
+
+  if (!hasColumn(database, "notification_events", "template_updated_at")) {
+    database.exec("alter table notification_events add column template_updated_at text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "state_keywords")) {
+    database.exec("alter table jurisdiction_settings add column state_keywords text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "county_keywords")) {
+    database.exec("alter table jurisdiction_settings add column county_keywords text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "utility_keywords")) {
+    database.exec("alter table jurisdiction_settings add column utility_keywords text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "private_property_keywords")) {
+    database.exec("alter table jurisdiction_settings add column private_property_keywords text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "school_keywords")) {
+    database.exec("alter table jurisdiction_settings add column school_keywords text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "transit_keywords")) {
+    database.exec("alter table jurisdiction_settings add column transit_keywords text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "parks_keywords")) {
+    database.exec("alter table jurisdiction_settings add column parks_keywords text;");
+  }
 }
 
 function seedRoutingData(database: Database.Database) {
@@ -532,13 +586,22 @@ function seedJurisdictionSettings(database: Database.Database) {
   database
     .prepare(
       `insert into jurisdiction_settings (
-        id, district_match_keywords, district_outside_keywords, updated_at
-      ) values (?, ?, ?, ?)`,
+        id, district_match_keywords, district_outside_keywords, state_keywords,
+        county_keywords, utility_keywords, private_property_keywords,
+        school_keywords, transit_keywords, parks_keywords, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       1,
       process.env.DISTRICT_7_MATCH_KEYWORDS ?? "",
       process.env.DISTRICT_7_OUTSIDE_KEYWORDS ?? "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
       nowIso(),
     );
 }
@@ -661,6 +724,8 @@ function getDb() {
       id text primary key,
       report_id text not null references issue_reports(id) on delete cascade,
       event_type text not null,
+      template_key text,
+      template_updated_at text,
       recipient text,
       subject text not null,
       body text not null,
@@ -706,6 +771,13 @@ function getDb() {
       id integer primary key,
       district_match_keywords text,
       district_outside_keywords text,
+      state_keywords text,
+      county_keywords text,
+      utility_keywords text,
+      private_property_keywords text,
+      school_keywords text,
+      transit_keywords text,
+      parks_keywords text,
       updated_at text
     );
 
@@ -805,6 +877,8 @@ function mapNotificationEvent(row: NotificationEventRow): NotificationEvent {
     id: row.id,
     reportId: row.report_id,
     eventType: row.event_type,
+    templateKey: row.template_key,
+    templateUpdatedAt: row.template_updated_at,
     recipient: row.recipient,
     subject: row.subject,
     body: row.body,
@@ -970,23 +1044,16 @@ export function createIssueReport(input: CreateIssueReportInput) {
       createdAt,
     });
 
-    database
-      .prepare(
-        `insert into notification_events (
-          id, report_id, event_type, recipient, subject, body, delivery_status,
-          created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        makeId(),
-        id,
-        "confirmation",
-        input.residentEmail,
-        "District 7 received your report",
-        `Your report was received and is waiting for staff review. Tracking token: ${token}`,
-        "local_stub",
-        createdAt,
-      );
+    insertNotificationEventTx(database, {
+      reportId: id,
+      eventType: "confirmation",
+      templateKey: "confirmation",
+      recipient: input.residentEmail,
+      subject: "District 7 received your report",
+      body: `Your report was received and is waiting for staff review. Tracking token: ${token}`,
+      deliveryStatus: "local_stub",
+      createdAt,
+    });
   })();
 
   return getIssueReportById(id);
@@ -1070,6 +1137,13 @@ export function getJurisdictionConfig(): JurisdictionConfig {
       districtOutsideKeywords: parseKeywordList(
         process.env.DISTRICT_7_OUTSIDE_KEYWORDS ?? "",
       ),
+      stateKeywords: [],
+      countyKeywords: [],
+      utilityKeywords: [],
+      privatePropertyKeywords: [],
+      schoolKeywords: [],
+      transitKeywords: [],
+      parksKeywords: [],
       updatedAt: null,
     };
   }
@@ -1077,6 +1151,13 @@ export function getJurisdictionConfig(): JurisdictionConfig {
   return {
     districtMatchKeywords: parseKeywordList(row.district_match_keywords),
     districtOutsideKeywords: parseKeywordList(row.district_outside_keywords),
+    stateKeywords: parseKeywordList(row.state_keywords),
+    countyKeywords: parseKeywordList(row.county_keywords),
+    utilityKeywords: parseKeywordList(row.utility_keywords),
+    privatePropertyKeywords: parseKeywordList(row.private_property_keywords),
+    schoolKeywords: parseKeywordList(row.school_keywords),
+    transitKeywords: parseKeywordList(row.transit_keywords),
+    parksKeywords: parseKeywordList(row.parks_keywords),
     updatedAt: row.updated_at,
   };
 }
@@ -1084,23 +1165,46 @@ export function getJurisdictionConfig(): JurisdictionConfig {
 export function saveJurisdictionConfig(input: {
   districtMatchKeywords: string;
   districtOutsideKeywords: string;
+  stateKeywords: string;
+  countyKeywords: string;
+  utilityKeywords: string;
+  privatePropertyKeywords: string;
+  schoolKeywords: string;
+  transitKeywords: string;
+  parksKeywords: string;
 }) {
   const updatedAt = nowIso();
 
   getDb()
     .prepare(
       `insert into jurisdiction_settings (
-        id, district_match_keywords, district_outside_keywords, updated_at
-      ) values (?, ?, ?, ?)
+        id, district_match_keywords, district_outside_keywords, state_keywords,
+        county_keywords, utility_keywords, private_property_keywords,
+        school_keywords, transit_keywords, parks_keywords, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(id) do update set
         district_match_keywords = excluded.district_match_keywords,
         district_outside_keywords = excluded.district_outside_keywords,
+        state_keywords = excluded.state_keywords,
+        county_keywords = excluded.county_keywords,
+        utility_keywords = excluded.utility_keywords,
+        private_property_keywords = excluded.private_property_keywords,
+        school_keywords = excluded.school_keywords,
+        transit_keywords = excluded.transit_keywords,
+        parks_keywords = excluded.parks_keywords,
         updated_at = excluded.updated_at`,
     )
     .run(
       1,
       input.districtMatchKeywords.trim(),
       input.districtOutsideKeywords.trim(),
+      input.stateKeywords.trim(),
+      input.countyKeywords.trim(),
+      input.utilityKeywords.trim(),
+      input.privatePropertyKeywords.trim(),
+      input.schoolKeywords.trim(),
+      input.transitKeywords.trim(),
+      input.parksKeywords.trim(),
       updatedAt,
     );
 
@@ -1463,6 +1567,71 @@ export function upsertNotificationTemplate(input: {
     );
 }
 
+function getNotificationTemplateSnapshot(
+  key: NotificationTemplateKey | null | undefined,
+) {
+  if (!key) return null;
+  return getNotificationTemplateMap().get(key) ?? null;
+}
+
+function inferStatusTemplateKey(status: IssueStatus): NotificationTemplateKey {
+  switch (status) {
+    case "needs_more_info":
+      return "needs_more_info";
+    case "routed":
+      return "routed";
+    case "awaiting_agency":
+      return "awaiting_agency";
+    case "follow_up_due":
+      return "follow_up_due";
+    case "resolved":
+      return "resolved";
+    case "closed_outside_jurisdiction":
+      return "outside_jurisdiction";
+    case "closed_duplicate":
+      return "duplicate_linked";
+    default:
+      return "status_update";
+  }
+}
+
+function insertNotificationEventTx(
+  database: Database.Database,
+  input: {
+    reportId: string;
+    eventType: string;
+    templateKey?: NotificationTemplateKey | null;
+    recipient?: string | null;
+    subject: string;
+    body: string;
+    deliveryStatus?: string;
+    createdAt?: string;
+  },
+) {
+  const createdAt = input.createdAt ?? nowIso();
+  const template = getNotificationTemplateSnapshot(input.templateKey);
+
+  database
+    .prepare(
+      `insert into notification_events (
+        id, report_id, event_type, template_key, template_updated_at,
+        recipient, subject, body, delivery_status, created_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      makeId(),
+      input.reportId,
+      input.eventType,
+      input.templateKey ?? null,
+      template?.updatedAt ?? null,
+      input.recipient || null,
+      input.subject,
+      input.body,
+      input.deliveryStatus || "local_stub",
+      createdAt,
+    );
+}
+
 export function listAiSuggestions(reportId: string) {
   const rows = getDb()
     .prepare(
@@ -1604,28 +1773,13 @@ export function updateAiSuggestionFeedback(input: {
 export function addNotificationEvent(input: {
   reportId: string;
   eventType: string;
+  templateKey?: NotificationTemplateKey | null;
   recipient?: string | null;
   subject: string;
   body: string;
   deliveryStatus?: string;
 }) {
-  getDb()
-    .prepare(
-      `insert into notification_events (
-        id, report_id, event_type, recipient, subject, body, delivery_status,
-        created_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      makeId(),
-      input.reportId,
-      input.eventType,
-      input.recipient || null,
-      input.subject,
-      input.body,
-      input.deliveryStatus || "local_stub",
-      nowIso(),
-    );
+  insertNotificationEventTx(getDb(), input);
 }
 
 function normalizeSearchText(value: string) {
@@ -1709,23 +1863,16 @@ export function markIssueAsDuplicate(input: {
       )
       .run(makeId(), report.id, "closed_duplicate", publicNote, updatedAt);
 
-    database
-      .prepare(
-        `insert into notification_events (
-          id, report_id, event_type, recipient, subject, body, delivery_status,
-          created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        makeId(),
-        report.id,
-        "duplicate_linked",
-        report.residentEmail,
-        "District 7 linked your report to an existing case",
-        `${publicNote} Primary case: ${masterReport.category} at ${masterReport.addressText}.`,
-        "local_stub",
-        updatedAt,
-      );
+    insertNotificationEventTx(database, {
+      reportId: report.id,
+      eventType: "duplicate_linked",
+      templateKey: "duplicate_linked",
+      recipient: report.residentEmail,
+      subject: "District 7 linked your report to an existing case",
+      body: `${publicNote} Primary case: ${masterReport.category} at ${masterReport.addressText}.`,
+      deliveryStatus: "local_stub",
+      createdAt: updatedAt,
+    });
   })();
 }
 
@@ -1774,23 +1921,16 @@ export function markIssueAsDistinct(input: {
         )
         .run(makeId(), report.id, nextStatus, publicNote, updatedAt);
 
-      database
-        .prepare(
-          `insert into notification_events (
-            id, report_id, event_type, recipient, subject, body, delivery_status,
-            created_at
-          ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          makeId(),
-          report.id,
-          "duplicate_reopened",
-          report.residentEmail,
-          "District 7 kept your report as a separate case",
-          publicNote,
-          "local_stub",
-          updatedAt,
-        );
+      insertNotificationEventTx(database, {
+        reportId: report.id,
+        eventType: "duplicate_reopened",
+        templateKey: "status_update",
+        recipient: report.residentEmail,
+        subject: "District 7 kept your report as a separate case",
+        body: publicNote,
+        deliveryStatus: "local_stub",
+        createdAt: updatedAt,
+      });
     }
   })();
 }
@@ -1820,23 +1960,15 @@ export function updateIssueStatus(input: {
         updatedAt,
       );
 
-    database
-      .prepare(
-        `insert into notification_events (
-          id, report_id, event_type, recipient, subject, body, delivery_status,
-          created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        makeId(),
-        input.reportId,
-        "status_update",
-        null,
-        `Report status updated to ${input.status}`,
-        input.publicNote?.trim() || `Report status updated to ${input.status}.`,
-        "local_stub",
-        updatedAt,
-      );
+    insertNotificationEventTx(database, {
+      reportId: input.reportId,
+      eventType: "status_update",
+      templateKey: inferStatusTemplateKey(input.status),
+      subject: `Report status updated to ${input.status}`,
+      body: input.publicNote?.trim() || `Report status updated to ${input.status}.`,
+      deliveryStatus: "local_stub",
+      createdAt: updatedAt,
+    });
   })();
 }
 
@@ -1900,23 +2032,15 @@ export function addReferral(input: {
       )
       .run(makeId(), input.reportId, "routed", publicNote, createdAt);
 
-    database
-      .prepare(
-        `insert into notification_events (
-          id, report_id, event_type, recipient, subject, body, delivery_status,
-          created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        makeId(),
-        input.reportId,
-        "referral",
-        null,
-        `Report referred to ${input.agencyName}`,
-        publicNote,
-        "local_stub",
-        createdAt,
-      );
+    insertNotificationEventTx(database, {
+      reportId: input.reportId,
+      eventType: "referral",
+      templateKey: "routed",
+      subject: `Report referred to ${input.agencyName}`,
+      body: publicNote,
+      deliveryStatus: "local_stub",
+      createdAt,
+    });
   })();
 }
 

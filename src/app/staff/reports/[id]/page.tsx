@@ -13,6 +13,7 @@ import {
   getJurisdictionConfig,
   getLatestAiSuggestion,
   getManagedRoutingRule,
+  getNotificationTemplateMap,
   getIssueReportById,
   listLinkedDuplicateReports,
   listAgencies,
@@ -60,6 +61,7 @@ export default async function StaffReportPage({
   const latestSuggestion = getLatestAiSuggestion(report.id);
   const aiRoutingAvailability = getAiRoutingAvailability();
   const jurisdictionConfig = getJurisdictionConfig();
+  const notificationTemplateMap = getNotificationTemplateMap();
   const jurisdiction = analyzeReportJurisdiction(report, jurisdictionConfig);
   const defaultOwnerLabel = routingRule?.ownerLabel ?? "District 7 triage";
   const masterReport = report.duplicateOfReportId
@@ -785,6 +787,13 @@ export default async function StaffReportPage({
                   {notification.eventType} |{" "}
                   {new Date(notification.createdAt).toLocaleString()}
                 </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {describeNotificationTemplateVersion(
+                    notification.templateKey,
+                    notification.templateUpdatedAt,
+                    notificationTemplateMap,
+                  )}
+                </div>
                 <p className="mt-2 text-slate-600">{notification.body}</p>
               </div>
             ))}
@@ -804,4 +813,38 @@ function Detail({ label, value }: { label: string; value: string }) {
       <div className="mt-1 text-sm text-slate-800">{value}</div>
     </div>
   );
+}
+
+function describeNotificationTemplateVersion(
+  templateKey: string | null,
+  templateUpdatedAt: string | null,
+  templateMap: Map<
+    string,
+    {
+      key: string;
+      label: string;
+      subjectTemplate: string;
+      bodyTemplate: string;
+      updatedAt: string;
+    }
+  >,
+) {
+  if (!templateKey) {
+    return "Legacy stub with no template version recorded.";
+  }
+
+  const currentTemplate = templateMap.get(templateKey);
+  if (!currentTemplate) {
+    return `Template key: ${templateKey}. Current template is unavailable.`;
+  }
+
+  if (!templateUpdatedAt) {
+    return `${currentTemplate.label}: version not recorded on this stub.`;
+  }
+
+  if (currentTemplate.updatedAt === templateUpdatedAt) {
+    return `${currentTemplate.label}: matches current template.`;
+  }
+
+  return `${currentTemplate.label}: current template changed after this stub was logged.`;
 }

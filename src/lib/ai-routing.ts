@@ -5,6 +5,7 @@ import { analyzeReportJurisdiction } from "@/lib/jurisdiction";
 import {
   type Agency,
   type IssueReport,
+  type JurisdictionConfig,
   getJurisdictionConfig,
   type ManagedRoutingRule,
   addAiSuggestion,
@@ -168,10 +169,7 @@ function getResponseSchema(agencyIds: string[]) {
 
 function buildPrompt(input: {
   report: IssueReport;
-  jurisdictionConfig: {
-    districtMatchKeywords: string[];
-    districtOutsideKeywords: string[];
-  };
+  jurisdictionConfig: JurisdictionConfig;
   currentRule: ManagedRoutingRule | null;
   agencies: Agency[];
   routingRules: ManagedRoutingRule[];

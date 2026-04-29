@@ -33,6 +33,13 @@ export type JurisdictionAssessment = {
 export type JurisdictionKeywordConfig = {
   districtMatchKeywords: string[];
   districtOutsideKeywords: string[];
+  stateKeywords: string[];
+  countyKeywords: string[];
+  utilityKeywords: string[];
+  privatePropertyKeywords: string[];
+  schoolKeywords: string[];
+  transitKeywords: string[];
+  parksKeywords: string[];
 };
 
 const OWNERSHIP_RULES: Array<{
@@ -112,18 +119,73 @@ const OWNERSHIP_RULES: Array<{
   },
 ];
 
+const CONFIG_OWNERSHIP_RULES: Array<{
+  ownershipHint: Exclude<JurisdictionOwnershipHint, "municipal" | "unclear">;
+  label: string;
+  getKeywords: (config: JurisdictionKeywordConfig) => string[];
+}> = [
+  {
+    ownershipHint: "state",
+    label: "Configured state keyword",
+    getKeywords: (config) => config.stateKeywords,
+  },
+  {
+    ownershipHint: "county",
+    label: "Configured county keyword",
+    getKeywords: (config) => config.countyKeywords,
+  },
+  {
+    ownershipHint: "utility",
+    label: "Configured utility keyword",
+    getKeywords: (config) => config.utilityKeywords,
+  },
+  {
+    ownershipHint: "private_property",
+    label: "Configured private-property keyword",
+    getKeywords: (config) => config.privatePropertyKeywords,
+  },
+  {
+    ownershipHint: "school",
+    label: "Configured school keyword",
+    getKeywords: (config) => config.schoolKeywords,
+  },
+  {
+    ownershipHint: "transit",
+    label: "Configured transit keyword",
+    getKeywords: (config) => config.transitKeywords,
+  },
+  {
+    ownershipHint: "parks",
+    label: "Configured parks keyword",
+    getKeywords: (config) => config.parksKeywords,
+  },
+];
+
 export function analyzeReportJurisdiction(
   report: ReportLike,
   config?: JurisdictionKeywordConfig,
 ): JurisdictionAssessment {
   const combinedText = `${report.addressText}\n${report.description}`;
   const normalized = combinedText.toLowerCase();
+  const keywordConfig = config ?? getEnvJurisdictionKeywordConfig();
 
   const matchedClues: string[] = [];
   const ownershipScores = new Map<JurisdictionOwnershipHint, number>();
 
   for (const rule of OWNERSHIP_RULES) {
     const matchCount = rule.patterns.filter((pattern) => pattern.test(normalized)).length;
+    if (matchCount > 0) {
+      ownershipScores.set(
+        rule.ownershipHint,
+        (ownershipScores.get(rule.ownershipHint) ?? 0) + matchCount,
+      );
+      matchedClues.push(rule.label);
+    }
+  }
+
+  for (const rule of CONFIG_OWNERSHIP_RULES) {
+    const keywords = rule.getKeywords(keywordConfig);
+    const matchCount = keywords.filter((keyword) => normalized.includes(keyword)).length;
     if (matchCount > 0) {
       ownershipScores.set(
         rule.ownershipHint,
@@ -143,7 +205,7 @@ export function analyzeReportJurisdiction(
   const districtHintStatus = getDistrictHintStatus(
     normalized,
     matchedClues,
-    config ?? getEnvJurisdictionKeywordConfig(),
+    keywordConfig,
   );
   const confidence = getConfidence(ownershipHint, ownershipScore, districtHintStatus);
 
@@ -238,6 +300,13 @@ function getEnvJurisdictionKeywordConfig(): JurisdictionKeywordConfig {
   return {
     districtMatchKeywords: parseKeywords(process.env.DISTRICT_7_MATCH_KEYWORDS),
     districtOutsideKeywords: parseKeywords(process.env.DISTRICT_7_OUTSIDE_KEYWORDS),
+    stateKeywords: [],
+    countyKeywords: [],
+    utilityKeywords: [],
+    privatePropertyKeywords: [],
+    schoolKeywords: [],
+    transitKeywords: [],
+    parksKeywords: [],
   };
 }
 
