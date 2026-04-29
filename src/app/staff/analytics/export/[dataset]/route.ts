@@ -237,6 +237,40 @@ function buildCsv(
         ),
       };
     }
+    case "notification-reviews": {
+      const reviewedReports = reports.filter(
+        (report) => report.notificationReviewStatus !== null,
+      );
+      return {
+        fileName: "notification-reviews.csv",
+        body: toCsv(
+          [
+            "report_id",
+            "tracking_token",
+            "category",
+            "status",
+            "address",
+            "resident_email",
+            "notification_review_status",
+            "notification_review_note",
+            "notification_reviewed_at",
+            "created_at",
+          ],
+          reviewedReports.map((report) => [
+            report.id,
+            report.publicTrackingToken,
+            report.category,
+            report.status,
+            report.addressText,
+            report.residentEmail,
+            report.notificationReviewStatus ?? "",
+            report.notificationReviewNote ?? "",
+            report.notificationReviewedAt ?? "",
+            report.createdAt,
+          ]),
+        ),
+      };
+    }
     default:
       return null;
   }

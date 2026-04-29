@@ -425,7 +425,7 @@ export default async function StaffAnalyticsPage({
         </section>
 
         <Panel title="Exports">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <ExportLink
               href={`/staff/analytics/export/newsletter-contacts${exportQuerySuffix}`}
               label="Newsletter contacts CSV"
@@ -445,6 +445,11 @@ export default async function StaffAnalyticsPage({
               href={`/staff/analytics/export/ai-feedback${exportQuerySuffix}`}
               label="AI feedback CSV"
               description="Suggestion quality and review outcomes."
+            />
+            <ExportLink
+              href={`/staff/analytics/export/notification-reviews${exportQuerySuffix}`}
+              label="Notification review CSV"
+              description="Ready, needs edit, and hold states for message workflow."
             />
           </div>
         </Panel>

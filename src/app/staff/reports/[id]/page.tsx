@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AiSuggestionPanel } from "@/components/ai-suggestion-panel";
+import { BoundaryPreview } from "@/components/boundary-preview";
 import { getAiRoutingAvailability } from "@/lib/ai-routing";
 import { formatStatus, ISSUE_STATUSES } from "@/lib/issue-types";
 import {
@@ -180,6 +181,15 @@ export default async function StaffReportPage({
                 </div>
               </div>
             ) : null}
+            <BoundaryPreview
+              boundaryGeoJson={jurisdictionConfig.districtBoundaryGeoJson}
+              boundaryName={jurisdictionConfig.districtBoundaryName}
+              latitude={report.latitude}
+              longitude={report.longitude}
+              districtStatusLabel={formatDistrictHintStatus(
+                jurisdiction.districtHintStatus,
+              )}
+            />
           </div>
 
           <div className="mt-5 grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
