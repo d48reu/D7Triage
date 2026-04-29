@@ -86,6 +86,10 @@ export type AiSuggestion = {
   recommendedNextStep: string;
   missingInformation: string[];
   draftResponse: string;
+  model: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
   createdAt: string;
   agency: Agency | null;
 };
@@ -193,6 +197,10 @@ type AiSuggestionRow = {
   recommended_next_step: string | null;
   missing_information_json: string | null;
   draft_response: string | null;
+  model: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
   created_at: string;
   agency_name: string | null;
   agency_contact_name: string | null;
@@ -292,6 +300,22 @@ function ensureSchemaMigrations(database: Database.Database) {
 
   if (!hasColumn(database, "ai_suggestions", "missing_information_json")) {
     database.exec("alter table ai_suggestions add column missing_information_json text;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "model")) {
+    database.exec("alter table ai_suggestions add column model text;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "input_tokens")) {
+    database.exec("alter table ai_suggestions add column input_tokens integer;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "output_tokens")) {
+    database.exec("alter table ai_suggestions add column output_tokens integer;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "total_tokens")) {
+    database.exec("alter table ai_suggestions add column total_tokens integer;");
   }
 }
 
@@ -446,6 +470,10 @@ function getDb() {
       recommended_next_step text,
       missing_information_json text,
       draft_response text,
+      model text,
+      input_tokens integer,
+      output_tokens integer,
+      total_tokens integer,
       created_at text not null
     );
 
@@ -596,6 +624,10 @@ function mapAiSuggestion(row: AiSuggestionRow): AiSuggestion {
       ? (JSON.parse(row.missing_information_json) as string[])
       : [],
     draftResponse: row.draft_response ?? "",
+    model: row.model,
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    totalTokens: row.total_tokens,
     createdAt: row.created_at,
     agency: hasAgency
       ? {
@@ -1054,6 +1086,18 @@ export function getLatestAiSuggestion(reportId: string) {
   return listAiSuggestions(reportId)[0] ?? null;
 }
 
+export function countAiSuggestionsSince(reportId: string, sinceIso: string) {
+  const row = getDb()
+    .prepare(
+      `select count(*) as count
+       from ai_suggestions
+       where report_id = ? and datetime(created_at) >= datetime(?)`,
+    )
+    .get(reportId, sinceIso) as { count: number };
+
+  return row.count;
+}
+
 export function addAiSuggestion(input: {
   reportId: string;
   summary: string;
@@ -1066,6 +1110,10 @@ export function addAiSuggestion(input: {
   recommendedNextStep: string;
   missingInformation: string[];
   draftResponse: string;
+  model?: string | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
 }) {
   const id = makeId();
   getDb()
@@ -1073,8 +1121,9 @@ export function addAiSuggestion(input: {
       `insert into ai_suggestions (
         id, report_id, summary, suggested_category, suggested_urgency,
         suggested_responsible_party, suggested_agency_id, confidence, explanation,
-        recommended_next_step, missing_information_json, draft_response, created_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        recommended_next_step, missing_information_json, draft_response, model,
+        input_tokens, output_tokens, total_tokens, created_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -1089,6 +1138,10 @@ export function addAiSuggestion(input: {
       input.recommendedNextStep,
       JSON.stringify(input.missingInformation),
       input.draftResponse,
+      input.model || null,
+      input.inputTokens ?? null,
+      input.outputTokens ?? null,
+      input.totalTokens ?? null,
       nowIso(),
     );
 

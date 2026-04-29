@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AiSuggestionPanel } from "@/components/ai-suggestion-panel";
+import { getAiRoutingAvailability } from "@/lib/ai-routing";
 import { formatStatus, ISSUE_STATUSES } from "@/lib/issue-types";
 import {
   findPotentialDuplicates,
@@ -46,6 +47,7 @@ export default async function StaffReportPage({
   const duplicateCandidates = findPotentialDuplicates(report);
   const routingRule = getManagedRoutingRule(report.category);
   const latestSuggestion = getLatestAiSuggestion(report.id);
+  const aiRoutingAvailability = getAiRoutingAvailability();
   const defaultOwnerLabel = routingRule?.ownerLabel ?? "District 7 triage";
 
   return (
@@ -211,9 +213,24 @@ export default async function StaffReportPage({
                     recommendedNextStep: latestSuggestion.recommendedNextStep,
                     missingInformation: latestSuggestion.missingInformation,
                     draftResponse: latestSuggestion.draftResponse,
+                    model: latestSuggestion.model,
+                    inputTokens: latestSuggestion.inputTokens,
+                    outputTokens: latestSuggestion.outputTokens,
+                    totalTokens: latestSuggestion.totalTokens,
                     createdAt: latestSuggestion.createdAt,
                   }
                 : null
+            }
+            isEnabled={aiRoutingAvailability.enabled}
+            availabilityMessage={
+              aiRoutingAvailability.enabled
+                ? "Generate a suggestion to get an AI-assisted routing recommendation."
+                : aiRoutingAvailability.reason ||
+                  "AI routing is unavailable right now."
+            }
+            modelName={aiRoutingAvailability.model}
+            maxGenerationsPerDay={
+              aiRoutingAvailability.maxGenerationsPerReportPerDay
             }
           />
 

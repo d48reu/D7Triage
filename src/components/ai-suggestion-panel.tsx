@@ -12,15 +12,23 @@ type Suggestion = NonNullable<GenerateAiSuggestionState["suggestion"]>;
 export function AiSuggestionPanel({
   reportId,
   initialSuggestion,
+  isEnabled,
+  availabilityMessage,
+  modelName,
+  maxGenerationsPerDay,
 }: {
   reportId: string;
   initialSuggestion: Suggestion | null;
+  isEnabled: boolean;
+  availabilityMessage: string;
+  modelName: string;
+  maxGenerationsPerDay: number;
 }) {
   const initialState: GenerateAiSuggestionState = {
     status: "idle",
     message: initialSuggestion
       ? "Latest saved suggestion shown below."
-      : "Generate a suggestion to get an AI-assisted routing recommendation.",
+      : availabilityMessage,
     suggestion: initialSuggestion,
   };
 
@@ -39,12 +47,16 @@ export function AiSuggestionPanel({
           <p className="mt-1 text-sm text-slate-600">
             Generated from the report, active agencies, and managed routing rules.
           </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Model: {modelName} | Limit: {maxGenerationsPerDay} runs per report per
+            day
+          </p>
         </div>
         <form action={formAction}>
           <input type="hidden" name="reportId" value={reportId} />
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || !isEnabled}
             className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-60"
           >
             {isPending
@@ -94,6 +106,18 @@ export function AiSuggestionPanel({
           <Block title="Draft resident response">
             {suggestion.draftResponse}
           </Block>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Detail label="Model" value={suggestion.model || modelName} />
+            <Detail
+              label="Token usage"
+              value={
+                suggestion.totalTokens !== null
+                  ? `${suggestion.totalTokens} total (${suggestion.inputTokens ?? 0} in / ${suggestion.outputTokens ?? 0} out)`
+                  : "Not captured"
+              }
+            />
+          </div>
 
           <div>
             <h3 className="text-sm font-semibold text-slate-800">

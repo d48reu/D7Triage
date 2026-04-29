@@ -37,6 +37,10 @@ export type GenerateAiSuggestionState = {
     recommendedNextStep: string;
     missingInformation: string[];
     draftResponse: string;
+    model: string | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
     createdAt: string;
   } | null;
 };
@@ -255,6 +259,10 @@ export async function generateAiRoutingSuggestionAction(
         recommendedNextStep: suggestion.recommendedNextStep,
         missingInformation: suggestion.missingInformation,
         draftResponse: suggestion.draftResponse,
+        model: suggestion.model,
+        inputTokens: suggestion.inputTokens,
+        outputTokens: suggestion.outputTokens,
+        totalTokens: suggestion.totalTokens,
         createdAt: suggestion.createdAt,
       },
     };
@@ -279,6 +287,10 @@ export async function generateAiRoutingSuggestionAction(
             recommendedNextStep: latestSuggestion.recommendedNextStep,
             missingInformation: latestSuggestion.missingInformation,
             draftResponse: latestSuggestion.draftResponse,
+            model: latestSuggestion.model,
+            inputTokens: latestSuggestion.inputTokens,
+            outputTokens: latestSuggestion.outputTokens,
+            totalTokens: latestSuggestion.totalTokens,
             createdAt: latestSuggestion.createdAt,
           }
         : null,

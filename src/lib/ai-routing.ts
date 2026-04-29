@@ -6,6 +6,7 @@ import {
   type IssueReport,
   type ManagedRoutingRule,
   addAiSuggestion,
+  countAiSuggestionsSince,
   getIssueReportById,
   getManagedRoutingRule,
   listAgencies,
@@ -25,6 +26,30 @@ type RawAiSuggestion = {
   draftResponse: string;
 };
 
+export type AiRoutingAvailability = {
+  enabled: boolean;
+  reason: string | null;
+  model: string;
+  maxGenerationsPerReportPerDay: number;
+};
+
+function parseBooleanEnv(value: string | undefined, fallback: boolean) {
+  if (value === undefined) return fallback;
+
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+function parsePositiveIntegerEnv(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getStartOfTodayIso() {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return now.toISOString();
+}
+
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -35,7 +60,62 @@ function getOpenAIClient() {
 }
 
 function getRoutingModel() {
-  return process.env.OPENAI_ROUTING_MODEL || "gpt-5-mini";
+  return process.env.OPENAI_ROUTING_MODEL || "gpt-5-nano";
+}
+
+function getMaxGenerationsPerReportPerDay() {
+  return parsePositiveIntegerEnv(
+    process.env.AI_ROUTING_MAX_GENERATIONS_PER_REPORT_PER_DAY,
+    2,
+  );
+}
+
+export function getAiRoutingAvailability(): AiRoutingAvailability {
+  const enabled = parseBooleanEnv(process.env.AI_ROUTING_ENABLED, false);
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      reason: "AI routing is disabled by configuration.",
+      model: getRoutingModel(),
+      maxGenerationsPerReportPerDay: getMaxGenerationsPerReportPerDay(),
+    };
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      enabled: false,
+      reason: "OPENAI_API_KEY is not configured.",
+      model: getRoutingModel(),
+      maxGenerationsPerReportPerDay: getMaxGenerationsPerReportPerDay(),
+    };
+  }
+
+  return {
+    enabled: true,
+    reason: null,
+    model: getRoutingModel(),
+    maxGenerationsPerReportPerDay: getMaxGenerationsPerReportPerDay(),
+  };
+}
+
+function estimateTokenCount(text: string) {
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function getUsageMetrics(response: OpenAIResponse, parsed: RawAiSuggestion) {
+  const inputTokens =
+    response.usage?.input_tokens ??
+    estimateTokenCount(
+      [parsed.summary, parsed.explanation, parsed.recommendedNextStep].join(" "),
+    );
+  const outputTokens =
+    response.usage?.output_tokens ??
+    estimateTokenCount(JSON.stringify(parsed));
+  const totalTokens =
+    response.usage?.total_tokens ?? inputTokens + outputTokens;
+
+  return { inputTokens, outputTokens, totalTokens };
 }
 
 function getResponseSchema(agencyIds: string[]) {
@@ -159,9 +239,21 @@ function extractResponseText(response: OpenAIResponse) {
 }
 
 export async function generateAiRoutingSuggestion(reportId: string) {
+  const availability = getAiRoutingAvailability();
+  if (!availability.enabled) {
+    throw new Error(availability.reason || "AI routing is unavailable.");
+  }
+
   const report = getIssueReportById(reportId);
   if (!report) {
     throw new Error("Report not found.");
+  }
+
+  const generatedToday = countAiSuggestionsSince(reportId, getStartOfTodayIso());
+  if (generatedToday >= availability.maxGenerationsPerReportPerDay) {
+    throw new Error(
+      `This report has already used its ${availability.maxGenerationsPerReportPerDay} AI suggestion runs for today.`,
+    );
   }
 
   const currentRule = getManagedRoutingRule(report.category);
@@ -198,6 +290,7 @@ export async function generateAiRoutingSuggestion(reportId: string) {
   const agency = agencyId
     ? agencies.find((candidate) => candidate.id === agencyId) ?? null
     : null;
+  const usage = getUsageMetrics(response, parsed);
 
   return addAiSuggestion({
     reportId,
@@ -212,5 +305,9 @@ export async function generateAiRoutingSuggestion(reportId: string) {
     recommendedNextStep: parsed.recommendedNextStep,
     missingInformation: parsed.missingInformation,
     draftResponse: parsed.draftResponse,
+    model: getRoutingModel(),
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    totalTokens: usage.totalTokens,
   });
 }
