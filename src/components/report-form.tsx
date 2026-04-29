@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { ISSUE_CATEGORIES } from "@/lib/issue-types";
 import {
   submitIssueReportAction,
@@ -17,6 +17,50 @@ export function ReportForm() {
     submitIssueReportAction,
     initialState,
   );
+  const [locationState, setLocationState] = useState<{
+    latitude: string;
+    longitude: string;
+    message: string;
+  }>({
+    latitude: "",
+    longitude: "",
+    message: "Optional. Helps future map and boundary checks if available.",
+  });
+
+  function captureLocation() {
+    if (!navigator.geolocation) {
+      setLocationState((current) => ({
+        ...current,
+        message: "This browser does not support location capture.",
+      }));
+      return;
+    }
+
+    setLocationState((current) => ({
+      ...current,
+      message: "Getting your location...",
+    }));
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationState({
+          latitude: position.coords.latitude.toFixed(6),
+          longitude: position.coords.longitude.toFixed(6),
+          message: "Location captured for boundary-aware routing.",
+        });
+      },
+      () => {
+        setLocationState((current) => ({
+          ...current,
+          message: "We couldn’t capture your location. You can still submit with the address field.",
+        }));
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+      },
+    );
+  }
 
   return (
     <form action={formAction} className="rounded-md border border-slate-200 bg-white shadow-sm">
@@ -74,6 +118,34 @@ export function ReportForm() {
             landmarks help staff determine jurisdiction faster.
           </p>
         </label>
+
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-slate-800">
+                Optional device location
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                If you allow it, we’ll attach coordinates for map-based boundary checks later.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={captureLocation}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              Use My Location
+            </button>
+          </div>
+          <input type="hidden" name="latitude" value={locationState.latitude} />
+          <input type="hidden" name="longitude" value={locationState.longitude} />
+          <p className="mt-3 text-xs text-slate-500">{locationState.message}</p>
+          {locationState.latitude && locationState.longitude ? (
+            <p className="mt-1 text-xs text-slate-500">
+              {locationState.latitude}, {locationState.longitude}
+            </p>
+          ) : null}
+        </div>
 
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-slate-800">

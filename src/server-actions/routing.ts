@@ -67,6 +67,12 @@ export async function saveJurisdictionConfigAction(formData: FormData) {
     schoolKeywords: String(formData.get("schoolKeywords") ?? "").trim(),
     transitKeywords: String(formData.get("transitKeywords") ?? "").trim(),
     parksKeywords: String(formData.get("parksKeywords") ?? "").trim(),
+    districtBoundaryName: String(
+      formData.get("districtBoundaryName") ?? "",
+    ).trim(),
+    districtBoundaryGeoJson: String(
+      formData.get("districtBoundaryGeoJson") ?? "",
+    ).trim(),
   });
 
   revalidatePath("/staff/routing");

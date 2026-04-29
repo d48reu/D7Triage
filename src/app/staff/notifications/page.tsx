@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { logoutStaffAction } from "@/server-actions/auth";
-import { saveNotificationTemplateAction } from "@/server-actions/notifications";
+import {
+  saveNotificationTemplateAction,
+  updateNotificationReviewAction,
+} from "@/server-actions/notifications";
 import {
   buildNotificationPreview,
   getLastNotificationSummary,
@@ -60,6 +63,15 @@ export default async function StaffNotificationsPage() {
       row.report.status,
     ),
   );
+  const readyForSend = rows.filter(
+    (row) => row.report.notificationReviewStatus === "ready",
+  );
+  const needsEdit = rows.filter(
+    (row) => row.report.notificationReviewStatus === "needs_edit",
+  );
+  const onHold = rows.filter(
+    (row) => row.report.notificationReviewStatus === "hold",
+  );
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -108,6 +120,12 @@ export default async function StaffNotificationsPage() {
           <Metric label="Previews ready" value={readyPreviews.length} />
           <Metric label="Suppressed previews" value={suppressedPreviews.length} />
           <Metric label="Logged stubs" value={totalNotificationEvents} />
+        </section>
+
+        <section className="grid gap-3 md:grid-cols-3">
+          <Metric label="Marked ready" value={readyForSend.length} />
+          <Metric label="Needs edit" value={needsEdit.length} />
+          <Metric label="On hold" value={onHold.length} />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -322,6 +340,59 @@ export default async function StaffNotificationsPage() {
                   )}
                 </div>
               </div>
+
+              <form
+                action={updateNotificationReviewAction}
+                className="mt-5 rounded-md border border-slate-200 bg-slate-50 p-4"
+              >
+                <input type="hidden" name="reportId" value={row.report.id} />
+                <div className="text-sm font-semibold text-slate-900">
+                  Staff review workflow
+                </div>
+                <p className="mt-1 text-sm text-slate-600">
+                  Keep this local-only for now: mark the message as ready, needs edit, or hold.
+                </p>
+                <div className="mt-4 grid gap-4 lg:grid-cols-[220px_1fr_auto]">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">
+                      Review status
+                    </span>
+                    <select
+                      name="reviewStatus"
+                      defaultValue={row.report.notificationReviewStatus ?? "needs_edit"}
+                      className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                    >
+                      <option value="ready">Ready</option>
+                      <option value="needs_edit">Needs edit</option>
+                      <option value="hold">Hold</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">
+                      Review note
+                    </span>
+                    <input
+                      name="reviewNote"
+                      defaultValue={row.report.notificationReviewNote ?? ""}
+                      placeholder="Optional note for staff about wording, timing, or whether to wait."
+                      className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Save Review
+                    </button>
+                  </div>
+                </div>
+                {row.report.notificationReviewedAt ? (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Last reviewed {new Date(row.report.notificationReviewedAt).toLocaleString()}
+                  </p>
+                ) : null}
+              </form>
             </section>
           ))}
         </section>

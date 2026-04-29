@@ -21,6 +21,8 @@ export type IssueReport = {
   category: string;
   description: string;
   addressText: string;
+  latitude: number | null;
+  longitude: number | null;
   residentName: string | null;
   residentEmail: string;
   residentPhone: string | null;
@@ -28,6 +30,9 @@ export type IssueReport = {
   contactConsent: boolean;
   newsletterOptIn: boolean;
   newsletterOptInAt: string | null;
+  notificationReviewStatus: "ready" | "needs_edit" | "hold" | null;
+  notificationReviewNote: string | null;
+  notificationReviewedAt: string | null;
   duplicateOfReportId: string | null;
   duplicateReviewDecision: "linked_to_master" | "kept_separate" | null;
   duplicateReviewedAt: string | null;
@@ -57,7 +62,19 @@ export type JurisdictionConfig = {
   schoolKeywords: string[];
   transitKeywords: string[];
   parksKeywords: string[];
+  districtBoundaryName: string | null;
+  districtBoundaryGeoJson: string | null;
   updatedAt: string | null;
+};
+
+export type AnalyticsView = {
+  id: string;
+  name: string;
+  preset: string;
+  dateFrom: string | null;
+  dateTo: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type IssueStatusEvent = {
@@ -178,6 +195,8 @@ type IssueReportRow = {
   category: string;
   description: string;
   address_text: string;
+  latitude: number | null;
+  longitude: number | null;
   resident_name: string | null;
   resident_email: string;
   resident_phone: string | null;
@@ -185,6 +204,9 @@ type IssueReportRow = {
   contact_consent: number;
   newsletter_opt_in: number;
   newsletter_opt_in_at: string | null;
+  notification_review_status: "ready" | "needs_edit" | "hold" | null;
+  notification_review_note: string | null;
+  notification_reviewed_at: string | null;
   duplicate_of_report_id: string | null;
   duplicate_review_decision: "linked_to_master" | "kept_separate" | null;
   duplicate_reviewed_at: string | null;
@@ -333,13 +355,27 @@ type JurisdictionSettingsRow = {
   school_keywords: string | null;
   transit_keywords: string | null;
   parks_keywords: string | null;
+  district_boundary_name: string | null;
+  district_boundary_geojson: string | null;
   updated_at: string | null;
+};
+
+type AnalyticsViewRow = {
+  id: string;
+  name: string;
+  preset: string;
+  date_from: string | null;
+  date_to: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type CreateIssueReportInput = {
   category: string;
   description: string;
   addressText: string;
+  latitude?: number | null;
+  longitude?: number | null;
   residentName?: string;
   residentEmail: string;
   residentPhone?: string;
@@ -386,6 +422,26 @@ function ensureSchemaMigrations(database: Database.Database) {
 
   if (!hasColumn(database, "issue_reports", "newsletter_opt_in_at")) {
     database.exec("alter table issue_reports add column newsletter_opt_in_at text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "latitude")) {
+    database.exec("alter table issue_reports add column latitude real;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "longitude")) {
+    database.exec("alter table issue_reports add column longitude real;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "notification_review_status")) {
+    database.exec("alter table issue_reports add column notification_review_status text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "notification_review_note")) {
+    database.exec("alter table issue_reports add column notification_review_note text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "notification_reviewed_at")) {
+    database.exec("alter table issue_reports add column notification_reviewed_at text;");
   }
 
   if (!hasColumn(database, "issue_reports", "duplicate_of_report_id")) {
@@ -496,6 +552,14 @@ function ensureSchemaMigrations(database: Database.Database) {
   if (!hasColumn(database, "jurisdiction_settings", "parks_keywords")) {
     database.exec("alter table jurisdiction_settings add column parks_keywords text;");
   }
+
+  if (!hasColumn(database, "jurisdiction_settings", "district_boundary_name")) {
+    database.exec("alter table jurisdiction_settings add column district_boundary_name text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "district_boundary_geojson")) {
+    database.exec("alter table jurisdiction_settings add column district_boundary_geojson text;");
+  }
 }
 
 function seedRoutingData(database: Database.Database) {
@@ -588,13 +652,18 @@ function seedJurisdictionSettings(database: Database.Database) {
       `insert into jurisdiction_settings (
         id, district_match_keywords, district_outside_keywords, state_keywords,
         county_keywords, utility_keywords, private_property_keywords,
-        school_keywords, transit_keywords, parks_keywords, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        school_keywords, transit_keywords, parks_keywords,
+        district_boundary_name, district_boundary_geojson, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       1,
       process.env.DISTRICT_7_MATCH_KEYWORDS ?? "",
       process.env.DISTRICT_7_OUTSIDE_KEYWORDS ?? "",
+      "",
+      "",
+      "",
+      "",
       "",
       "",
       "",
@@ -643,6 +712,8 @@ function getDb() {
       category text not null,
       description text not null,
       address_text text not null,
+      latitude real,
+      longitude real,
       resident_name text,
       resident_email text not null,
       resident_phone text,
@@ -650,6 +721,9 @@ function getDb() {
       contact_consent integer not null default 1,
       newsletter_opt_in integer not null default 0,
       newsletter_opt_in_at text,
+      notification_review_status text,
+      notification_review_note text,
+      notification_reviewed_at text,
       duplicate_of_report_id text references issue_reports(id) on delete set null,
       duplicate_review_decision text,
       duplicate_reviewed_at text,
@@ -778,7 +852,19 @@ function getDb() {
       school_keywords text,
       transit_keywords text,
       parks_keywords text,
+      district_boundary_name text,
+      district_boundary_geojson text,
       updated_at text
+    );
+
+    create table if not exists analytics_views (
+      id text primary key,
+      name text not null unique,
+      preset text not null,
+      date_from text,
+      date_to text,
+      created_at text not null,
+      updated_at text not null
     );
 
     create index if not exists idx_issue_reports_status on issue_reports(status);
@@ -791,6 +877,7 @@ function getDb() {
     create index if not exists idx_notification_events_report on notification_events(report_id);
     create index if not exists idx_routing_rules_category on routing_rules(category);
     create index if not exists idx_ai_suggestions_report on ai_suggestions(report_id);
+    create index if not exists idx_analytics_views_name on analytics_views(name);
   `);
 
   ensureSchemaMigrations(db);
@@ -809,6 +896,8 @@ function mapReport(row: IssueReportRow): IssueReport {
     category: row.category,
     description: row.description,
     addressText: row.address_text,
+    latitude: row.latitude,
+    longitude: row.longitude,
     residentName: row.resident_name,
     residentEmail: row.resident_email,
     residentPhone: row.resident_phone,
@@ -816,10 +905,25 @@ function mapReport(row: IssueReportRow): IssueReport {
     contactConsent: row.contact_consent === 1,
     newsletterOptIn: row.newsletter_opt_in === 1,
     newsletterOptInAt: row.newsletter_opt_in_at,
+    notificationReviewStatus: row.notification_review_status,
+    notificationReviewNote: row.notification_review_note,
+    notificationReviewedAt: row.notification_reviewed_at,
     duplicateOfReportId: row.duplicate_of_report_id,
     duplicateReviewDecision: row.duplicate_review_decision,
     duplicateReviewedAt: row.duplicate_reviewed_at,
     duplicateReviewNote: row.duplicate_review_note,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapAnalyticsView(row: AnalyticsViewRow): AnalyticsView {
+  return {
+    id: row.id,
+    name: row.name,
+    preset: row.preset,
+    dateFrom: row.date_from,
+    dateTo: row.date_to,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -996,16 +1100,17 @@ export function createIssueReport(input: CreateIssueReportInput) {
 
   const insertReport = database.prepare(`
     insert into issue_reports (
-      id, public_tracking_token, status, category, description, address_text,
-      resident_name, resident_email, resident_phone, preferred_language,
+    id, public_tracking_token, status, category, description, address_text,
+      latitude, longitude, resident_name, resident_email, resident_phone, preferred_language,
       contact_consent, newsletter_opt_in, newsletter_opt_in_at,
+      notification_review_status, notification_review_note, notification_reviewed_at,
       duplicate_of_report_id, duplicate_review_decision, duplicate_reviewed_at,
       duplicate_review_note, created_at, updated_at
     ) values (
       @id, @publicTrackingToken, @status, @category, @description, @addressText,
-      @residentName, @residentEmail, @residentPhone, @preferredLanguage,
+      @latitude, @longitude, @residentName, @residentEmail, @residentPhone, @preferredLanguage,
       @contactConsent, @newsletterOptIn, @newsletterOptInAt, null, null, null,
-      null, @createdAt, @updatedAt
+      null, null, null, null, @createdAt, @updatedAt
     )
   `);
 
@@ -1025,6 +1130,8 @@ export function createIssueReport(input: CreateIssueReportInput) {
       category: input.category,
       description: input.description,
       addressText: input.addressText,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
       residentName: input.residentName || null,
       residentEmail: input.residentEmail,
       residentPhone: input.residentPhone || null,
@@ -1144,6 +1251,8 @@ export function getJurisdictionConfig(): JurisdictionConfig {
       schoolKeywords: [],
       transitKeywords: [],
       parksKeywords: [],
+      districtBoundaryName: null,
+      districtBoundaryGeoJson: null,
       updatedAt: null,
     };
   }
@@ -1158,6 +1267,8 @@ export function getJurisdictionConfig(): JurisdictionConfig {
     schoolKeywords: parseKeywordList(row.school_keywords),
     transitKeywords: parseKeywordList(row.transit_keywords),
     parksKeywords: parseKeywordList(row.parks_keywords),
+    districtBoundaryName: row.district_boundary_name,
+    districtBoundaryGeoJson: row.district_boundary_geojson,
     updatedAt: row.updated_at,
   };
 }
@@ -1172,6 +1283,8 @@ export function saveJurisdictionConfig(input: {
   schoolKeywords: string;
   transitKeywords: string;
   parksKeywords: string;
+  districtBoundaryName?: string;
+  districtBoundaryGeoJson?: string;
 }) {
   const updatedAt = nowIso();
 
@@ -1180,8 +1293,9 @@ export function saveJurisdictionConfig(input: {
       `insert into jurisdiction_settings (
         id, district_match_keywords, district_outside_keywords, state_keywords,
         county_keywords, utility_keywords, private_property_keywords,
-        school_keywords, transit_keywords, parks_keywords, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        school_keywords, transit_keywords, parks_keywords,
+        district_boundary_name, district_boundary_geojson, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(id) do update set
         district_match_keywords = excluded.district_match_keywords,
         district_outside_keywords = excluded.district_outside_keywords,
@@ -1192,6 +1306,8 @@ export function saveJurisdictionConfig(input: {
         school_keywords = excluded.school_keywords,
         transit_keywords = excluded.transit_keywords,
         parks_keywords = excluded.parks_keywords,
+        district_boundary_name = excluded.district_boundary_name,
+        district_boundary_geojson = excluded.district_boundary_geojson,
         updated_at = excluded.updated_at`,
     )
     .run(
@@ -1205,6 +1321,8 @@ export function saveJurisdictionConfig(input: {
       input.schoolKeywords.trim(),
       input.transitKeywords.trim(),
       input.parksKeywords.trim(),
+      input.districtBoundaryName?.trim() || null,
+      input.districtBoundaryGeoJson?.trim() || null,
       updatedAt,
     );
 
@@ -1531,6 +1649,87 @@ export function getNotificationTemplateMap() {
       },
     ]),
   );
+}
+
+export function listAnalyticsViews() {
+  const rows = getDb()
+    .prepare("select * from analytics_views order by lower(name) asc")
+    .all() as AnalyticsViewRow[];
+
+  return rows.map(mapAnalyticsView);
+}
+
+export function upsertAnalyticsView(input: {
+  name: string;
+  preset: string;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}) {
+  const existing = getDb()
+    .prepare("select id, created_at from analytics_views where lower(name) = lower(?)")
+    .get(input.name.trim()) as { id: string; created_at: string } | undefined;
+  const updatedAt = nowIso();
+
+  if (existing) {
+    getDb()
+      .prepare(
+        `update analytics_views
+         set name = ?, preset = ?, date_from = ?, date_to = ?, updated_at = ?
+         where id = ?`,
+      )
+      .run(
+        input.name.trim(),
+        input.preset.trim() || "all",
+        input.dateFrom?.trim() || null,
+        input.dateTo?.trim() || null,
+        updatedAt,
+        existing.id,
+      );
+
+    return listAnalyticsViews().find((view) => view.id === existing.id) ?? null;
+  }
+
+  const id = makeId();
+  getDb()
+    .prepare(
+      `insert into analytics_views (
+        id, name, preset, date_from, date_to, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      input.name.trim(),
+      input.preset.trim() || "all",
+      input.dateFrom?.trim() || null,
+      input.dateTo?.trim() || null,
+      updatedAt,
+      updatedAt,
+    );
+
+  return listAnalyticsViews().find((view) => view.id === id) ?? null;
+}
+
+export function updateNotificationReview(input: {
+  reportId: string;
+  status: "ready" | "needs_edit" | "hold";
+  note?: string;
+}) {
+  getDb()
+    .prepare(
+      `update issue_reports
+       set notification_review_status = ?, notification_review_note = ?,
+           notification_reviewed_at = ?, updated_at = ?
+       where id = ?`,
+    )
+    .run(
+      input.status,
+      input.note?.trim() || null,
+      nowIso(),
+      nowIso(),
+      input.reportId,
+    );
+
+  return getIssueReportById(input.reportId);
 }
 
 export function upsertNotificationTemplate(input: {

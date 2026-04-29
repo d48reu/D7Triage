@@ -125,6 +125,18 @@ export default async function RoutingGuidePage() {
               defaultValue={jurisdictionConfig.parksKeywords.join("\n")}
               helperText="Use park names, trail names, recreation centers, or facility names."
             />
+            <Field
+              name="districtBoundaryName"
+              label="Boundary dataset name"
+              defaultValue={jurisdictionConfig.districtBoundaryName ?? ""}
+            />
+            <TextArea
+              name="districtBoundaryGeoJson"
+              label="District boundary GeoJSON"
+              defaultValue={jurisdictionConfig.districtBoundaryGeoJson ?? ""}
+              className="xl:col-span-2"
+              helperText="Paste a GeoJSON Polygon, MultiPolygon, Feature, or FeatureCollection for District 7. If reports include captured coordinates, the hint engine will use this boundary before keyword matching."
+            />
             <div className="xl:col-span-3 lg:col-span-2">
               <button
                 type="submit"

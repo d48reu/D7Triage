@@ -81,6 +81,13 @@ function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "-");
 }
 
+function readOptionalNumber(formData: FormData, key: string) {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function serializeSuggestion(
   suggestion: NonNullable<ReturnType<typeof getLatestAiSuggestion>>,
 ): NonNullable<GenerateAiSuggestionState["suggestion"]> {
@@ -138,6 +145,8 @@ export async function submitIssueReportAction(
   const addressText = String(formData.get("addressText") ?? "").trim();
   const residentEmail = String(formData.get("residentEmail") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
+  const latitude = readOptionalNumber(formData, "latitude");
+  const longitude = readOptionalNumber(formData, "longitude");
   const contactConsent = formData.get("contactConsent") === "on";
   const newsletterOptIn = formData.get("newsletterOptIn") === "on";
   const photos = formData
@@ -179,6 +188,8 @@ export async function submitIssueReportAction(
     category,
     description,
     addressText,
+    latitude,
+    longitude,
     residentEmail,
     contactConsent,
     residentName: String(formData.get("residentName") ?? "").trim(),

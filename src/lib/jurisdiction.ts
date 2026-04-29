@@ -2,6 +2,8 @@ type ReportLike = {
   category: string;
   description: string;
   addressText: string;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export type JurisdictionOwnershipHint =
@@ -40,6 +42,8 @@ export type JurisdictionKeywordConfig = {
   schoolKeywords: string[];
   transitKeywords: string[];
   parksKeywords: string[];
+  districtBoundaryName?: string | null;
+  districtBoundaryGeoJson?: string | null;
 };
 
 const OWNERSHIP_RULES: Array<{
@@ -203,6 +207,7 @@ export function analyzeReportJurisdiction(
   const ownershipScore = topOwnership?.[1] ?? 0;
 
   const districtHintStatus = getDistrictHintStatus(
+    report,
     normalized,
     matchedClues,
     keywordConfig,
@@ -307,14 +312,29 @@ function getEnvJurisdictionKeywordConfig(): JurisdictionKeywordConfig {
     schoolKeywords: [],
     transitKeywords: [],
     parksKeywords: [],
+    districtBoundaryName: null,
+    districtBoundaryGeoJson: null,
   };
 }
 
 function getDistrictHintStatus(
+  report: ReportLike,
   normalizedText: string,
   matchedClues: string[],
   config: JurisdictionKeywordConfig,
 ) {
+  const boundaryResult = classifyBoundaryMatch(report, config);
+
+  if (boundaryResult === "inside") {
+    matchedClues.push("Boundary polygon contains captured coordinates");
+    return "likely_in_district";
+  }
+
+  if (boundaryResult === "outside") {
+    matchedClues.push("Boundary polygon excludes captured coordinates");
+    return "likely_outside_district";
+  }
+
   const matchesDistrict = config.districtMatchKeywords.some((keyword) =>
     normalizedText.includes(keyword),
   );
@@ -333,6 +353,126 @@ function getDistrictHintStatus(
   }
 
   return "unclear";
+}
+
+function classifyBoundaryMatch(
+  report: ReportLike,
+  config: JurisdictionKeywordConfig,
+) {
+  if (
+    report.latitude === null ||
+    report.latitude === undefined ||
+    report.longitude === null ||
+    report.longitude === undefined ||
+    !config.districtBoundaryGeoJson
+  ) {
+    return "unknown" as const;
+  }
+
+  try {
+    const parsed = JSON.parse(config.districtBoundaryGeoJson) as {
+      type?: string;
+      coordinates?: unknown;
+      geometry?: { type?: string; coordinates?: unknown };
+      features?: Array<{ geometry?: { type?: string; coordinates?: unknown } }>;
+    };
+
+    const geometries = getGeoJsonGeometries(parsed);
+    if (geometries.length === 0) {
+      return "unknown" as const;
+    }
+
+    const point: [number, number] = [report.longitude, report.latitude];
+    return geometries.some((geometry) => geometryContainsPoint(geometry, point))
+      ? "inside"
+      : "outside";
+  } catch {
+    return "unknown" as const;
+  }
+}
+
+function getGeoJsonGeometries(value: {
+  type?: string;
+  coordinates?: unknown;
+  geometry?: { type?: string; coordinates?: unknown };
+  features?: Array<{ geometry?: { type?: string; coordinates?: unknown } }>;
+}) {
+  if (value.type === "FeatureCollection" && Array.isArray(value.features)) {
+    return value.features
+      .map((feature) => feature.geometry)
+      .filter((geometry): geometry is { type?: string; coordinates?: unknown } => Boolean(geometry));
+  }
+
+  if (value.type === "Feature" && value.geometry) {
+    return [value.geometry];
+  }
+
+  if (value.type && value.coordinates) {
+    return [{ type: value.type, coordinates: value.coordinates }];
+  }
+
+  return [];
+}
+
+function geometryContainsPoint(
+  geometry: { type?: string; coordinates?: unknown },
+  point: [number, number],
+) {
+  if (geometry.type === "Polygon" && Array.isArray(geometry.coordinates)) {
+    return polygonContainsPoint(geometry.coordinates as number[][][], point);
+  }
+
+  if (geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates)) {
+    return (geometry.coordinates as number[][][][]).some((polygon) =>
+      polygonContainsPoint(polygon, point),
+    );
+  }
+
+  return false;
+}
+
+function polygonContainsPoint(
+  polygon: number[][][],
+  point: [number, number],
+) {
+  if (!Array.isArray(polygon) || polygon.length === 0) return false;
+  const [outerRing, ...holes] = polygon;
+  if (!ringContainsPoint(outerRing, point)) return false;
+  return !holes.some((ring) => ringContainsPoint(ring, point));
+}
+
+function ringContainsPoint(
+  ring: number[][],
+  point: [number, number],
+) {
+  let inside = false;
+  const [px, py] = point;
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i]?.[0];
+    const yi = ring[i]?.[1];
+    const xj = ring[j]?.[0];
+    const yj = ring[j]?.[1];
+
+    if (
+      xi === undefined ||
+      yi === undefined ||
+      xj === undefined ||
+      yj === undefined
+    ) {
+      continue;
+    }
+
+    const intersects =
+      yi > py !== yj > py &&
+      px < ((xj - xi) * (py - yi)) / (yj - yi || Number.EPSILON) + xi;
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
 }
 
 function getConfidence(

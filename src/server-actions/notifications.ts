@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import type { NotificationTemplateKey } from "@/lib/notification-template-definitions";
-import { upsertNotificationTemplate } from "@/lib/issues-repository";
+import {
+  getIssueReportById,
+  updateNotificationReview,
+  upsertNotificationTemplate,
+} from "@/lib/issues-repository";
 
 function readRequiredText(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -25,4 +29,24 @@ export async function saveNotificationTemplateAction(formData: FormData) {
   });
 
   revalidatePath("/staff/notifications");
+}
+
+export async function updateNotificationReviewAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const report = getIssueReportById(reportId);
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  updateNotificationReview({
+    reportId,
+    status: readRequiredText(formData, "reviewStatus") as
+      | "ready"
+      | "needs_edit"
+      | "hold",
+    note: String(formData.get("reviewNote") ?? "").trim(),
+  });
+
+  revalidatePath("/staff/notifications");
+  revalidatePath(`/staff/reports/${reportId}`);
 }

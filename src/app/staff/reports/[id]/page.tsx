@@ -184,6 +184,14 @@ export default async function StaffReportPage({
 
           <div className="mt-5 grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
             <Detail label="Location" value={report.addressText} />
+            <Detail
+              label="Coordinates"
+              value={
+                report.latitude !== null && report.longitude !== null
+                  ? `${report.latitude}, ${report.longitude}`
+                  : "Not captured"
+              }
+            />
             <Detail label="Email" value={report.residentEmail} />
             <Detail label="Name" value={report.residentName || "Not provided"} />
             <Detail label="Phone" value={report.residentPhone || "Not provided"} />
@@ -191,6 +199,14 @@ export default async function StaffReportPage({
             <Detail
               label="Newsletter"
               value={report.newsletterOptIn ? "Opted in" : "Case updates only"}
+            />
+            <Detail
+              label="Notification review"
+              value={
+                report.notificationReviewStatus
+                  ? formatStatus(report.notificationReviewStatus)
+                  : "Not reviewed"
+              }
             />
             <Detail
               label="Submitted"

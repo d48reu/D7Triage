@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { saveAnalyticsViewAction } from "@/server-actions/analytics";
 import { logoutStaffAction } from "@/server-actions/auth";
 import { formatStatus } from "@/lib/issue-types";
 import {
@@ -10,6 +11,7 @@ import {
 import {
   listAiSuggestions,
   getJurisdictionConfig,
+  listAnalyticsViews,
   listIssueReports,
   listNewsletterContacts,
   listReferrals,
@@ -40,6 +42,7 @@ export default async function StaffAnalyticsPage({
   const reports = allReports.filter((report) =>
     isIsoWithinRange(report.createdAt, filterRange.start, filterRange.end),
   );
+  const analyticsViews = listAnalyticsViews();
   const allSuggestions = reports.flatMap((report) => listAiSuggestions(report.id));
   const allReferrals = reports.flatMap((report) => listReferrals(report.id));
   const newsletterContacts = listNewsletterContacts().filter((contact) =>
@@ -268,6 +271,64 @@ export default async function StaffAnalyticsPage({
                 {range.label}
               </Link>
             ))}
+          </div>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+            <form
+              action={saveAnalyticsViewAction}
+              className="rounded-md border border-slate-200 bg-slate-50 p-4"
+            >
+              <div className="text-sm font-semibold text-slate-900">
+                Save this view
+              </div>
+              <p className="mt-1 text-sm text-slate-600">
+                Save the current date window as a reusable staff shortcut.
+              </p>
+              <input type="hidden" name="preset" value={selectedPreset} />
+              <input type="hidden" name="dateFrom" value={dateFrom} />
+              <input type="hidden" name="dateTo" value={dateTo} />
+              <div className="mt-4 flex flex-wrap gap-3">
+                <input
+                  name="name"
+                  required
+                  placeholder="Example: Last 30 days"
+                  className="h-11 min-w-64 flex-1 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+                >
+                  Save View
+                </button>
+              </div>
+            </form>
+
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">
+                Saved views
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {analyticsViews.length > 0 ? (
+                  analyticsViews.map((view) => (
+                    <Link
+                      key={view.id}
+                      href={buildAnalyticsHref({
+                        preset: view.preset,
+                        dateFrom: view.dateFrom ?? "",
+                        dateTo: view.dateTo ?? "",
+                      })}
+                      className="rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      {view.name}
+                    </Link>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-600">
+                    No saved analytics views yet.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -663,12 +724,39 @@ function buildQuickRangeLinks(input: {
 
   return options.map((option) => ({
     label: option.label,
-    href: `/staff/analytics?preset=${option.preset}`,
+    href: buildAnalyticsHref({
+      preset: option.preset,
+      dateFrom: "",
+      dateTo: "",
+    }),
     active:
       !input.dateFrom &&
       !input.dateTo &&
       input.currentPreset === option.preset,
   }));
+}
+
+function buildAnalyticsHref(input: {
+  preset: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const query = new URLSearchParams();
+
+  if (input.dateFrom) {
+    query.set("dateFrom", input.dateFrom);
+  }
+
+  if (input.dateTo) {
+    query.set("dateTo", input.dateTo);
+  }
+
+  if (!input.dateFrom && !input.dateTo && input.preset && input.preset !== "all") {
+    query.set("preset", input.preset);
+  }
+
+  const serialized = query.toString();
+  return serialized ? `/staff/analytics?${serialized}` : "/staff/analytics";
 }
 
 function buildExportQuerySuffix(input: {
