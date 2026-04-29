@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AiSuggestionPanel } from "@/components/ai-suggestion-panel";
 import { formatStatus, ISSUE_STATUSES } from "@/lib/issue-types";
 import {
   findPotentialDuplicates,
+  getLatestAiSuggestion,
   getManagedRoutingRule,
   getIssueReportById,
   listAgencies,
@@ -43,6 +45,7 @@ export default async function StaffReportPage({
   const notifications = listNotificationEvents(report.id);
   const duplicateCandidates = findPotentialDuplicates(report);
   const routingRule = getManagedRoutingRule(report.category);
+  const latestSuggestion = getLatestAiSuggestion(report.id);
   const defaultOwnerLabel = routingRule?.ownerLabel ?? "District 7 triage";
 
   return (
@@ -191,6 +194,29 @@ export default async function StaffReportPage({
         </section>
 
         <aside className="space-y-6">
+          <AiSuggestionPanel
+            reportId={report.id}
+            initialSuggestion={
+              latestSuggestion
+                ? {
+                    id: latestSuggestion.id,
+                    summary: latestSuggestion.summary,
+                    suggestedCategory: latestSuggestion.suggestedCategory,
+                    suggestedUrgency: latestSuggestion.suggestedUrgency,
+                    suggestedResponsibleParty:
+                      latestSuggestion.suggestedResponsibleParty,
+                    suggestedAgencyId: latestSuggestion.suggestedAgencyId,
+                    confidence: latestSuggestion.confidence,
+                    explanation: latestSuggestion.explanation,
+                    recommendedNextStep: latestSuggestion.recommendedNextStep,
+                    missingInformation: latestSuggestion.missingInformation,
+                    draftResponse: latestSuggestion.draftResponse,
+                    createdAt: latestSuggestion.createdAt,
+                  }
+                : null
+            }
+          />
+
           <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Record referral</h2>
             <form action={addReferralAction} className="mt-4 space-y-4">

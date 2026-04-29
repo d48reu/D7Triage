@@ -73,6 +73,23 @@ export type NotificationEvent = {
   createdAt: string;
 };
 
+export type AiSuggestion = {
+  id: string;
+  reportId: string;
+  summary: string;
+  suggestedCategory: string;
+  suggestedUrgency: string;
+  suggestedResponsibleParty: string;
+  suggestedAgencyId: string | null;
+  confidence: string;
+  explanation: string;
+  recommendedNextStep: string;
+  missingInformation: string[];
+  draftResponse: string;
+  createdAt: string;
+  agency: Agency | null;
+};
+
 export type Agency = {
   id: string;
   name: string;
@@ -163,6 +180,32 @@ type NotificationEventRow = {
   created_at: string;
 };
 
+type AiSuggestionRow = {
+  id: string;
+  report_id: string;
+  summary: string | null;
+  suggested_category: string | null;
+  suggested_urgency: string | null;
+  suggested_responsible_party: string | null;
+  suggested_agency_id: string | null;
+  confidence: string | null;
+  explanation: string | null;
+  recommended_next_step: string | null;
+  missing_information_json: string | null;
+  draft_response: string | null;
+  created_at: string;
+  agency_name: string | null;
+  agency_contact_name: string | null;
+  agency_contact_email: string | null;
+  agency_contact_phone: string | null;
+  agency_contact_url: string | null;
+  agency_default_referral_method: string | null;
+  agency_escalation_notes: string | null;
+  agency_is_active: number | null;
+  agency_created_at: string | null;
+  agency_updated_at: string | null;
+};
+
 type AgencyRow = {
   id: string;
   name: string;
@@ -237,6 +280,18 @@ function hasColumn(
 function ensureSchemaMigrations(database: Database.Database) {
   if (!hasColumn(database, "referrals", "agency_id")) {
     database.exec("alter table referrals add column agency_id text;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "suggested_agency_id")) {
+    database.exec("alter table ai_suggestions add column suggested_agency_id text;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "recommended_next_step")) {
+    database.exec("alter table ai_suggestions add column recommended_next_step text;");
+  }
+
+  if (!hasColumn(database, "ai_suggestions", "missing_information_json")) {
+    database.exec("alter table ai_suggestions add column missing_information_json text;");
   }
 }
 
@@ -385,8 +440,11 @@ function getDb() {
       suggested_category text,
       suggested_urgency text,
       suggested_responsible_party text,
+      suggested_agency_id text,
       confidence text,
       explanation text,
+      recommended_next_step text,
+      missing_information_json text,
       draft_response text,
       created_at text not null
     );
@@ -436,6 +494,7 @@ function getDb() {
     create index if not exists idx_attachments_report on issue_attachments(report_id);
     create index if not exists idx_notification_events_report on notification_events(report_id);
     create index if not exists idx_routing_rules_category on routing_rules(category);
+    create index if not exists idx_ai_suggestions_report on ai_suggestions(report_id);
   `);
 
   ensureSchemaMigrations(db);
@@ -516,6 +575,43 @@ function mapNotificationEvent(row: NotificationEventRow): NotificationEvent {
     body: row.body,
     deliveryStatus: row.delivery_status,
     createdAt: row.created_at,
+  };
+}
+
+function mapAiSuggestion(row: AiSuggestionRow): AiSuggestion {
+  const hasAgency = Boolean(row.agency_name);
+
+  return {
+    id: row.id,
+    reportId: row.report_id,
+    summary: row.summary ?? "",
+    suggestedCategory: row.suggested_category ?? "Other / unsure",
+    suggestedUrgency: row.suggested_urgency ?? "medium",
+    suggestedResponsibleParty: row.suggested_responsible_party ?? "",
+    suggestedAgencyId: row.suggested_agency_id,
+    confidence: row.confidence ?? "low",
+    explanation: row.explanation ?? "",
+    recommendedNextStep: row.recommended_next_step ?? "",
+    missingInformation: row.missing_information_json
+      ? (JSON.parse(row.missing_information_json) as string[])
+      : [],
+    draftResponse: row.draft_response ?? "",
+    createdAt: row.created_at,
+    agency: hasAgency
+      ? {
+          id: row.suggested_agency_id!,
+          name: row.agency_name!,
+          contactName: row.agency_contact_name,
+          contactEmail: row.agency_contact_email,
+          contactPhone: row.agency_contact_phone,
+          contactUrl: row.agency_contact_url,
+          defaultReferralMethod: row.agency_default_referral_method,
+          escalationNotes: row.agency_escalation_notes,
+          isActive: row.agency_is_active === 1,
+          createdAt: row.agency_created_at!,
+          updatedAt: row.agency_updated_at!,
+        }
+      : null,
   };
 }
 
@@ -927,6 +1023,76 @@ export function listNotificationEvents(reportId: string) {
     .all(reportId) as NotificationEventRow[];
 
   return rows.map(mapNotificationEvent);
+}
+
+export function listAiSuggestions(reportId: string) {
+  const rows = getDb()
+    .prepare(
+      `select
+         ai_suggestions.*,
+         agencies.name as agency_name,
+         agencies.contact_name as agency_contact_name,
+         agencies.contact_email as agency_contact_email,
+         agencies.contact_phone as agency_contact_phone,
+         agencies.contact_url as agency_contact_url,
+         agencies.default_referral_method as agency_default_referral_method,
+         agencies.escalation_notes as agency_escalation_notes,
+         agencies.is_active as agency_is_active,
+         agencies.created_at as agency_created_at,
+         agencies.updated_at as agency_updated_at
+       from ai_suggestions
+       left join agencies on agencies.id = ai_suggestions.suggested_agency_id
+       where ai_suggestions.report_id = ?
+       order by datetime(ai_suggestions.created_at) desc`,
+    )
+    .all(reportId) as AiSuggestionRow[];
+
+  return rows.map(mapAiSuggestion);
+}
+
+export function getLatestAiSuggestion(reportId: string) {
+  return listAiSuggestions(reportId)[0] ?? null;
+}
+
+export function addAiSuggestion(input: {
+  reportId: string;
+  summary: string;
+  suggestedCategory: string;
+  suggestedUrgency: string;
+  suggestedResponsibleParty: string;
+  suggestedAgencyId?: string | null;
+  confidence: string;
+  explanation: string;
+  recommendedNextStep: string;
+  missingInformation: string[];
+  draftResponse: string;
+}) {
+  const id = makeId();
+  getDb()
+    .prepare(
+      `insert into ai_suggestions (
+        id, report_id, summary, suggested_category, suggested_urgency,
+        suggested_responsible_party, suggested_agency_id, confidence, explanation,
+        recommended_next_step, missing_information_json, draft_response, created_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      input.reportId,
+      input.summary,
+      input.suggestedCategory,
+      input.suggestedUrgency,
+      input.suggestedResponsibleParty,
+      input.suggestedAgencyId || null,
+      input.confidence,
+      input.explanation,
+      input.recommendedNextStep,
+      JSON.stringify(input.missingInformation),
+      input.draftResponse,
+      nowIso(),
+    );
+
+  return getLatestAiSuggestion(input.reportId);
 }
 
 export function addNotificationEvent(input: {

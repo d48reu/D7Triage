@@ -5,7 +5,9 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ISSUE_STATUSES, type IssueStatus } from "@/lib/issue-types";
+import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
 import {
+  getLatestAiSuggestion,
   addAttachment,
   addReferral,
   addStaffNote,
@@ -18,6 +20,25 @@ import {
 export type SubmitIssueReportState = {
   status: "idle" | "error";
   message: string;
+};
+
+export type GenerateAiSuggestionState = {
+  status: "idle" | "error" | "success";
+  message: string;
+  suggestion: {
+    id: string;
+    summary: string;
+    suggestedCategory: string;
+    suggestedUrgency: string;
+    suggestedResponsibleParty: string;
+    suggestedAgencyId: string | null;
+    confidence: string;
+    explanation: string;
+    recommendedNextStep: string;
+    missingInformation: string[];
+    draftResponse: string;
+    createdAt: string;
+  } | null;
 };
 
 const UPLOAD_DIR = path.join(process.cwd(), ".data", "uploads");
@@ -198,4 +219,69 @@ export async function addReferralAction(formData: FormData) {
   revalidatePath(`/staff/reports/${reportId}`);
   revalidatePath(`/report/${report.publicTrackingToken}`);
   redirect(`/staff/reports/${reportId}`);
+}
+
+export async function generateAiRoutingSuggestionAction(
+  _previousState: GenerateAiSuggestionState,
+  formData: FormData,
+): Promise<GenerateAiSuggestionState> {
+  const reportId = readRequiredText(formData, "reportId");
+
+  try {
+    const suggestion = await generateAiRoutingSuggestion(reportId);
+
+    if (!suggestion) {
+      return {
+        status: "error",
+        message: "The suggestion could not be saved.",
+        suggestion: null,
+      };
+    }
+
+    revalidatePath(`/staff/reports/${reportId}`);
+
+    return {
+      status: "success",
+      message: "AI routing suggestion generated.",
+      suggestion: {
+        id: suggestion.id,
+        summary: suggestion.summary,
+        suggestedCategory: suggestion.suggestedCategory,
+        suggestedUrgency: suggestion.suggestedUrgency,
+        suggestedResponsibleParty: suggestion.suggestedResponsibleParty,
+        suggestedAgencyId: suggestion.suggestedAgencyId,
+        confidence: suggestion.confidence,
+        explanation: suggestion.explanation,
+        recommendedNextStep: suggestion.recommendedNextStep,
+        missingInformation: suggestion.missingInformation,
+        draftResponse: suggestion.draftResponse,
+        createdAt: suggestion.createdAt,
+      },
+    };
+  } catch (error) {
+    const latestSuggestion = getLatestAiSuggestion(reportId);
+    return {
+      status: "error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "AI routing suggestion failed.",
+      suggestion: latestSuggestion
+        ? {
+            id: latestSuggestion.id,
+            summary: latestSuggestion.summary,
+            suggestedCategory: latestSuggestion.suggestedCategory,
+            suggestedUrgency: latestSuggestion.suggestedUrgency,
+            suggestedResponsibleParty: latestSuggestion.suggestedResponsibleParty,
+            suggestedAgencyId: latestSuggestion.suggestedAgencyId,
+            confidence: latestSuggestion.confidence,
+            explanation: latestSuggestion.explanation,
+            recommendedNextStep: latestSuggestion.recommendedNextStep,
+            missingInformation: latestSuggestion.missingInformation,
+            draftResponse: latestSuggestion.draftResponse,
+            createdAt: latestSuggestion.createdAt,
+          }
+        : null,
+    };
+  }
 }
