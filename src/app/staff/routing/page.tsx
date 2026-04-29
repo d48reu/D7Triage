@@ -35,6 +35,12 @@ export default async function RoutingGuidePage() {
               Analytics
             </Link>
             <Link
+              href="/staff/notifications"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Notifications
+            </Link>
+            <Link
               href="/report"
               className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
             >
