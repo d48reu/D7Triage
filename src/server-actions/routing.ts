@@ -7,6 +7,7 @@ import {
   saveJurisdictionConfig,
   upsertAgency,
   upsertRoutingRule,
+  upsertStaffMember,
 } from "@/lib/issues-repository";
 
 function readRequiredText(formData: FormData, key: string) {
@@ -30,6 +31,20 @@ export async function saveAgencyAction(formData: FormData) {
       formData.get("defaultReferralMethod") ?? "",
     ).trim(),
     escalationNotes: String(formData.get("escalationNotes") ?? "").trim(),
+    isActive: formData.get("isActive") === "on",
+  });
+
+  revalidatePath("/staff/routing");
+  revalidatePath("/staff");
+}
+
+export async function saveStaffMemberAction(formData: FormData) {
+  const name = readRequiredText(formData, "name");
+  upsertStaffMember({
+    id: String(formData.get("staffMemberId") ?? "").trim() || undefined,
+    name,
+    email: String(formData.get("email") ?? "").trim(),
+    roleLabel: String(formData.get("roleLabel") ?? "").trim(),
     isActive: formData.get("isActive") === "on",
   });
 

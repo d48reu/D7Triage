@@ -4,6 +4,7 @@ import {
   getJurisdictionConfig,
   listAgencies,
   listManagedRoutingRules,
+  listStaffMembers,
 } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 import {
@@ -11,12 +12,14 @@ import {
   saveAgencyAction,
   saveJurisdictionConfigAction,
   saveRoutingRuleAction,
+  saveStaffMemberAction,
 } from "@/server-actions/routing";
 
 export default async function RoutingGuidePage() {
   await requireStaffSession();
   const agencies = listAgencies();
   const routingRules = listManagedRoutingRules();
+  const staffMembers = listStaffMembers();
   const jurisdictionConfig = getJurisdictionConfig();
   const municipalityNames = Array.from(
     new Set(
@@ -183,6 +186,81 @@ export default async function RoutingGuidePage() {
               ) : null}
             </div>
           </form>
+        </section>
+
+        <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">Staff members</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Manage the local list of assignable staff members for case ownership.
+              </p>
+            </div>
+          </div>
+
+          <form action={saveStaffMemberAction} className="mt-5 grid gap-3 border-b border-slate-200 pb-5 md:grid-cols-2 xl:grid-cols-4">
+            <Field name="name" label="Staff name" required />
+            <Field name="email" label="Email" type="email" />
+            <Field name="roleLabel" label="Role" />
+            <label className="flex items-center gap-2 pt-7 text-sm text-slate-700">
+              <input name="isActive" type="checkbox" defaultChecked />
+              Active
+            </label>
+            <div className="flex items-end">
+              <button
+                type="submit"
+                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+              >
+                Add Staff Member
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-5 space-y-4">
+            {staffMembers.length > 0 ? (
+              staffMembers.map((staffMember) => (
+                <form
+                  key={staffMember.id}
+                  action={saveStaffMemberAction}
+                  className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 xl:grid-cols-4"
+                >
+                  <input type="hidden" name="staffMemberId" value={staffMember.id} />
+                  <Field name="name" label="Staff name" defaultValue={staffMember.name} required />
+                  <Field
+                    name="email"
+                    label="Email"
+                    type="email"
+                    defaultValue={staffMember.email ?? ""}
+                  />
+                  <Field
+                    name="roleLabel"
+                    label="Role"
+                    defaultValue={staffMember.roleLabel ?? ""}
+                  />
+                  <label className="flex items-center gap-2 pt-7 text-sm text-slate-700">
+                    <input
+                      name="isActive"
+                      type="checkbox"
+                      defaultChecked={staffMember.isActive}
+                    />
+                    Active
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
+                    >
+                      Save Staff Member
+                    </button>
+                  </div>
+                </form>
+              ))
+            ) : (
+              <p className="text-sm text-slate-600">
+                No staff members have been added yet.
+              </p>
+            )}
+          </div>
         </section>
 
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">

@@ -14,6 +14,7 @@ import {
 } from "@/lib/location-intelligence";
 import {
   addAttachment,
+  assignIssueReport,
   addReferral,
   addStaffNote,
   createIssueReport,
@@ -468,6 +469,24 @@ export async function updateIssueStatusAction(formData: FormData) {
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
   revalidatePath(`/report/${report.publicTrackingToken}`);
+  redirect(`/staff/reports/${reportId}`);
+}
+
+export async function assignIssueReportAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const report = getIssueReportById(reportId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  assignIssueReport({
+    reportId,
+    staffMemberId: String(formData.get("staffMemberId") ?? "").trim() || null,
+  });
+
+  revalidatePath("/staff");
+  revalidatePath(`/staff/reports/${reportId}`);
   redirect(`/staff/reports/${reportId}`);
 }
 

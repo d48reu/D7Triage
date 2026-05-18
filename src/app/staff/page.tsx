@@ -10,6 +10,7 @@ import {
   getJurisdictionConfig,
   getManagedRoutingRule,
   listIssueReports,
+  listStaffMembers,
 } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 
@@ -19,6 +20,10 @@ export const dynamic = "force-dynamic";
 export default async function StaffPage() {
   await requireStaffSession();
   const reports = listIssueReports();
+  const staffMembers = listStaffMembers();
+  const staffMemberNameById = new Map(
+    staffMembers.map((staffMember) => [staffMember.id, staffMember.name]),
+  );
   const jurisdictionConfig = getJurisdictionConfig();
   const reportRows = reports.map((report) => ({
     report,
@@ -113,6 +118,13 @@ export default async function StaffPage() {
                     </p>
                     <div className="mt-1 text-xs text-slate-500">
                       {report.addressText}
+                    </div>
+                    <div className="mt-2 text-xs font-medium text-slate-600">
+                      Assigned:{" "}
+                      {report.assignedStaffId
+                        ? (staffMemberNameById.get(report.assignedStaffId) ??
+                          "Unknown staff member")
+                        : "Unassigned"}
                     </div>
                   </div>
                   <div className="text-sm text-slate-600">
