@@ -1,9 +1,15 @@
+import { geometryContainsPoint, parseGeoJsonFeatures } from "@/lib/geojson-utils";
+
 type ReportLike = {
   category: string;
   description: string;
   addressText: string;
   latitude?: number | null;
   longitude?: number | null;
+  municipalityName?: string | null;
+  municipalityLookupStatus?: "matched" | "outside_municipality" | "failed" | "not_attempted";
+  parcelLookupStatus?: "matched" | "probable_right_of_way" | "failed" | "not_attempted";
+  rightOfWayHint?: "on_parcel" | "probable_public_right_of_way" | "unclear";
 };
 
 export type JurisdictionOwnershipHint =
@@ -26,10 +32,15 @@ export type JurisdictionAssessment = {
   districtHintStatus: DistrictHintStatus;
   ownershipHint: JurisdictionOwnershipHint;
   confidence: "low" | "medium" | "high";
+  confidenceReason: string;
   summary: string;
   staffGuidance: string;
   residentExplanation: string;
   matchedClues: string[];
+  municipalityName: string | null;
+  municipalityHintStatus: "matched" | "outside_municipality" | "failed" | "not_attempted";
+  parcelLookupStatus: "matched" | "probable_right_of_way" | "failed" | "not_attempted";
+  rightOfWayHint: "on_parcel" | "probable_public_right_of_way" | "unclear";
 };
 
 export type JurisdictionKeywordConfig = {
@@ -44,6 +55,8 @@ export type JurisdictionKeywordConfig = {
   parksKeywords: string[];
   districtBoundaryName?: string | null;
   districtBoundaryGeoJson?: string | null;
+  municipalityBoundaryName?: string | null;
+  municipalityBoundaryGeoJson?: string | null;
 };
 
 const OWNERSHIP_RULES: Array<{
@@ -63,6 +76,8 @@ const OWNERSHIP_RULES: Array<{
       /\bsr[- ]?\d+\b/i,
       /\bhighway\b/i,
       /\bhwy\b/i,
+      /\bdixie hwy\b/i,
+      /\bus-1\b/i,
     ],
   },
   {
@@ -82,6 +97,7 @@ const OWNERSHIP_RULES: Array<{
       /\bfire hydrant\b/i,
       /\bgas leak\b/i,
       /\bsewer\b/i,
+      /\bsparks?\b/i,
     ],
   },
   {
@@ -199,7 +215,7 @@ export function analyzeReportJurisdiction(
     }
   }
 
-  applyCategoryBias(report.category, ownershipScores, matchedClues);
+  applyCategoryBias(report, ownershipScores, matchedClues);
 
   const topOwnership =
     Array.from(ownershipScores.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
@@ -212,16 +228,26 @@ export function analyzeReportJurisdiction(
     matchedClues,
     keywordConfig,
   );
-  const confidence = getConfidence(ownershipHint, ownershipScore, districtHintStatus);
+  const confidenceInfo = getConfidenceInfo({
+    report,
+    ownershipHint,
+    ownershipScore,
+    districtHintStatus,
+  });
 
   return {
     districtHintStatus,
     ownershipHint,
-    confidence,
-    summary: buildSummary(ownershipHint, districtHintStatus),
-    staffGuidance: buildStaffGuidance(ownershipHint, districtHintStatus),
+    confidence: confidenceInfo.confidence,
+    confidenceReason: confidenceInfo.reason,
+    summary: buildSummary(report, ownershipHint, districtHintStatus),
+    staffGuidance: buildStaffGuidance(report, ownershipHint, districtHintStatus),
     residentExplanation: buildResidentExplanation(ownershipHint),
     matchedClues,
+    municipalityName: report.municipalityName ?? null,
+    municipalityHintStatus: report.municipalityLookupStatus ?? "not_attempted",
+    parcelLookupStatus: report.parcelLookupStatus ?? "not_attempted",
+    rightOfWayHint: report.rightOfWayHint ?? "unclear",
   };
 }
 
@@ -267,7 +293,7 @@ function parseKeywords(value: string | undefined) {
 }
 
 function applyCategoryBias(
-  category: string,
+  report: ReportLike,
   scores: Map<JurisdictionOwnershipHint, number>,
   matchedClues: string[],
 ) {
@@ -278,7 +304,7 @@ function applyCategoryBias(
     }
   };
 
-  switch (category) {
+  switch (report.category) {
     case "Parks":
       addScore("parks", "Parks category context", 2);
       break;
@@ -291,13 +317,26 @@ function applyCategoryBias(
     case "Trees":
       addScore("municipal", "Tree issue category context");
       addScore("private_property", "Tree issue may involve adjacent private property");
+      if (/\bpower line\b/i.test(report.description)) {
+        addScore("utility", "Tree hazard intersects utility clue");
+      }
       break;
     case "Sidewalks":
       addScore("municipal", "Sidewalk category context");
       addScore("private_property", "Sidewalk issue may involve adjacent property");
+      if (report.rightOfWayHint === "probable_public_right_of_way") {
+        addScore("municipal", "Point appears outside a parcel, suggesting right-of-way", 2);
+      }
+      if (report.rightOfWayHint === "on_parcel") {
+        addScore("private_property", "Point appears to fall on a parcel");
+      }
       break;
     default:
       break;
+  }
+
+  if (report.municipalityName) {
+    addScore("municipal", `Municipality identified: ${report.municipalityName}`);
   }
 }
 
@@ -314,6 +353,8 @@ function getEnvJurisdictionKeywordConfig(): JurisdictionKeywordConfig {
     parksKeywords: [],
     districtBoundaryName: null,
     districtBoundaryGeoJson: null,
+    municipalityBoundaryName: null,
+    municipalityBoundaryGeoJson: null,
   };
 }
 
@@ -323,7 +364,7 @@ function getDistrictHintStatus(
   matchedClues: string[],
   config: JurisdictionKeywordConfig,
 ) {
-  const boundaryResult = classifyBoundaryMatch(report, config);
+  const boundaryResult = classifyBoundaryMatch(report, config.districtBoundaryGeoJson);
 
   if (boundaryResult === "inside") {
     matchedClues.push("Boundary polygon contains captured coordinates");
@@ -357,148 +398,117 @@ function getDistrictHintStatus(
 
 function classifyBoundaryMatch(
   report: ReportLike,
-  config: JurisdictionKeywordConfig,
+  boundaryGeoJson: string | null | undefined,
 ) {
   if (
     report.latitude === null ||
     report.latitude === undefined ||
     report.longitude === null ||
     report.longitude === undefined ||
-    !config.districtBoundaryGeoJson
+    !boundaryGeoJson
   ) {
     return "unknown" as const;
   }
 
-  try {
-    const parsed = JSON.parse(config.districtBoundaryGeoJson) as {
-      type?: string;
-      coordinates?: unknown;
-      geometry?: { type?: string; coordinates?: unknown };
-      features?: Array<{ geometry?: { type?: string; coordinates?: unknown } }>;
-    };
-
-    const geometries = getGeoJsonGeometries(parsed);
-    if (geometries.length === 0) {
-      return "unknown" as const;
-    }
-
-    const point: [number, number] = [report.longitude, report.latitude];
-    return geometries.some((geometry) => geometryContainsPoint(geometry, point))
-      ? "inside"
-      : "outside";
-  } catch {
+  const point: [number, number] = [report.longitude, report.latitude];
+  const features = parseGeoJsonFeatures(boundaryGeoJson);
+  if (features.length === 0) {
     return "unknown" as const;
   }
+
+  return features.some((feature) => geometryContainsPoint(feature.geometry, point))
+    ? "inside"
+    : "outside";
 }
 
-function getGeoJsonGeometries(value: {
-  type?: string;
-  coordinates?: unknown;
-  geometry?: { type?: string; coordinates?: unknown };
-  features?: Array<{ geometry?: { type?: string; coordinates?: unknown } }>;
+function getConfidenceInfo(input: {
+  report: ReportLike;
+  ownershipHint: JurisdictionOwnershipHint;
+  ownershipScore: number;
+  districtHintStatus: DistrictHintStatus;
 }) {
-  if (value.type === "FeatureCollection" && Array.isArray(value.features)) {
-    return value.features
-      .map((feature) => feature.geometry)
-      .filter((geometry): geometry is { type?: string; coordinates?: unknown } => Boolean(geometry));
+  const municipalityKnown = Boolean(input.report.municipalityName);
+  const parcelKnown = input.report.parcelLookupStatus === "matched";
+  const probableRow = input.report.rightOfWayHint === "probable_public_right_of_way";
+
+  if (
+    input.districtHintStatus !== "unclear" &&
+    municipalityKnown &&
+    parcelKnown &&
+    probableRow &&
+    input.ownershipScore >= 2
+  ) {
+    return {
+      confidence: "high" as const,
+      reason:
+        "District, municipality, parcel lookup, and probable right-of-way context all aligned for this case.",
+    };
   }
 
-  if (value.type === "Feature" && value.geometry) {
-    return [value.geometry];
+  if (
+    input.ownershipHint !== "municipal" &&
+    input.ownershipHint !== "unclear" &&
+    input.ownershipScore >= 1 &&
+    (municipalityKnown || parcelKnown)
+  ) {
+    return {
+      confidence: "medium" as const,
+      reason:
+        "Specific ownership clues were detected, but staff should still confirm the final operating agency.",
+    };
   }
 
-  if (value.type && value.coordinates) {
-    return [{ type: value.type, coordinates: value.coordinates }];
+  if (input.report.category === "Sidewalks" && municipalityKnown && !probableRow) {
+    return {
+      confidence: "low" as const,
+      reason:
+        "The municipality is known, but sidewalk ownership still depends on whether the damage is in public right-of-way or tied to the adjacent parcel.",
+    };
   }
 
-  return [];
-}
-
-function geometryContainsPoint(
-  geometry: { type?: string; coordinates?: unknown },
-  point: [number, number],
-) {
-  if (geometry.type === "Polygon" && Array.isArray(geometry.coordinates)) {
-    return polygonContainsPoint(geometry.coordinates as number[][][], point);
+  if (input.report.category === "Sidewalks" && probableRow && municipalityKnown) {
+    return {
+      confidence: "medium" as const,
+      reason:
+        "The municipality is known and the point appears outside a parcel, which leans toward public right-of-way, but staff should still confirm maintenance responsibility.",
+    };
   }
 
-  if (geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates)) {
-    return (geometry.coordinates as number[][][][]).some((polygon) =>
-      polygonContainsPoint(polygon, point),
-    );
+  if (municipalityKnown && input.districtHintStatus !== "unclear") {
+    return {
+      confidence: "medium" as const,
+      reason:
+        "District and municipality were both identified, but the ownership evidence is still broad.",
+    };
   }
 
-  return false;
-}
-
-function polygonContainsPoint(
-  polygon: number[][][],
-  point: [number, number],
-) {
-  if (!Array.isArray(polygon) || polygon.length === 0) return false;
-  const [outerRing, ...holes] = polygon;
-  if (!ringContainsPoint(outerRing, point)) return false;
-  return !holes.some((ring) => ringContainsPoint(ring, point));
-}
-
-function ringContainsPoint(
-  ring: number[][],
-  point: [number, number],
-) {
-  let inside = false;
-  const [px, py] = point;
-
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i]?.[0];
-    const yi = ring[i]?.[1];
-    const xj = ring[j]?.[0];
-    const yj = ring[j]?.[1];
-
-    if (
-      xi === undefined ||
-      yi === undefined ||
-      xj === undefined ||
-      yj === undefined
-    ) {
-      continue;
-    }
-
-    const intersects =
-      yi > py !== yj > py &&
-      px < ((xj - xi) * (py - yi)) / (yj - yi || Number.EPSILON) + xi;
-
-    if (intersects) {
-      inside = !inside;
-    }
-  }
-
-  return inside;
-}
-
-function getConfidence(
-  ownershipHint: JurisdictionOwnershipHint,
-  ownershipScore: number,
-  districtHintStatus: DistrictHintStatus,
-) {
-  if (districtHintStatus !== "unclear" && ownershipScore >= 2) {
-    return "high";
-  }
-
-  if (ownershipHint !== "municipal" && ownershipHint !== "unclear" && ownershipScore >= 1) {
-    return "medium";
-  }
-
-  return "low";
+  return {
+    confidence: "low" as const,
+    reason:
+      "The app can place the report geographically, but it still lacks enough ownership evidence to recommend a highly confident route.",
+  };
 }
 
 function buildSummary(
+  report: ReportLike,
   ownershipHint: JurisdictionOwnershipHint,
   districtHintStatus: DistrictHintStatus,
 ) {
-  return `${formatOwnershipHint(ownershipHint)}. ${formatDistrictHintStatus(districtHintStatus)}.`;
+  const municipalitySegment = report.municipalityName
+    ? ` Municipality: ${report.municipalityName}.`
+    : "";
+  const rowSegment =
+    report.rightOfWayHint === "probable_public_right_of_way"
+      ? " Point likely falls in public right-of-way."
+      : report.rightOfWayHint === "on_parcel"
+        ? " Point falls on a mapped parcel."
+        : "";
+
+  return `${formatOwnershipHint(ownershipHint)}. ${formatDistrictHintStatus(districtHintStatus)}.${municipalitySegment}${rowSegment}`;
 }
 
 function buildStaffGuidance(
+  report: ReportLike,
   ownershipHint: JurisdictionOwnershipHint,
   districtHintStatus: DistrictHintStatus,
 ) {
@@ -510,8 +520,17 @@ function buildStaffGuidance(
     districtHintStatus === "unclear"
       ? "District 7 matching is heuristic-only right now; confirm the actual service area with staff knowledge."
       : `Use the ${formatDistrictHintStatus(districtHintStatus).toLowerCase()} clue as a triage signal, not a final boundary decision.`;
+  const municipalityLine = report.municipalityName
+    ? ` Municipal context: ${report.municipalityName}.`
+    : " Municipality lookup is still unresolved.";
+  const rowLine =
+    report.rightOfWayHint === "probable_public_right_of_way"
+      ? " The point appears outside a parcel, which may indicate right-of-way."
+      : report.rightOfWayHint === "on_parcel"
+        ? " The point falls on a parcel, so adjacent private-property responsibility is still possible."
+        : " Parcel/right-of-way evidence is still limited.";
 
-  return `${ownershipLine} ${districtLine}`;
+  return `${ownershipLine} ${districtLine}${municipalityLine}${rowLine}`;
 }
 
 function buildResidentExplanation(ownershipHint: JurisdictionOwnershipHint) {

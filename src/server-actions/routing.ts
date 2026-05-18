@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { fetchOfficialMiamiDadeMunicipalityBoundaries } from "@/lib/location-intelligence";
 import {
+  getJurisdictionConfig,
   saveJurisdictionConfig,
   upsertAgency,
   upsertRoutingRule,
@@ -39,6 +41,7 @@ export async function saveRoutingRuleAction(formData: FormData) {
   const category = readRequiredText(formData, "category");
   upsertRoutingRule({
     category,
+    municipalityName: String(formData.get("municipalityName") ?? "").trim(),
     agencyId: String(formData.get("agencyId") ?? "").trim() || undefined,
     ownerLabel: String(formData.get("ownerLabel") ?? "").trim(),
     staffGuidance: readRequiredText(formData, "staffGuidance"),
@@ -73,6 +76,36 @@ export async function saveJurisdictionConfigAction(formData: FormData) {
     districtBoundaryGeoJson: String(
       formData.get("districtBoundaryGeoJson") ?? "",
     ).trim(),
+    municipalityBoundaryName: String(
+      formData.get("municipalityBoundaryName") ?? "",
+    ).trim(),
+    municipalityBoundaryGeoJson: String(
+      formData.get("municipalityBoundaryGeoJson") ?? "",
+    ).trim(),
+  });
+
+  revalidatePath("/staff/routing");
+  revalidatePath("/staff");
+  revalidatePath("/staff/analytics");
+}
+
+export async function loadOfficialMunicipalitiesAction() {
+  const dataset = await fetchOfficialMiamiDadeMunicipalityBoundaries();
+  const current = getJurisdictionConfig();
+  saveJurisdictionConfig({
+    districtMatchKeywords: current.districtMatchKeywords.join("\n"),
+    districtOutsideKeywords: current.districtOutsideKeywords.join("\n"),
+    stateKeywords: current.stateKeywords.join("\n"),
+    countyKeywords: current.countyKeywords.join("\n"),
+    utilityKeywords: current.utilityKeywords.join("\n"),
+    privatePropertyKeywords: current.privatePropertyKeywords.join("\n"),
+    schoolKeywords: current.schoolKeywords.join("\n"),
+    transitKeywords: current.transitKeywords.join("\n"),
+    parksKeywords: current.parksKeywords.join("\n"),
+    districtBoundaryName: current.districtBoundaryName ?? "",
+    districtBoundaryGeoJson: current.districtBoundaryGeoJson ?? "",
+    municipalityBoundaryName: dataset.datasetName,
+    municipalityBoundaryGeoJson: dataset.geoJson,
   });
 
   revalidatePath("/staff/routing");

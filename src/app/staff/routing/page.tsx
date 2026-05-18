@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { parseGeoJsonFeatures } from "@/lib/geojson-utils";
 import {
   getJurisdictionConfig,
   listAgencies,
@@ -6,6 +7,7 @@ import {
 } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 import {
+  loadOfficialMunicipalitiesAction,
   saveAgencyAction,
   saveJurisdictionConfigAction,
   saveRoutingRuleAction,
@@ -16,6 +18,15 @@ export default async function RoutingGuidePage() {
   const agencies = listAgencies();
   const routingRules = listManagedRoutingRules();
   const jurisdictionConfig = getJurisdictionConfig();
+  const municipalityNames = Array.from(
+    new Set(
+      parseGeoJsonFeatures(jurisdictionConfig.municipalityBoundaryGeoJson)
+        .map((feature) => String(feature.properties.NAME || "").trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+  const genericRules = routingRules.filter((rule) => !rule.municipalityName);
+  const municipalityRules = routingRules.filter((rule) => Boolean(rule.municipalityName));
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -130,6 +141,11 @@ export default async function RoutingGuidePage() {
               label="Boundary dataset name"
               defaultValue={jurisdictionConfig.districtBoundaryName ?? ""}
             />
+            <Field
+              name="municipalityBoundaryName"
+              label="Municipality boundary dataset name"
+              defaultValue={jurisdictionConfig.municipalityBoundaryName ?? ""}
+            />
             <TextArea
               name="districtBoundaryGeoJson"
               label="District boundary GeoJSON"
@@ -137,13 +153,34 @@ export default async function RoutingGuidePage() {
               className="xl:col-span-2"
               helperText="Paste a GeoJSON Polygon, MultiPolygon, Feature, or FeatureCollection for District 7. If reports include captured coordinates, the hint engine will use this boundary before keyword matching."
             />
+            <TextArea
+              name="municipalityBoundaryGeoJson"
+              label="Municipality boundary GeoJSON"
+              defaultValue={jurisdictionConfig.municipalityBoundaryGeoJson ?? ""}
+              className="xl:col-span-2"
+              helperText="Paste a GeoJSON FeatureCollection for Miami-Dade municipalities, or use the official loader below."
+            />
             <div className="xl:col-span-3 lg:col-span-2">
-              <button
-                type="submit"
-                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
-              >
-                Save Jurisdiction Rules
-              </button>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="submit"
+                  className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+                >
+                  Save Jurisdiction Rules
+                </button>
+                <button
+                  type="submit"
+                  formAction={loadOfficialMunicipalitiesAction}
+                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Load Official Miami-Dade Municipalities
+                </button>
+              </div>
+              {municipalityNames.length > 0 ? (
+                <p className="mt-3 text-xs text-slate-500">
+                  Loaded municipalities: {municipalityNames.length}
+                </p>
+              ) : null}
             </div>
           </form>
         </section>
@@ -249,13 +286,14 @@ export default async function RoutingGuidePage() {
           </p>
 
           <div className="mt-5 space-y-4">
-            {routingRules.map((rule) => (
+            {genericRules.map((rule) => (
               <form
-                key={rule.category}
+                key={`${rule.category}-default`}
                 action={saveRoutingRuleAction}
                 className="rounded-md border border-slate-200 bg-slate-50 p-4"
               >
                 <input type="hidden" name="category" value={rule.category} />
+                <input type="hidden" name="municipalityName" value="" />
                 <div className="grid gap-3 md:grid-cols-[220px_1fr_1fr]">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
@@ -320,6 +358,173 @@ export default async function RoutingGuidePage() {
                 </div>
               </form>
             ))}
+          </div>
+        </section>
+
+        <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold">Municipality overrides</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Add narrower routing rules for cases where the municipality changes the likely owner.
+          </p>
+
+          <form
+            action={saveRoutingRuleAction}
+            className="mt-5 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 lg:grid-cols-2 xl:grid-cols-4"
+          >
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-800">
+                Category
+              </span>
+              <select
+                name="category"
+                defaultValue="Sidewalks"
+                className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              >
+                {genericRules.map((rule) => (
+                  <option key={rule.category} value={rule.category}>
+                    {rule.category}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-800">
+                Municipality
+              </span>
+              <select
+                name="municipalityName"
+                defaultValue={municipalityNames[0] ?? ""}
+                className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              >
+                {municipalityNames.length > 0 ? (
+                  municipalityNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Load municipality boundaries first</option>
+                )}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-800">
+                Managed agency
+              </span>
+              <select
+                name="agencyId"
+                defaultValue=""
+                className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              >
+                <option value="">No linked agency</option>
+                {agencies
+                  .filter((agency) => agency.isActive)
+                  .map((agency) => (
+                    <option key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <Field name="ownerLabel" label="Owner label" required />
+            <TextArea name="staffGuidance" label="Staff guidance" className="xl:col-span-2" />
+            <TextArea name="residentExplanation" label="Resident explanation" />
+            <TextArea name="escalationNotes" label="Escalation notes" />
+            <div className="xl:col-span-4">
+              <button
+                type="submit"
+                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+              >
+                Add Municipality Override
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-5 space-y-4">
+            {municipalityRules.length > 0 ? (
+              municipalityRules.map((rule) => (
+                <form
+                  key={`${rule.category}-${rule.municipalityName}`}
+                  action={saveRoutingRuleAction}
+                  className="rounded-md border border-slate-200 bg-slate-50 p-4"
+                >
+                  <input type="hidden" name="category" value={rule.category} />
+                  <input type="hidden" name="municipalityName" value={rule.municipalityName ?? ""} />
+                  <div className="grid gap-3 md:grid-cols-[180px_180px_1fr_1fr]">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        Category
+                      </div>
+                      <div className="mt-2 font-medium text-slate-950">{rule.category}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        Municipality
+                      </div>
+                      <div className="mt-2 font-medium text-slate-950">
+                        {rule.municipalityName}
+                      </div>
+                    </div>
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-medium text-slate-800">
+                        Managed agency
+                      </span>
+                      <select
+                        name="agencyId"
+                        defaultValue={rule.agencyId ?? ""}
+                        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                      >
+                        <option value="">No linked agency</option>
+                        {agencies
+                          .filter((agency) => agency.isActive)
+                          .map((agency) => (
+                            <option key={agency.id} value={agency.id}>
+                              {agency.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                    <Field
+                      name="ownerLabel"
+                      label="Owner label"
+                      defaultValue={rule.ownerLabel}
+                      required
+                    />
+                  </div>
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    <TextArea
+                      name="staffGuidance"
+                      label="Staff guidance"
+                      defaultValue={rule.staffGuidance}
+                    />
+                    <TextArea
+                      name="residentExplanation"
+                      label="Resident explanation"
+                      defaultValue={rule.residentExplanation}
+                    />
+                    <TextArea
+                      name="escalationNotes"
+                      label="Escalation notes"
+                      defaultValue={rule.escalationNotes}
+                    />
+                  </div>
+
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="submit"
+                      className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
+                    >
+                      Save Override
+                    </button>
+                  </div>
+                </form>
+              ))
+            ) : (
+              <p className="text-sm text-slate-600">
+                No municipality-specific overrides yet.
+              </p>
+            )}
           </div>
         </section>
       </div>

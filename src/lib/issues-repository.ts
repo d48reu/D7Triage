@@ -28,6 +28,17 @@ export type IssueReport = {
   geocodedAddress: string | null;
   geocodingProvider: string | null;
   geocodedAt: string | null;
+  municipalityName: string | null;
+  municipalityCode: string | null;
+  municipalityLookupStatus: "matched" | "outside_municipality" | "failed" | "not_attempted";
+  municipalitySource: string | null;
+  municipalityMatchedAt: string | null;
+  parcelLookupStatus: "matched" | "probable_right_of_way" | "failed" | "not_attempted";
+  parcelFolio: string | null;
+  parcelAddress: string | null;
+  parcelOwner: string | null;
+  rightOfWayHint: "on_parcel" | "probable_public_right_of_way" | "unclear";
+  parcelMatchedAt: string | null;
   residentName: string | null;
   residentEmail: string;
   residentPhone: string | null;
@@ -69,6 +80,8 @@ export type JurisdictionConfig = {
   parksKeywords: string[];
   districtBoundaryName: string | null;
   districtBoundaryGeoJson: string | null;
+  municipalityBoundaryName: string | null;
+  municipalityBoundaryGeoJson: string | null;
   updatedAt: string | null;
 };
 
@@ -183,6 +196,7 @@ export type Agency = {
 export type ManagedRoutingRule = {
   id: string;
   category: string;
+  municipalityName: string | null;
   agencyId: string | null;
   ownerLabel: string;
   staffGuidance: string;
@@ -207,6 +221,17 @@ type IssueReportRow = {
   geocoded_address: string | null;
   geocoding_provider: string | null;
   geocoded_at: string | null;
+  municipality_name: string | null;
+  municipality_code: string | null;
+  municipality_lookup_status: "matched" | "outside_municipality" | "failed" | "not_attempted";
+  municipality_source: string | null;
+  municipality_matched_at: string | null;
+  parcel_lookup_status: "matched" | "probable_right_of_way" | "failed" | "not_attempted";
+  parcel_folio: string | null;
+  parcel_address: string | null;
+  parcel_owner: string | null;
+  right_of_way_hint: "on_parcel" | "probable_public_right_of_way" | "unclear";
+  parcel_matched_at: string | null;
   resident_name: string | null;
   resident_email: string;
   resident_phone: string | null;
@@ -335,6 +360,7 @@ type AgencyRow = {
 type ManagedRoutingRuleRow = {
   id: string;
   category: string;
+  municipality_name: string | null;
   agency_id: string | null;
   owner_label: string;
   staff_guidance: string;
@@ -367,6 +393,8 @@ type JurisdictionSettingsRow = {
   parks_keywords: string | null;
   district_boundary_name: string | null;
   district_boundary_geojson: string | null;
+  municipality_boundary_name: string | null;
+  municipality_boundary_geojson: string | null;
   updated_at: string | null;
 };
 
@@ -391,6 +419,17 @@ export type CreateIssueReportInput = {
   geocodedAddress?: string | null;
   geocodingProvider?: string | null;
   geocodedAt?: string | null;
+  municipalityName?: string | null;
+  municipalityCode?: string | null;
+  municipalityLookupStatus?: "matched" | "outside_municipality" | "failed" | "not_attempted";
+  municipalitySource?: string | null;
+  municipalityMatchedAt?: string | null;
+  parcelLookupStatus?: "matched" | "probable_right_of_way" | "failed" | "not_attempted";
+  parcelFolio?: string | null;
+  parcelAddress?: string | null;
+  parcelOwner?: string | null;
+  rightOfWayHint?: "on_parcel" | "probable_public_right_of_way" | "unclear";
+  parcelMatchedAt?: string | null;
   residentName?: string;
   residentEmail: string;
   residentPhone?: string;
@@ -431,6 +470,40 @@ function hasColumn(
 }
 
 function ensureSchemaMigrations(database: Database.Database) {
+  if (!hasColumn(database, "routing_rules", "municipality_name")) {
+    database.exec(`
+      alter table routing_rules rename to routing_rules_legacy;
+
+      create table routing_rules (
+        id text primary key,
+        category text not null,
+        municipality_name text,
+        agency_id text references agencies(id) on delete set null,
+        owner_label text not null,
+        staff_guidance text not null,
+        resident_explanation text not null,
+        escalation_notes text not null,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      insert into routing_rules (
+        id, category, municipality_name, agency_id, owner_label, staff_guidance,
+        resident_explanation, escalation_notes, created_at, updated_at
+      )
+      select
+        id, category, null, agency_id, owner_label, staff_guidance,
+        resident_explanation, escalation_notes, created_at, updated_at
+      from routing_rules_legacy;
+
+      drop table routing_rules_legacy;
+
+      create index if not exists idx_routing_rules_category on routing_rules(category);
+      create unique index if not exists idx_routing_rules_category_municipality
+        on routing_rules(category, ifnull(municipality_name, ''));
+    `);
+  }
+
   if (!hasColumn(database, "issue_reports", "newsletter_opt_in")) {
     database.exec("alter table issue_reports add column newsletter_opt_in integer not null default 0;");
   }
@@ -465,6 +538,50 @@ function ensureSchemaMigrations(database: Database.Database) {
 
   if (!hasColumn(database, "issue_reports", "geocoded_at")) {
     database.exec("alter table issue_reports add column geocoded_at text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "municipality_name")) {
+    database.exec("alter table issue_reports add column municipality_name text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "municipality_code")) {
+    database.exec("alter table issue_reports add column municipality_code text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "municipality_lookup_status")) {
+    database.exec("alter table issue_reports add column municipality_lookup_status text not null default 'not_attempted';");
+  }
+
+  if (!hasColumn(database, "issue_reports", "municipality_source")) {
+    database.exec("alter table issue_reports add column municipality_source text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "municipality_matched_at")) {
+    database.exec("alter table issue_reports add column municipality_matched_at text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "parcel_lookup_status")) {
+    database.exec("alter table issue_reports add column parcel_lookup_status text not null default 'not_attempted';");
+  }
+
+  if (!hasColumn(database, "issue_reports", "parcel_folio")) {
+    database.exec("alter table issue_reports add column parcel_folio text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "parcel_address")) {
+    database.exec("alter table issue_reports add column parcel_address text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "parcel_owner")) {
+    database.exec("alter table issue_reports add column parcel_owner text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "right_of_way_hint")) {
+    database.exec("alter table issue_reports add column right_of_way_hint text not null default 'unclear';");
+  }
+
+  if (!hasColumn(database, "issue_reports", "parcel_matched_at")) {
+    database.exec("alter table issue_reports add column parcel_matched_at text;");
   }
 
   if (!hasColumn(database, "issue_reports", "notification_review_status")) {
@@ -596,6 +713,16 @@ function ensureSchemaMigrations(database: Database.Database) {
     database.exec("alter table jurisdiction_settings add column district_boundary_geojson text;");
   }
 
+  if (!hasColumn(database, "jurisdiction_settings", "municipality_boundary_name")) {
+    database.exec("alter table jurisdiction_settings add column municipality_boundary_name text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "municipality_boundary_geojson")) {
+    database.exec("alter table jurisdiction_settings add column municipality_boundary_geojson text;");
+  }
+
+  database.exec("create unique index if not exists idx_routing_rules_category_municipality on routing_rules(category, ifnull(municipality_name, ''));");
+
   database.exec(`
     create table if not exists submission_rate_limits (
       id text primary key,
@@ -699,13 +826,15 @@ function seedJurisdictionSettings(database: Database.Database) {
         id, district_match_keywords, district_outside_keywords, state_keywords,
         county_keywords, utility_keywords, private_property_keywords,
         school_keywords, transit_keywords, parks_keywords,
-        district_boundary_name, district_boundary_geojson, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        district_boundary_name, district_boundary_geojson,
+        municipality_boundary_name, municipality_boundary_geojson, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       1,
       process.env.DISTRICT_7_MATCH_KEYWORDS ?? "",
       process.env.DISTRICT_7_OUTSIDE_KEYWORDS ?? "",
+      "",
       "",
       "",
       "",
@@ -765,6 +894,17 @@ function getDb() {
       geocoded_address text,
       geocoding_provider text,
       geocoded_at text,
+      municipality_name text,
+      municipality_code text,
+      municipality_lookup_status text not null default 'not_attempted',
+      municipality_source text,
+      municipality_matched_at text,
+      parcel_lookup_status text not null default 'not_attempted',
+      parcel_folio text,
+      parcel_address text,
+      parcel_owner text,
+      right_of_way_hint text not null default 'unclear',
+      parcel_matched_at text,
       resident_name text,
       resident_email text not null,
       resident_phone text,
@@ -882,7 +1022,8 @@ function getDb() {
 
     create table if not exists routing_rules (
       id text primary key,
-      category text not null unique,
+      category text not null,
+      municipality_name text,
       agency_id text references agencies(id) on delete set null,
       owner_label text not null,
       staff_guidance text not null,
@@ -905,6 +1046,8 @@ function getDb() {
       parks_keywords text,
       district_boundary_name text,
       district_boundary_geojson text,
+      municipality_boundary_name text,
+      municipality_boundary_geojson text,
       updated_at text
     );
 
@@ -934,6 +1077,8 @@ function getDb() {
     create index if not exists idx_attachments_report on issue_attachments(report_id);
     create index if not exists idx_notification_events_report on notification_events(report_id);
     create index if not exists idx_routing_rules_category on routing_rules(category);
+    create unique index if not exists idx_routing_rules_category_municipality
+      on routing_rules(category, ifnull(municipality_name, ''));
     create index if not exists idx_ai_suggestions_report on ai_suggestions(report_id);
     create index if not exists idx_analytics_views_name on analytics_views(name);
     create index if not exists idx_submission_rate_limits_lookup
@@ -963,6 +1108,17 @@ function mapReport(row: IssueReportRow): IssueReport {
     geocodedAddress: row.geocoded_address,
     geocodingProvider: row.geocoding_provider,
     geocodedAt: row.geocoded_at,
+    municipalityName: row.municipality_name,
+    municipalityCode: row.municipality_code,
+    municipalityLookupStatus: row.municipality_lookup_status,
+    municipalitySource: row.municipality_source,
+    municipalityMatchedAt: row.municipality_matched_at,
+    parcelLookupStatus: row.parcel_lookup_status,
+    parcelFolio: row.parcel_folio,
+    parcelAddress: row.parcel_address,
+    parcelOwner: row.parcel_owner,
+    rightOfWayHint: row.right_of_way_hint,
+    parcelMatchedAt: row.parcel_matched_at,
     residentName: row.resident_name,
     residentEmail: row.resident_email,
     residentPhone: row.resident_phone,
@@ -1132,6 +1288,7 @@ function mapManagedRoutingRule(row: ManagedRoutingRuleRow): ManagedRoutingRule {
   return {
     id: row.id,
     category: row.category,
+    municipalityName: row.municipality_name,
     agencyId: row.agency_id,
     ownerLabel: row.owner_label,
     staffGuidance: row.staff_guidance,
@@ -1167,7 +1324,10 @@ export function createIssueReport(input: CreateIssueReportInput) {
     insert into issue_reports (
     id, public_tracking_token, status, category, description, address_text,
       latitude, longitude, location_source, geocoding_status, geocoded_address,
-      geocoding_provider, geocoded_at, resident_name, resident_email, resident_phone, preferred_language,
+      geocoding_provider, geocoded_at, municipality_name, municipality_code,
+      municipality_lookup_status, municipality_source, municipality_matched_at,
+      parcel_lookup_status, parcel_folio, parcel_address, parcel_owner, right_of_way_hint,
+      parcel_matched_at, resident_name, resident_email, resident_phone, preferred_language,
       contact_consent, newsletter_opt_in, newsletter_opt_in_at,
       notification_review_status, notification_review_note, notification_reviewed_at,
       duplicate_of_report_id, duplicate_review_decision, duplicate_reviewed_at,
@@ -1175,7 +1335,10 @@ export function createIssueReport(input: CreateIssueReportInput) {
     ) values (
       @id, @publicTrackingToken, @status, @category, @description, @addressText,
       @latitude, @longitude, @locationSource, @geocodingStatus, @geocodedAddress,
-      @geocodingProvider, @geocodedAt, @residentName, @residentEmail, @residentPhone, @preferredLanguage,
+      @geocodingProvider, @geocodedAt, @municipalityName, @municipalityCode,
+      @municipalityLookupStatus, @municipalitySource, @municipalityMatchedAt,
+      @parcelLookupStatus, @parcelFolio, @parcelAddress, @parcelOwner, @rightOfWayHint,
+      @parcelMatchedAt, @residentName, @residentEmail, @residentPhone, @preferredLanguage,
       @contactConsent, @newsletterOptIn, @newsletterOptInAt, null, null, null,
       null, null, null, null, @createdAt, @updatedAt
     )
@@ -1204,6 +1367,17 @@ export function createIssueReport(input: CreateIssueReportInput) {
       geocodedAddress: input.geocodedAddress ?? null,
       geocodingProvider: input.geocodingProvider ?? null,
       geocodedAt: input.geocodedAt ?? null,
+      municipalityName: input.municipalityName ?? null,
+      municipalityCode: input.municipalityCode ?? null,
+      municipalityLookupStatus: input.municipalityLookupStatus ?? "not_attempted",
+      municipalitySource: input.municipalitySource ?? null,
+      municipalityMatchedAt: input.municipalityMatchedAt ?? null,
+      parcelLookupStatus: input.parcelLookupStatus ?? "not_attempted",
+      parcelFolio: input.parcelFolio ?? null,
+      parcelAddress: input.parcelAddress ?? null,
+      parcelOwner: input.parcelOwner ?? null,
+      rightOfWayHint: input.rightOfWayHint ?? "unclear",
+      parcelMatchedAt: input.parcelMatchedAt ?? null,
       residentName: input.residentName || null,
       residentEmail: input.residentEmail,
       residentPhone: input.residentPhone || null,
@@ -1413,6 +1587,8 @@ export function getJurisdictionConfig(): JurisdictionConfig {
       parksKeywords: [],
       districtBoundaryName: null,
       districtBoundaryGeoJson: null,
+      municipalityBoundaryName: null,
+      municipalityBoundaryGeoJson: null,
       updatedAt: null,
     };
   }
@@ -1429,6 +1605,8 @@ export function getJurisdictionConfig(): JurisdictionConfig {
     parksKeywords: parseKeywordList(row.parks_keywords),
     districtBoundaryName: row.district_boundary_name,
     districtBoundaryGeoJson: row.district_boundary_geojson,
+    municipalityBoundaryName: row.municipality_boundary_name,
+    municipalityBoundaryGeoJson: row.municipality_boundary_geojson,
     updatedAt: row.updated_at,
   };
 }
@@ -1445,6 +1623,8 @@ export function saveJurisdictionConfig(input: {
   parksKeywords: string;
   districtBoundaryName?: string;
   districtBoundaryGeoJson?: string;
+  municipalityBoundaryName?: string;
+  municipalityBoundaryGeoJson?: string;
 }) {
   const updatedAt = nowIso();
 
@@ -1454,8 +1634,9 @@ export function saveJurisdictionConfig(input: {
         id, district_match_keywords, district_outside_keywords, state_keywords,
         county_keywords, utility_keywords, private_property_keywords,
         school_keywords, transit_keywords, parks_keywords,
-        district_boundary_name, district_boundary_geojson, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        district_boundary_name, district_boundary_geojson,
+        municipality_boundary_name, municipality_boundary_geojson, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(id) do update set
         district_match_keywords = excluded.district_match_keywords,
         district_outside_keywords = excluded.district_outside_keywords,
@@ -1468,6 +1649,8 @@ export function saveJurisdictionConfig(input: {
         parks_keywords = excluded.parks_keywords,
         district_boundary_name = excluded.district_boundary_name,
         district_boundary_geojson = excluded.district_boundary_geojson,
+        municipality_boundary_name = excluded.municipality_boundary_name,
+        municipality_boundary_geojson = excluded.municipality_boundary_geojson,
         updated_at = excluded.updated_at`,
     )
     .run(
@@ -1483,6 +1666,8 @@ export function saveJurisdictionConfig(input: {
       input.parksKeywords.trim(),
       input.districtBoundaryName?.trim() || null,
       input.districtBoundaryGeoJson?.trim() || null,
+      input.municipalityBoundaryName?.trim() || null,
+      input.municipalityBoundaryGeoJson?.trim() || null,
       updatedAt,
     );
 
@@ -1595,24 +1780,51 @@ export function listManagedRoutingRules() {
     ISSUE_CATEGORIES.map((category, index) => [category, index]),
   );
   mapped.sort(
-    (a, b) =>
-      (orderMap.get(a.category) ?? Number.MAX_SAFE_INTEGER) -
-      (orderMap.get(b.category) ?? Number.MAX_SAFE_INTEGER),
+    (a, b) => {
+      const categoryDiff =
+        (orderMap.get(a.category) ?? Number.MAX_SAFE_INTEGER) -
+        (orderMap.get(b.category) ?? Number.MAX_SAFE_INTEGER);
+      if (categoryDiff !== 0) {
+        return categoryDiff;
+      }
+
+      if (!a.municipalityName && b.municipalityName) return -1;
+      if (a.municipalityName && !b.municipalityName) return 1;
+
+      return (a.municipalityName || "").localeCompare(b.municipalityName || "");
+    },
   );
   return mapped;
 }
 
-export function getManagedRoutingRule(category: string) {
+export function getManagedRoutingRule(category: string, municipalityName?: string | null) {
   const rules = listManagedRoutingRules();
+  const normalizedMunicipality = municipalityName?.trim().toLowerCase() || null;
+
+  if (normalizedMunicipality) {
+    const municipalityMatch = rules.find(
+      (rule) =>
+        rule.category === category &&
+        rule.municipalityName?.trim().toLowerCase() === normalizedMunicipality,
+    );
+
+    if (municipalityMatch) {
+      return municipalityMatch;
+    }
+  }
+
   return (
-    rules.find((rule) => rule.category === category) ??
-    rules.find((rule) => rule.category === "Other / unsure") ??
+    rules.find((rule) => rule.category === category && !rule.municipalityName) ??
+    rules.find(
+      (rule) => rule.category === "Other / unsure" && !rule.municipalityName,
+    ) ??
     null
   );
 }
 
 export function upsertRoutingRule(input: {
   category: string;
+  municipalityName?: string;
   agencyId?: string;
   ownerLabel?: string;
   staffGuidance: string;
@@ -1623,38 +1835,43 @@ export function upsertRoutingRule(input: {
   const now = nowIso();
   const agency = input.agencyId ? getAgencyById(input.agencyId) : null;
   const ownerLabel = agency?.name || input.ownerLabel?.trim() || "District 7 triage";
+  const municipalityName = input.municipalityName?.trim() || null;
   const existing = database
-    .prepare("select id from routing_rules where category = ?")
-    .get(input.category) as { id: string } | undefined;
+    .prepare(
+      "select id from routing_rules where category = ? and ifnull(municipality_name, '') = ifnull(?, '')",
+    )
+    .get(input.category, municipalityName) as { id: string } | undefined;
 
   if (existing) {
     database
       .prepare(
         `update routing_rules
-         set agency_id = ?, owner_label = ?, staff_guidance = ?,
+         set municipality_name = ?, agency_id = ?, owner_label = ?, staff_guidance = ?,
              resident_explanation = ?, escalation_notes = ?, updated_at = ?
-         where category = ?`,
+         where id = ?`,
       )
       .run(
+        municipalityName,
         input.agencyId || null,
         ownerLabel,
         input.staffGuidance.trim(),
         input.residentExplanation.trim(),
         input.escalationNotes.trim(),
         now,
-        input.category,
+        existing.id,
       );
   } else {
     database
       .prepare(
         `insert into routing_rules (
-          id, category, agency_id, owner_label, staff_guidance,
+          id, category, municipality_name, agency_id, owner_label, staff_guidance,
           resident_explanation, escalation_notes, created_at, updated_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         makeId(),
         input.category,
+        municipalityName,
         input.agencyId || null,
         ownerLabel,
         input.staffGuidance.trim(),
@@ -1665,7 +1882,65 @@ export function upsertRoutingRule(input: {
       );
   }
 
-  return getManagedRoutingRule(input.category);
+  return getManagedRoutingRule(input.category, municipalityName);
+}
+
+export function updateIssueLocationIntelligence(input: {
+  reportId: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationSource?: "device" | "census_geocoder" | "none";
+  geocodingStatus?: "captured" | "matched" | "failed" | "not_attempted";
+  geocodedAddress?: string | null;
+  geocodingProvider?: string | null;
+  geocodedAt?: string | null;
+  municipalityName?: string | null;
+  municipalityCode?: string | null;
+  municipalityLookupStatus?: "matched" | "outside_municipality" | "failed" | "not_attempted";
+  municipalitySource?: string | null;
+  municipalityMatchedAt?: string | null;
+  parcelLookupStatus?: "matched" | "probable_right_of_way" | "failed" | "not_attempted";
+  parcelFolio?: string | null;
+  parcelAddress?: string | null;
+  parcelOwner?: string | null;
+  rightOfWayHint?: "on_parcel" | "probable_public_right_of_way" | "unclear";
+  parcelMatchedAt?: string | null;
+}) {
+  getDb()
+    .prepare(
+      `update issue_reports
+       set latitude = ?, longitude = ?, location_source = ?, geocoding_status = ?,
+           geocoded_address = ?, geocoding_provider = ?, geocoded_at = ?,
+           municipality_name = ?, municipality_code = ?, municipality_lookup_status = ?,
+           municipality_source = ?, municipality_matched_at = ?,
+           parcel_lookup_status = ?, parcel_folio = ?, parcel_address = ?, parcel_owner = ?,
+           right_of_way_hint = ?, parcel_matched_at = ?, updated_at = ?
+       where id = ?`,
+    )
+    .run(
+      input.latitude ?? null,
+      input.longitude ?? null,
+      input.locationSource ?? "none",
+      input.geocodingStatus ?? "not_attempted",
+      input.geocodedAddress ?? null,
+      input.geocodingProvider ?? null,
+      input.geocodedAt ?? null,
+      input.municipalityName ?? null,
+      input.municipalityCode ?? null,
+      input.municipalityLookupStatus ?? "not_attempted",
+      input.municipalitySource ?? null,
+      input.municipalityMatchedAt ?? null,
+      input.parcelLookupStatus ?? "not_attempted",
+      input.parcelFolio ?? null,
+      input.parcelAddress ?? null,
+      input.parcelOwner ?? null,
+      input.rightOfWayHint ?? "unclear",
+      input.parcelMatchedAt ?? null,
+      nowIso(),
+      input.reportId,
+    );
+
+  return getIssueReportById(input.reportId);
 }
 
 export function getIssueReportById(id: string) {

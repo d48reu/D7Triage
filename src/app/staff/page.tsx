@@ -117,13 +117,18 @@ export default async function StaffPage() {
                   </div>
                   <div className="text-sm text-slate-600">
                     <div>
-                      {getManagedRoutingRule(report.category)?.ownerLabel ??
+                      {getManagedRoutingRule(report.category, report.municipalityName)?.ownerLabel ??
                         "District 7 triage"}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
                       {formatOwnershipHint(jurisdiction.ownershipHint)} |{" "}
                       {formatDistrictHintStatus(jurisdiction.districtHintStatus)}
                     </div>
+                    {report.municipalityName ? (
+                      <div className="mt-1 text-xs text-slate-500">
+                        {report.municipalityName}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="hidden text-sm text-slate-700 lg:block">
                     {formatStatus(report.status)}

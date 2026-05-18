@@ -12,6 +12,8 @@ Current capabilities:
 - optional photo upload
 - optional device geolocation capture
 - automatic server-side address geocoding through the U.S. Census geocoder when coordinates are missing
+- municipality detection using official Miami-Dade municipality boundaries
+- first-pass parcel and probable right-of-way lookup using official Miami-Dade parcel GIS
 - private resident tracking page at `/report/[trackingToken]`
 - local staff login
 - staff inbox, case detail, notes, status updates, and referrals
@@ -61,6 +63,10 @@ Automatic address geocoding uses the official U.S. Census geocoder from the serv
 - no device coordinates were captured
 
 That keeps the boundary and jurisdiction hints useful even when residents skip “Use My Location.”
+
+### Municipality And Parcel Intelligence
+
+The routing admin can now load the official Miami-Dade municipality boundary layer for municipality-aware routing. When a report has coordinates, the app also performs a first-pass parcel lookup against Miami-Dade parcel GIS so staff can distinguish “on parcel” from “probably in public right-of-way” more clearly.
 
 ### Local Hardening Controls
 

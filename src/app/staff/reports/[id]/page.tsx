@@ -30,6 +30,7 @@ import {
   addStaffNoteAction,
   markDistinctAction,
   markDuplicateAction,
+  refreshLocationIntelligenceAction,
   updateReferralOutcomeAction,
   updateIssueStatusAction,
 } from "@/server-actions/issues";
@@ -58,7 +59,7 @@ export default async function StaffReportPage({
   const notifications = listNotificationEvents(report.id);
   const duplicateCandidates = findPotentialDuplicates(report);
   const linkedDuplicates = listLinkedDuplicateReports(report.id);
-  const routingRule = getManagedRoutingRule(report.category);
+  const routingRule = getManagedRoutingRule(report.category, report.municipalityName);
   const latestSuggestion = getLatestAiSuggestion(report.id);
   const aiRoutingAvailability = getAiRoutingAvailability();
   const jurisdictionConfig = getJurisdictionConfig();
@@ -162,6 +163,9 @@ export default async function StaffReportPage({
               {jurisdiction.summary}
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-700">
+              Confidence basis: {jurisdiction.confidenceReason}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
               {jurisdiction.staffGuidance}
             </p>
             {jurisdiction.matchedClues.length > 0 ? (
@@ -207,6 +211,14 @@ export default async function StaffReportPage({
               value={formatLocationSource(report.locationSource)}
             />
             <Detail
+              label="Municipality"
+              value={report.municipalityName || "Not resolved"}
+            />
+            <Detail
+              label="Municipality lookup"
+              value={formatLookupStatus(report.municipalityLookupStatus)}
+            />
+            <Detail
               label="Geocoding"
               value={formatGeocodingStatus(report.geocodingStatus)}
             />
@@ -214,6 +226,17 @@ export default async function StaffReportPage({
               label="Matched address"
               value={report.geocodedAddress || "Not available"}
             />
+            <Detail
+              label="Parcel lookup"
+              value={formatLookupStatus(report.parcelLookupStatus)}
+            />
+            <Detail
+              label="Right-of-way hint"
+              value={formatRightOfWayHint(report.rightOfWayHint)}
+            />
+            <Detail label="Parcel folio" value={report.parcelFolio || "Not available"} />
+            <Detail label="Parcel address" value={report.parcelAddress || "Not available"} />
+            <Detail label="Parcel owner" value={report.parcelOwner || "Not available"} />
             <Detail label="Email" value={report.residentEmail} />
             <Detail label="Name" value={report.residentName || "Not provided"} />
             <Detail label="Phone" value={report.residentPhone || "Not provided"} />
@@ -243,6 +266,15 @@ export default async function StaffReportPage({
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
               {report.description}
             </p>
+            <form action={refreshLocationIntelligenceAction} className="mt-4">
+              <input type="hidden" name="reportId" value={report.id} />
+              <button
+                type="submit"
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Refresh Location Intelligence
+              </button>
+            </form>
           </div>
 
           <div className="mt-6 border-t border-slate-200 pt-5">
@@ -910,5 +942,33 @@ function formatGeocodingStatus(
       return "Address could not be matched";
     default:
       return "Not attempted";
+  }
+}
+
+function formatLookupStatus(value: string) {
+  switch (value) {
+    case "matched":
+      return "Matched";
+    case "outside_municipality":
+      return "Outside known municipality";
+    case "probable_right_of_way":
+      return "Probable right-of-way";
+    case "failed":
+      return "Lookup failed";
+    default:
+      return "Not attempted";
+  }
+}
+
+function formatRightOfWayHint(
+  value: "on_parcel" | "probable_public_right_of_way" | "unclear",
+) {
+  switch (value) {
+    case "on_parcel":
+      return "Point falls on a parcel";
+    case "probable_public_right_of_way":
+      return "Point appears outside a parcel";
+    default:
+      return "Unclear";
   }
 }

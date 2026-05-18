@@ -186,6 +186,13 @@ function buildPrompt(input: {
         locationSource: input.report.locationSource,
         geocodingStatus: input.report.geocodingStatus,
         geocodedAddress: input.report.geocodedAddress,
+        municipalityName: input.report.municipalityName,
+        municipalityLookupStatus: input.report.municipalityLookupStatus,
+        parcelLookupStatus: input.report.parcelLookupStatus,
+        parcelFolio: input.report.parcelFolio,
+        parcelAddress: input.report.parcelAddress,
+        parcelOwner: input.report.parcelOwner,
+        rightOfWayHint: input.report.rightOfWayHint,
         preferredLanguage: input.report.preferredLanguage,
       },
       null,
@@ -272,7 +279,7 @@ export async function generateAiRoutingSuggestion(reportId: string) {
     );
   }
 
-  const currentRule = getManagedRoutingRule(report.category);
+  const currentRule = getManagedRoutingRule(report.category, report.municipalityName);
   const agencies = listAgencies().filter((agency) => agency.isActive);
   const routingRules = listManagedRoutingRules();
   const jurisdictionConfig = getJurisdictionConfig();
