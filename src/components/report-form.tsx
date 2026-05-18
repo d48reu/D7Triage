@@ -17,6 +17,7 @@ export function ReportForm() {
     submitIssueReportAction,
     initialState,
   );
+  const [addressText, setAddressText] = useState("");
   const [locationState, setLocationState] = useState<{
     latitude: string;
     longitude: string;
@@ -25,6 +26,17 @@ export function ReportForm() {
     latitude: "",
     longitude: "",
     message: "Optional. Helps future map and boundary checks if available.",
+  });
+  const [jurisdictionPreview, setJurisdictionPreview] = useState<{
+    status: "idle" | "loading" | "success" | "error";
+    message: string;
+    districtHintStatus?: "likely_in_district" | "likely_outside_district" | "unclear";
+    districtLabel?: string;
+    municipalityName?: string | null;
+    geocodedAddress?: string | null;
+  }>({
+    status: "idle",
+    message: "Optional. Preview whether the location appears to be inside District 7.",
   });
 
   function captureLocation() {
@@ -60,6 +72,74 @@ export function ReportForm() {
         timeout: 10000,
       },
     );
+  }
+
+  async function previewJurisdiction() {
+    if (!addressText.trim()) {
+      setJurisdictionPreview({
+        status: "error",
+        message: "Enter a location or address first.",
+      });
+      return;
+    }
+
+    setJurisdictionPreview({
+      status: "loading",
+      message: "Checking whether this location appears to be in District 7...",
+    });
+
+    try {
+      const response = await fetch("/api/jurisdiction-preview", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          addressText,
+          latitude: locationState.latitude ? Number(locationState.latitude) : null,
+          longitude: locationState.longitude ? Number(locationState.longitude) : null,
+        }),
+      });
+
+      const data = (await response.json()) as
+        | {
+            ok: true;
+            districtHintStatus: "likely_in_district" | "likely_outside_district" | "unclear";
+            districtLabel: string;
+            municipalityName?: string | null;
+            geocodedAddress?: string | null;
+          }
+        | { ok: false; message?: string };
+
+      if (!response.ok || !data.ok) {
+        setJurisdictionPreview({
+          status: "error",
+          message:
+            ("message" in data && data.message) ||
+            "We couldn’t preview District 7 coverage right now.",
+        });
+        return;
+      }
+
+      setJurisdictionPreview({
+        status: "success",
+        message:
+          data.districtHintStatus === "likely_outside_district"
+            ? "This location appears to be outside Miami-Dade County District 7. You can still submit, and staff will review the jurisdiction."
+            : data.districtHintStatus === "likely_in_district"
+              ? "This location appears to be inside Miami-Dade County District 7."
+              : "We couldn’t confidently place this location in or out of District 7 yet, but you can still submit it for review.",
+        districtHintStatus: data.districtHintStatus,
+        districtLabel: data.districtLabel,
+        municipalityName: data.municipalityName,
+        geocodedAddress: data.geocodedAddress,
+      });
+    } catch {
+      setJurisdictionPreview({
+        status: "error",
+        message: "We couldn’t preview District 7 coverage right now.",
+      });
+    }
   }
 
   return (
@@ -112,6 +192,15 @@ export function ReportForm() {
             name="addressText"
             required
             maxLength={250}
+            value={addressText}
+            onChange={(event) => {
+              setAddressText(event.target.value);
+              setJurisdictionPreview({
+                status: "idle",
+                message:
+                  "Optional. Preview whether the location appears to be inside District 7.",
+              });
+            }}
             className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
             placeholder="Street address, intersection, park, or landmark"
           />
@@ -121,6 +210,47 @@ export function ReportForm() {
             location is unavailable, the app will try to place the report from
             the typed address.
           </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={previewJurisdiction}
+              disabled={jurisdictionPreview.status === "loading"}
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+            >
+              {jurisdictionPreview.status === "loading"
+                ? "Checking..."
+                : "Check District 7 Coverage"}
+            </button>
+            <span className="text-xs text-slate-500">
+              This preview does not block submission.
+            </span>
+          </div>
+          <div
+            className={`mt-3 rounded-md px-3 py-2 text-sm ${
+              jurisdictionPreview.status === "error"
+                ? "bg-rose-50 text-rose-800"
+                : jurisdictionPreview.districtHintStatus === "likely_outside_district"
+                  ? "bg-amber-50 text-amber-900"
+                  : jurisdictionPreview.districtHintStatus === "likely_in_district"
+                    ? "bg-emerald-50 text-emerald-800"
+                    : "bg-slate-50 text-slate-600"
+            }`}
+          >
+            {jurisdictionPreview.message}
+            {jurisdictionPreview.status === "success" ? (
+              <div className="mt-2 space-y-1 text-xs">
+                {jurisdictionPreview.districtLabel ? (
+                  <div>{jurisdictionPreview.districtLabel}</div>
+                ) : null}
+                {jurisdictionPreview.municipalityName ? (
+                  <div>Municipality: {jurisdictionPreview.municipalityName}</div>
+                ) : null}
+                {jurisdictionPreview.geocodedAddress ? (
+                  <div>Matched address: {jurisdictionPreview.geocodedAddress}</div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </label>
 
         <div className="rounded-md border border-slate-200 bg-slate-50 p-4">

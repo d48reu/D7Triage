@@ -77,6 +77,8 @@ export default async function StaffReportPage({
   const jurisdictionConfig = getJurisdictionConfig();
   const notificationTemplateMap = getNotificationTemplateMap();
   const jurisdiction = analyzeReportJurisdiction(report, jurisdictionConfig);
+  const isLikelyOutsideDistrict =
+    jurisdiction.districtHintStatus === "likely_outside_district";
   const defaultOwnerLabel = routingRule?.ownerLabel ?? "District 7 triage";
   const masterReport = report.duplicateOfReportId
     ? getIssueReportById(report.duplicateOfReportId)
@@ -210,6 +212,19 @@ export default async function StaffReportPage({
               )}
             />
           </div>
+
+          {isLikelyOutsideDistrict ? (
+            <div className="mt-5 rounded-md border border-rose-200 bg-rose-50 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-800">
+                Outside-district review
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-800">
+                This case looks outside Miami-Dade County District 7. Staff can still
+                review and re-route it, but it likely needs an outside-jurisdiction
+                response.
+              </p>
+            </div>
+          ) : null}
 
           <div className="mt-5 grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
             <Detail label="Location" value={report.addressText} />
@@ -472,6 +487,43 @@ export default async function StaffReportPage({
         </section>
 
         <aside className="space-y-6">
+          {isLikelyOutsideDistrict ? (
+            <section className="rounded-md border border-rose-200 bg-rose-50 p-5 shadow-sm">
+              <h2 className="text-lg font-semibold text-slate-950">
+                Likely outside District 7
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-slate-700">
+                If staff confirms this is outside the district, use the quick close
+                action below. It will mark the case accordingly and add a resident-facing
+                note to the timeline.
+              </p>
+              <form action={updateIssueStatusAction} className="mt-4 space-y-3">
+                <input type="hidden" name="reportId" value={report.id} />
+                <input
+                  type="hidden"
+                  name="status"
+                  value="closed_outside_jurisdiction"
+                />
+                <input
+                  type="hidden"
+                  name="publicNote"
+                  value="This report appears to be outside Miami-Dade County District 7. District 7 staff reviewed it and may route it to the appropriate office when possible."
+                />
+                <button
+                  type="submit"
+                  className="rounded-md bg-rose-700 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-800"
+                >
+                  Close As Outside Jurisdiction
+                </button>
+              </form>
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                Suggested resident wording: This report appears to be outside Miami-Dade
+                County District 7. District 7 staff reviewed it and may route it to the
+                appropriate office when possible.
+              </p>
+            </section>
+          ) : null}
+
           <AiSuggestionPanel
             reportId={report.id}
             initialSuggestion={

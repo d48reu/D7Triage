@@ -112,6 +112,11 @@ export default async function StaffPage() {
                       <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600 md:hidden">
                         {formatStatus(report.status)}
                       </span>
+                      {jurisdiction.districtHintStatus === "likely_outside_district" ? (
+                        <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                          Outside District 7
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">
                       {report.description}
