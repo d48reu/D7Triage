@@ -487,7 +487,7 @@ export async function assignIssueReportAction(formData: FormData) {
 
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
-  redirect(`/staff/reports/${reportId}`);
+  redirect(`/staff/reports/${reportId}?assignmentSaved=1`);
 }
 
 export async function refreshLocationIntelligenceAction(formData: FormData) {

@@ -43,11 +43,18 @@ export const dynamic = "force-dynamic";
 
 export default async function StaffReportPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireStaffSession();
   const { id } = await params;
+  const query = (await searchParams) ?? {};
+  const assignmentSaved =
+    (Array.isArray(query.assignmentSaved)
+      ? query.assignmentSaved[0]
+      : query.assignmentSaved) === "1";
   const report = getIssueReportById(id);
 
   if (!report) {
@@ -511,6 +518,11 @@ export default async function StaffReportPage({
             <p className="mt-1 text-sm text-slate-600">
               Assign this case so the inbox shows clear ownership for follow-up.
             </p>
+            {assignmentSaved ? (
+              <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+                Assignment saved.
+              </div>
+            ) : null}
             <form action={assignIssueReportAction} className="mt-4 space-y-4">
               <input type="hidden" name="reportId" value={report.id} />
               <label className="block">
