@@ -1,6 +1,16 @@
 import Database from "better-sqlite3";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import {
+  DEMO_JURISDICTION_SEED,
+  DEMO_NOTES,
+  DEMO_NOTIFICATION_EVENTS,
+  DEMO_REFERRALS,
+  DEMO_REPORTS,
+  DEMO_STATUS_EVENTS,
+  DEMO_STAFF_MEMBERS,
+} from "@/demo-data/demo-seed";
+import { isDemoMode } from "@/lib/demo-mode";
 import { ISSUE_CATEGORIES, type IssueStatus } from "@/lib/issue-types";
 import {
   NOTIFICATION_TEMPLATE_DEFINITIONS,
@@ -932,34 +942,110 @@ function seedJurisdictionSettings(database: Database.Database) {
     .prepare("select id from jurisdiction_settings where id = 1")
     .get() as { id: number } | undefined;
 
-  if (row) return;
+  if (!row) {
+    database
+      .prepare(
+        `insert into jurisdiction_settings (
+          id, district_match_keywords, district_outside_keywords, state_keywords,
+          county_keywords, utility_keywords, private_property_keywords,
+          school_keywords, transit_keywords, parks_keywords,
+          district_boundary_name, district_boundary_geojson,
+          municipality_boundary_name, municipality_boundary_geojson,
+          county_commission_districts_name, county_commission_districts_geojson,
+          updated_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        1,
+        process.env.DISTRICT_7_MATCH_KEYWORDS ?? "",
+        process.env.DISTRICT_7_OUTSIDE_KEYWORDS ?? "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        nowIso(),
+      );
+  }
+
+  if (!isDemoMode()) {
+    return;
+  }
+
+  const existing = database
+    .prepare(
+      `select
+        district_boundary_name,
+        district_boundary_geojson,
+        municipality_boundary_name,
+        municipality_boundary_geojson,
+        county_commission_districts_name,
+        county_commission_districts_geojson
+      from jurisdiction_settings where id = 1`,
+    )
+    .get() as {
+    district_boundary_name: string | null;
+    district_boundary_geojson: string | null;
+    municipality_boundary_name: string | null;
+    municipality_boundary_geojson: string | null;
+    county_commission_districts_name: string | null;
+    county_commission_districts_geojson: string | null;
+  };
+
+  if (
+    existing?.district_boundary_geojson &&
+    existing?.municipality_boundary_geojson &&
+    existing?.county_commission_districts_geojson
+  ) {
+    return;
+  }
 
   database
     .prepare(
-      `insert into jurisdiction_settings (
-        id, district_match_keywords, district_outside_keywords, state_keywords,
-        county_keywords, utility_keywords, private_property_keywords,
-        school_keywords, transit_keywords, parks_keywords,
-        district_boundary_name, district_boundary_geojson,
-        municipality_boundary_name, municipality_boundary_geojson, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `update jurisdiction_settings
+       set
+         district_match_keywords = ?,
+         district_outside_keywords = ?,
+         state_keywords = ?,
+         county_keywords = ?,
+         utility_keywords = ?,
+         private_property_keywords = ?,
+         school_keywords = ?,
+         transit_keywords = ?,
+         parks_keywords = ?,
+         district_boundary_name = ?,
+         district_boundary_geojson = ?,
+         municipality_boundary_name = ?,
+         municipality_boundary_geojson = ?,
+         county_commission_districts_name = ?,
+         county_commission_districts_geojson = ?,
+         updated_at = ?
+       where id = 1`,
     )
     .run(
-      1,
-      process.env.DISTRICT_7_MATCH_KEYWORDS ?? "",
-      process.env.DISTRICT_7_OUTSIDE_KEYWORDS ?? "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
+      DEMO_JURISDICTION_SEED.districtMatchKeywords,
+      DEMO_JURISDICTION_SEED.districtOutsideKeywords,
+      DEMO_JURISDICTION_SEED.stateKeywords,
+      DEMO_JURISDICTION_SEED.countyKeywords,
+      DEMO_JURISDICTION_SEED.utilityKeywords,
+      DEMO_JURISDICTION_SEED.privatePropertyKeywords,
+      DEMO_JURISDICTION_SEED.schoolKeywords,
+      DEMO_JURISDICTION_SEED.transitKeywords,
+      DEMO_JURISDICTION_SEED.parksKeywords,
+      DEMO_JURISDICTION_SEED.districtBoundaryName,
+      DEMO_JURISDICTION_SEED.districtBoundaryGeoJson,
+      DEMO_JURISDICTION_SEED.municipalityBoundaryName,
+      DEMO_JURISDICTION_SEED.municipalityBoundaryGeoJson,
+      DEMO_JURISDICTION_SEED.countyCommissionDistrictsName,
+      DEMO_JURISDICTION_SEED.countyCommissionDistrictsGeoJson,
       nowIso(),
     );
 }
@@ -983,6 +1069,134 @@ function seedNotificationTemplates(database: Database.Database) {
       template.bodyTemplate,
       nowIso(),
     );
+  }
+}
+
+function seedDemoData(database: Database.Database) {
+  if (!isDemoMode()) return;
+
+  const staffCount = (
+    database.prepare("select count(*) as count from staff_members").get() as {
+      count: number;
+    }
+  ).count;
+
+  if (staffCount === 0) {
+    const insertStaffMember = database.prepare(`
+      insert into staff_members (
+        id, name, email, title, focus_areas, role_label, is_active, created_at, updated_at
+      ) values (
+        @id, @name, @email, @title, @focusAreas, @roleLabel, 1, @createdAt, @updatedAt
+      )
+    `);
+
+    for (const staffMember of DEMO_STAFF_MEMBERS) {
+      const roleLabel = [staffMember.title, staffMember.focusAreas]
+        .filter(Boolean)
+        .join(" | ");
+
+      insertStaffMember.run({
+        ...staffMember,
+        roleLabel: roleLabel || null,
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+      });
+    }
+  }
+
+  const reportCount = (
+    database.prepare("select count(*) as count from issue_reports").get() as {
+      count: number;
+    }
+  ).count;
+
+  if (reportCount > 0) return;
+
+  const insertReport = database.prepare(`
+    insert into issue_reports (
+      id, public_tracking_token, status, assigned_staff_id, category, description, address_text,
+      latitude, longitude, location_source, geocoding_status, geocoded_address,
+      geocoding_provider, geocoded_at, municipality_name, municipality_code,
+      municipality_lookup_status, municipality_source, municipality_matched_at,
+      parcel_lookup_status, parcel_folio, parcel_address, parcel_owner, right_of_way_hint,
+      parcel_matched_at, resident_name, resident_email, resident_phone, preferred_language,
+      contact_consent, newsletter_opt_in, newsletter_opt_in_at, notification_review_status,
+      notification_review_note, notification_reviewed_at, duplicate_of_report_id,
+      duplicate_review_decision, duplicate_reviewed_at, duplicate_review_note, created_at, updated_at
+    ) values (
+      @id, @publicTrackingToken, @status, @assignedStaffId, @category, @description, @addressText,
+      @latitude, @longitude, @locationSource, @geocodingStatus, @geocodedAddress,
+      @geocodingProvider, @geocodedAt, @municipalityName, @municipalityCode,
+      @municipalityLookupStatus, @municipalitySource, @municipalityMatchedAt,
+      @parcelLookupStatus, @parcelFolio, @parcelAddress, @parcelOwner, @rightOfWayHint,
+      @parcelMatchedAt, @residentName, @residentEmail, @residentPhone, @preferredLanguage,
+      @contactConsent, @newsletterOptIn, @newsletterOptInAt, @notificationReviewStatus,
+      @notificationReviewNote, @notificationReviewedAt, null,
+      null, null, null, @createdAt, @updatedAt
+    )
+  `);
+
+  const insertStatusEvent = database.prepare(`
+    insert into issue_status_events (
+      id, report_id, status, public_note, created_at
+    ) values (
+      @id, @reportId, @status, @publicNote, @createdAt
+    )
+  `);
+
+  const insertStaffNote = database.prepare(`
+    insert into staff_notes (
+      id, report_id, body, created_at
+    ) values (
+      @id, @reportId, @body, @createdAt
+    )
+  `);
+
+  const insertReferral = database.prepare(`
+    insert into referrals (
+      id, report_id, agency_name, referral_method, outcome_status, external_reference,
+      follow_up_date, notes, outcome_note, updated_at, created_at
+    ) values (
+      @id, @reportId, @agencyName, @referralMethod, @outcomeStatus, @externalReference,
+      @followUpDate, @notes, @outcomeNote, @updatedAt, @createdAt
+    )
+  `);
+
+  const insertNotificationEvent = database.prepare(`
+    insert into notification_events (
+      id, report_id, event_type, template_key, template_updated_at, recipient, subject, body, delivery_status, created_at
+    ) values (
+      @id, @reportId, @eventType, @templateKey, @templateUpdatedAt, @recipient, @subject, @body, @deliveryStatus, @createdAt
+    )
+  `);
+
+  const templateUpdatedAt = nowIso();
+
+  for (const report of DEMO_REPORTS) {
+    insertReport.run({
+      ...report,
+      contactConsent: report.contactConsent ? 1 : 0,
+      newsletterOptIn: report.newsletterOptIn ? 1 : 0,
+    });
+  }
+
+  for (const event of DEMO_STATUS_EVENTS) {
+    insertStatusEvent.run(event);
+  }
+
+  for (const note of DEMO_NOTES) {
+    insertStaffNote.run(note);
+  }
+
+  for (const referral of DEMO_REFERRALS) {
+    insertReferral.run(referral);
+  }
+
+  for (const event of DEMO_NOTIFICATION_EVENTS) {
+    insertNotificationEvent.run({
+      ...event,
+      templateUpdatedAt: event.templateKey ? templateUpdatedAt : null,
+    });
   }
 }
 
@@ -1219,6 +1433,7 @@ function getDb() {
   seedRoutingData(db);
   seedJurisdictionSettings(db);
   seedNotificationTemplates(db);
+  seedDemoData(db);
 
   return db;
 }

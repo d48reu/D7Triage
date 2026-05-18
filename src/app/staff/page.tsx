@@ -1,5 +1,7 @@
+import { DemoSiteNotice } from "@/components/demo-site-notice";
 import Link from "next/link";
 import { logoutStaffAction } from "@/server-actions/auth";
+import { isDemoMode } from "@/lib/demo-mode";
 import { formatStatus } from "@/lib/issue-types";
 import {
   analyzeReportJurisdiction,
@@ -20,6 +22,7 @@ export const dynamic = "force-dynamic";
 
 export default async function StaffPage() {
   await requireStaffSession();
+  const demoMode = isDemoMode();
   const reports = listIssueReports();
   const staffMembers = listStaffMembers();
   const staffMemberNameById = new Map(
@@ -88,6 +91,12 @@ export default async function StaffPage() {
       </header>
 
       <div className="mx-auto max-w-7xl px-5 py-6">
+        {demoMode ? (
+          <div className="mb-6">
+            <DemoSiteNotice body="These seeded cases are here to show the triage workflow. Live AI routing is enabled on the case pages, while other changes may reset in the hosted demo." />
+          </div>
+        ) : null}
+
         <section className="grid gap-3 sm:grid-cols-3">
           <Metric label="All reports" value={reports.length} />
           <Metric label="Needs review" value={needsReview.length} />

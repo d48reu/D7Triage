@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AiSuggestionPanel } from "@/components/ai-suggestion-panel";
 import { BoundaryPreview } from "@/components/boundary-preview";
+import { DemoSiteNotice } from "@/components/demo-site-notice";
 import { getAiRoutingAvailability } from "@/lib/ai-routing";
+import { isDemoMode } from "@/lib/demo-mode";
 import { formatStatus, ISSUE_STATUSES } from "@/lib/issue-types";
 import {
   analyzeReportJurisdiction,
@@ -52,6 +54,7 @@ export default async function StaffReportPage({
   await requireStaffSession();
   const { id } = await params;
   const query = (await searchParams) ?? {};
+  const demoMode = isDemoMode();
   const assignmentSaved =
     (Array.isArray(query.assignmentSaved)
       ? query.assignmentSaved[0]
@@ -122,6 +125,12 @@ export default async function StaffReportPage({
 
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+          {demoMode ? (
+            <div className="mb-5">
+              <DemoSiteNotice body="This hosted demo keeps AI routing live on seeded cases. Other edits may reset between sessions, so treat staff-side changes here as temporary." />
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -590,6 +599,7 @@ export default async function StaffReportPage({
             maxGenerationsPerDay={
               aiRoutingAvailability.maxGenerationsPerReportPerDay
             }
+            allowFeedback={!demoMode}
           />
 
           <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">

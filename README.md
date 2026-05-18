@@ -35,6 +35,7 @@ Current capabilities:
 - optional `Resend` integration reserved for later
 
 The app can also be deployed to **Render** with a persistent disk for a stable shareable demo environment.
+For a **free shareable walkthrough**, the repo now also supports a **Vercel-hosted demo mode** with seeded cases and live AI routing.
 
 This repo still contains some future-facing dependencies and docs references from the earlier Supabase plan, but the **actual running app is local-first today**.
 
@@ -56,6 +57,7 @@ Most local work only needs:
 - `STAFF_PASSWORD`
 - optional `STAFF_SESSION_SECRET`
 - optional AI variables if you want routing suggestions enabled
+- `DEMO_MODE` and `NEXT_PUBLIC_DEMO_MODE` if you want the shareable hosted demo behavior
 
 For Render or other hosted environments that need persistent local storage, you can also set:
 
@@ -105,3 +107,4 @@ Staff auth is still local password-based and is suitable for development or tigh
 - [Implementation plan](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/implementation-plan.md>)
 - [Pilot readiness checklist](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/pilot-readiness.md>)
 - [Render deployment guide](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/render-deployment.md>)
+- [Vercel demo deployment guide](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/vercel-demo-deployment.md>)

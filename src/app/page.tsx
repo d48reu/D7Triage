@@ -1,6 +1,10 @@
+import { DemoSiteNotice } from "@/components/demo-site-notice";
 import Link from "next/link";
+import { isDemoMode } from "@/lib/demo-mode";
 
 export default function Home() {
+  const demoMode = isDemoMode();
+
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
@@ -29,19 +33,25 @@ export default function Home() {
       </header>
 
       <div className="mx-auto max-w-6xl px-5 py-10">
+        {demoMode ? (
+          <div className="mb-6">
+            <DemoSiteNotice body="This shareable version is optimized for demos: seeded District 7 examples, live AI routing on staff cases, and temporary state for anything newly created." />
+          </div>
+        ) : null}
+
         <section className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
           <div>
             <p className="text-sm font-medium text-slate-600">
-              Local-first prototype
+              {demoMode ? "Shareable demo" : "Local-first prototype"}
             </p>
             <h2 className="mt-3 max-w-3xl text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
               Help residents report the problem, then help staff route it
               correctly.
             </h2>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-              The current build saves reports locally, gives residents a private
-              status link, and gives staff a working inbox for triage, notes,
-              and status updates.
+              {demoMode
+                ? "This hosted demo shows the resident intake flow, seeded staff inbox, jurisdiction intelligence, and live AI routing suggestions without requiring county integrations yet."
+                : "The current build saves reports locally, gives residents a private status link, and gives staff a working inbox for triage, notes, and status updates."}
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link

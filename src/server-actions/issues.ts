@@ -5,6 +5,7 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { isDemoMode } from "@/lib/demo-mode";
 import { ISSUE_STATUSES, type IssueStatus } from "@/lib/issue-types";
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
 import { getUploadsDir } from "@/lib/data-paths";
@@ -310,6 +311,10 @@ export async function submitIssueReportAction(
         message: rateLimitResult.message || "Report could not be submitted right now.",
       };
     }
+  }
+
+  if (isDemoMode()) {
+    redirect("/report/demo-submission");
   }
 
   const locationIntelligence = await resolveReportLocationIntelligence({

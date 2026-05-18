@@ -18,6 +18,7 @@ export function AiSuggestionPanel({
   availabilityMessage,
   modelName,
   maxGenerationsPerDay,
+  allowFeedback = true,
 }: {
   reportId: string;
   initialSuggestion: Suggestion | null;
@@ -25,6 +26,7 @@ export function AiSuggestionPanel({
   availabilityMessage: string;
   modelName: string;
   maxGenerationsPerDay: number;
+  allowFeedback?: boolean;
 }) {
   const initialState: GenerateAiSuggestionState = {
     status: "idle",
@@ -161,47 +163,53 @@ export function AiSuggestionPanel({
               {reviewState.message}
             </div>
 
-            <form action={reviewFormAction} className="mt-3 space-y-3">
-              <input type="hidden" name="reportId" value={reportId} />
-              <input type="hidden" name="suggestionId" value={suggestion.id} />
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Outcome
-                </span>
-                <select
-                  name="feedbackDisposition"
-                  defaultValue={suggestion.feedbackDisposition || "accepted"}
-                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+            {allowFeedback ? (
+              <form action={reviewFormAction} className="mt-3 space-y-3">
+                <input type="hidden" name="reportId" value={reportId} />
+                <input type="hidden" name="suggestionId" value={suggestion.id} />
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Outcome
+                  </span>
+                  <select
+                    name="feedbackDisposition"
+                    defaultValue={suggestion.feedbackDisposition || "accepted"}
+                    className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                  >
+                    <option value="accepted">Accepted</option>
+                    <option value="accepted_with_edits">Accepted with edits</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Feedback note
+                  </span>
+                  <textarea
+                    name="feedbackNote"
+                    defaultValue={suggestion.feedbackNote || ""}
+                    className="min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                    placeholder="What was right, what needed editing, or why the suggestion missed."
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={isReviewPending}
+                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
                 >
-                  <option value="accepted">Accepted</option>
-                  <option value="accepted_with_edits">Accepted with edits</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Feedback note
-                </span>
-                <textarea
-                  name="feedbackNote"
-                  defaultValue={suggestion.feedbackNote || ""}
-                  className="min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-                  placeholder="What was right, what needed editing, or why the suggestion missed."
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={isReviewPending}
-                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-              >
-                {isReviewPending ? "Saving..." : "Save feedback"}
-              </button>
-              {suggestion.feedbackCreatedAt ? (
-                <p className="text-xs text-slate-500">
-                  Last reviewed {new Date(suggestion.feedbackCreatedAt).toLocaleString()}
-                </p>
-              ) : null}
-            </form>
+                  {isReviewPending ? "Saving..." : "Save feedback"}
+                </button>
+                {suggestion.feedbackCreatedAt ? (
+                  <p className="text-xs text-slate-500">
+                    Last reviewed {new Date(suggestion.feedbackCreatedAt).toLocaleString()}
+                  </p>
+                ) : null}
+              </form>
+            ) : (
+              <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-600">
+                Feedback capture is disabled in the hosted demo so the live AI result stays the focus.
+              </div>
+            )}
           </section>
 
           <div>
