@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ISSUE_STATUSES, type IssueStatus } from "@/lib/issue-types";
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
+import { getUploadsDir } from "@/lib/data-paths";
 import { resolveReportLocationIntelligence } from "@/lib/report-location-intelligence";
 import {
   addAttachment,
@@ -65,7 +66,7 @@ export type ReviewAiSuggestionState = {
   suggestion: GenerateAiSuggestionState["suggestion"];
 };
 
-const UPLOAD_DIR = path.join(process.cwd(), ".data", "uploads");
+const UPLOAD_DIR = getUploadsDir();
 const MAX_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
 const MAX_DESCRIPTION_LENGTH = 4000;
 const MAX_ADDRESS_LENGTH = 250;

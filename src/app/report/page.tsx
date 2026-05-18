@@ -28,8 +28,8 @@ export default function ReportPage() {
           <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="font-semibold text-slate-900">Before you submit</h2>
             <p className="mt-3">
-              If there is an immediate danger, call emergency services or the
-              appropriate urgent utility line. This form is for routing and
+              If there is an immediate danger, call emergency services (911) or
+              the appropriate urgent utility line. This form is for routing and
               follow-up by District 7 staff.
             </p>
           </div>

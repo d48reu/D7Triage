@@ -1,16 +1,16 @@
 import Database from "better-sqlite3";
 import crypto from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
 import { ISSUE_CATEGORIES, type IssueStatus } from "@/lib/issue-types";
 import {
   NOTIFICATION_TEMPLATE_DEFINITIONS,
   type NotificationTemplateKey,
 } from "@/lib/notification-template-definitions";
 import { ROUTING_RULES } from "@/lib/routing-matrix";
+import { getDataDir, getDbPath } from "@/lib/data-paths";
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const DB_PATH = path.join(DATA_DIR, "issues.db");
+const DATA_DIR = getDataDir();
+const DB_PATH = getDbPath();
 
 let db: Database.Database | null = null;
 

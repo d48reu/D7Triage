@@ -1,0 +1,60 @@
+services:
+  - type: web
+    name: district-7-issue-reporter
+    runtime: node
+    plan: starter
+    rootDir: .
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    disk:
+      name: district-7-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 20.19.0
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: STAFF_PASSWORD
+        sync: false
+      - key: STAFF_SESSION_SECRET
+        generateValue: true
+      - key: STAFF_SESSION_MAX_AGE_HOURS
+        value: 12
+      - key: GEOCODING_PROVIDER
+        value: census
+      - key: GEOCODING_CENSUS_BENCHMARK
+        value: Public_AR_Current
+      - key: GEOCODING_TIMEOUT_MS
+        value: 4000
+      - key: LOCATION_LOOKUP_TIMEOUT_MS
+        value: 5000
+      - key: REPORT_MAX_PHOTOS
+        value: 4
+      - key: REPORT_RATE_LIMIT_ENABLED
+        value: true
+      - key: REPORT_RATE_LIMIT_WINDOW_MINUTES
+        value: 60
+      - key: REPORT_RATE_LIMIT_MAX_PER_IP
+        value: 12
+      - key: REPORT_RATE_LIMIT_MAX_PER_EMAIL
+        value: 4
+      - key: RATE_LIMIT_SECRET
+        generateValue: true
+      - key: AI_ROUTING_ENABLED
+        value: false
+      - key: OPENAI_ROUTING_MODEL
+        value: gpt-5-nano
+      - key: AI_ROUTING_MAX_GENERATIONS_PER_REPORT_PER_DAY
+        value: 2
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ISSUE_REPORT_FROM_EMAIL
+        sync: false

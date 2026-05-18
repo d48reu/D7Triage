@@ -34,6 +34,8 @@ Current capabilities:
 - optional `OpenAI` integration for staff-only routing suggestions
 - optional `Resend` integration reserved for later
 
+The app can also be deployed to **Render** with a persistent disk for a stable shareable demo environment.
+
 This repo still contains some future-facing dependencies and docs references from the earlier Supabase plan, but the **actual running app is local-first today**.
 
 ## Local Development
@@ -54,6 +56,10 @@ Most local work only needs:
 - `STAFF_PASSWORD`
 - optional `STAFF_SESSION_SECRET`
 - optional AI variables if you want routing suggestions enabled
+
+For Render or other hosted environments that need persistent local storage, you can also set:
+
+- `DATA_DIR`
 
 ### Geocoding
 
@@ -98,3 +104,4 @@ Staff auth is still local password-based and is suitable for development or tigh
 - [Product brief](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/product-brief.md>)
 - [Implementation plan](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/implementation-plan.md>)
 - [Pilot readiness checklist](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/pilot-readiness.md>)
+- [Render deployment guide](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/render-deployment.md>)

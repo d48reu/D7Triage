@@ -12,11 +12,48 @@ const initialState: SubmitIssueReportState = {
   message: "Reports are saved locally and reviewed by staff.",
 };
 
+const EXAMPLE_REPORTS = [
+  {
+    id: "sidewalk",
+    title: "Broken sidewalk near a home",
+    category: "Sidewalks",
+    addressText: "3636 SW 16th Terrace, Miami, FL 33145",
+    description:
+      "The sidewalk in front of this address is cracked and lifted in several places, creating a tripping hazard for people walking by.",
+  },
+  {
+    id: "roads",
+    title: "Pothole on a neighborhood street",
+    category: "Roads and potholes",
+    addressText: "655 NW 37th Avenue, Miami, FL 33125",
+    description:
+      "There is a large pothole near the travel lane and drivers are swerving around it. It has gotten noticeably worse over the last week.",
+  },
+  {
+    id: "parks",
+    title: "Park lighting issue",
+    category: "Parks",
+    addressText: "Alice Wainwright Park, Miami, FL 33133",
+    description:
+      "Several lights along the walking path are out, making the park much darker after sunset and harder to use safely.",
+  },
+  {
+    id: "outside",
+    title: "Outside-district example",
+    category: "Roads and potholes",
+    addressText: "100 Washington Ave, Miami Beach, FL 33139",
+    description:
+      "There is a pothole near the curb lane that residents have been avoiding. This example helps show how the app handles reports outside District 7.",
+  },
+] as const;
+
 export function ReportForm() {
   const [state, formAction, isPending] = useActionState(
     submitIssueReportAction,
     initialState,
   );
+  const [category, setCategory] = useState<string>("Other / unsure");
+  const [description, setDescription] = useState("");
   const [addressText, setAddressText] = useState("");
   const [locationState, setLocationState] = useState<{
     latitude: string;
@@ -40,6 +77,28 @@ export function ReportForm() {
     status: "idle",
     message: "Optional. Preview whether the location appears to be inside District 7.",
   });
+
+  function resetJurisdictionPreview() {
+    setJurisdictionPreview({
+      status: "idle",
+      message: "Optional. Preview whether the location appears to be inside District 7.",
+    });
+  }
+
+  function applyExample(exampleId: (typeof EXAMPLE_REPORTS)[number]["id"]) {
+    const example = EXAMPLE_REPORTS.find((item) => item.id === exampleId);
+    if (!example) return;
+
+    setCategory(example.category);
+    setDescription(example.description);
+    setAddressText(example.addressText);
+    setLocationState({
+      latitude: "",
+      longitude: "",
+      message: "Optional. Helps future map and boundary checks if available.",
+    });
+    resetJurisdictionPreview();
+  }
 
   function captureLocation() {
     if (!navigator.geolocation) {
@@ -158,6 +217,39 @@ export function ReportForm() {
       </div>
 
       <div className="space-y-5 p-5">
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-slate-800">
+                Try an example
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Use a curated example to see what a clear report looks like, then edit it as needed.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {EXAMPLE_REPORTS.map((example) => (
+              <button
+                key={example.id}
+                type="button"
+                onClick={() => applyExample(example.id)}
+                className="rounded-md border border-slate-200 bg-white px-4 py-3 text-left hover:border-sky-300 hover:bg-sky-50"
+              >
+                <div className="text-sm font-semibold text-slate-900">
+                  {example.title}
+                </div>
+                <div className="mt-1 text-xs font-medium text-sky-700">
+                  {example.category}
+                </div>
+                <div className="mt-2 text-xs text-slate-500">
+                  {example.addressText}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-slate-800">
             Category
@@ -165,7 +257,8 @@ export function ReportForm() {
           <select
             name="category"
             required
-            defaultValue="Other / unsure"
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
             className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
           >
             {ISSUE_CATEGORIES.map((category) => (
@@ -185,6 +278,8 @@ export function ReportForm() {
             required
             minLength={12}
             maxLength={4000}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
             className="min-h-36 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
             placeholder="Example: There is a large pothole near the school entrance and cars are swerving around it."
           />
@@ -201,11 +296,7 @@ export function ReportForm() {
             value={addressText}
             onChange={(event) => {
               setAddressText(event.target.value);
-              setJurisdictionPreview({
-                status: "idle",
-                message:
-                  "Optional. Preview whether the location appears to be inside District 7.",
-              });
+              resetJurisdictionPreview();
             }}
             className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
             placeholder="Street address, intersection, park, or landmark"
