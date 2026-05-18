@@ -11,6 +11,7 @@ import {
 } from "@/lib/jurisdiction";
 import {
   findPotentialDuplicates,
+  formatStaffMemberLabel,
   getJurisdictionConfig,
   getLatestAiSuggestion,
   getManagedRoutingRule,
@@ -264,9 +265,7 @@ export default async function StaffReportPage({
               label="Assigned staff"
               value={
                 assignedStaffMember
-                  ? assignedStaffMember.roleLabel
-                    ? `${assignedStaffMember.name} (${assignedStaffMember.roleLabel})`
-                    : assignedStaffMember.name
+                  ? formatStaffMemberLabel(assignedStaffMember)
                   : "Unassigned"
               }
             />
@@ -526,9 +525,7 @@ export default async function StaffReportPage({
                   <option value="">Unassigned</option>
                   {staffMembers.map((staffMember) => (
                     <option key={staffMember.id} value={staffMember.id}>
-                      {staffMember.roleLabel
-                        ? `${staffMember.name} (${staffMember.roleLabel})`
-                        : staffMember.name}
+                      {formatStaffMemberLabel(staffMember)}
                     </option>
                   ))}
                 </select>

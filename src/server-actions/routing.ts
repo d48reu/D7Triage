@@ -44,7 +44,8 @@ export async function saveStaffMemberAction(formData: FormData) {
     id: String(formData.get("staffMemberId") ?? "").trim() || undefined,
     name,
     email: String(formData.get("email") ?? "").trim(),
-    roleLabel: String(formData.get("roleLabel") ?? "").trim(),
+    title: String(formData.get("title") ?? "").trim(),
+    focusAreas: String(formData.get("focusAreas") ?? "").trim(),
     isActive: formData.get("isActive") === "on",
   });
 

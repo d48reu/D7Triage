@@ -201,7 +201,12 @@ export default async function RoutingGuidePage() {
           <form action={saveStaffMemberAction} className="mt-5 grid gap-3 border-b border-slate-200 pb-5 md:grid-cols-2 xl:grid-cols-4">
             <Field name="name" label="Staff name" required />
             <Field name="email" label="Email" type="email" />
-            <Field name="roleLabel" label="Role" />
+            <Field name="title" label="Title" />
+            <TextArea
+              name="focusAreas"
+              label="Focus areas"
+              helperText="Comma-separated or sentence-style portfolio notes."
+            />
             <label className="flex items-center gap-2 pt-7 text-sm text-slate-700">
               <input name="isActive" type="checkbox" defaultChecked />
               Active
@@ -233,9 +238,15 @@ export default async function RoutingGuidePage() {
                     defaultValue={staffMember.email ?? ""}
                   />
                   <Field
-                    name="roleLabel"
-                    label="Role"
-                    defaultValue={staffMember.roleLabel ?? ""}
+                    name="title"
+                    label="Title"
+                    defaultValue={staffMember.title ?? ""}
+                  />
+                  <TextArea
+                    name="focusAreas"
+                    label="Focus areas"
+                    defaultValue={staffMember.focusAreas ?? ""}
+                    helperText="Comma-separated or sentence-style portfolio notes."
                   />
                   <label className="flex items-center gap-2 pt-7 text-sm text-slate-700">
                     <input

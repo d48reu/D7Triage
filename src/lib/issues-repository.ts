@@ -115,7 +115,8 @@ export type StaffMember = {
   id: string;
   name: string;
   email: string | null;
-  roleLabel: string | null;
+  title: string | null;
+  focusAreas: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -281,6 +282,8 @@ type StaffMemberRow = {
   id: string;
   name: string;
   email: string | null;
+  title: string | null;
+  focus_areas: string | null;
   role_label: string | null;
   is_active: number;
   created_at: string;
@@ -471,6 +474,38 @@ function parseKeywordList(value: string | null | undefined) {
     .filter(Boolean);
 }
 
+function splitLegacyStaffRoleLabel(value: string | null | undefined) {
+  const raw = (value ?? "").trim();
+  if (!raw) {
+    return { title: null, focusAreas: null };
+  }
+
+  const parts = raw.split("|").map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    return {
+      title: parts[0] || null,
+      focusAreas: parts.slice(1).join(" | ") || null,
+    };
+  }
+
+  return {
+    title: raw,
+    focusAreas: null,
+  };
+}
+
+export function formatStaffMemberLabel(staffMember: Pick<StaffMember, "name" | "title" | "focusAreas">) {
+  if (staffMember.title && staffMember.focusAreas) {
+    return `${staffMember.name} (${staffMember.title}; ${staffMember.focusAreas})`;
+  }
+
+  if (staffMember.title) {
+    return `${staffMember.name} (${staffMember.title})`;
+  }
+
+  return staffMember.name;
+}
+
 function makeId() {
   return crypto.randomUUID();
 }
@@ -535,12 +570,40 @@ function ensureSchemaMigrations(database: Database.Database) {
       id text primary key,
       name text not null unique,
       email text,
+      title text,
+      focus_areas text,
       role_label text,
       is_active integer not null default 1,
       created_at text not null,
       updated_at text not null
     );
     create index if not exists idx_staff_members_name on staff_members(name);
+  `);
+
+  if (!hasColumn(database, "staff_members", "title")) {
+    database.exec("alter table staff_members add column title text;");
+  }
+
+  if (!hasColumn(database, "staff_members", "focus_areas")) {
+    database.exec("alter table staff_members add column focus_areas text;");
+  }
+
+  database.exec(`
+    update staff_members
+    set
+      title = trim(case
+        when title is not null and trim(title) <> '' then title
+        when role_label is not null and instr(role_label, '|') > 0 then substr(role_label, 1, instr(role_label, '|') - 1)
+        else role_label
+      end),
+      focus_areas = trim(case
+        when focus_areas is not null and trim(focus_areas) <> '' then focus_areas
+        when role_label is not null and instr(role_label, '|') > 0 then substr(role_label, instr(role_label, '|') + 1)
+        else null
+      end)
+    where
+      (title is null or trim(title) = '')
+      or (focus_areas is null and role_label is not null and instr(role_label, '|') > 0);
   `);
 
   if (!hasColumn(database, "issue_reports", "assigned_staff_id")) {
@@ -992,6 +1055,8 @@ function getDb() {
       id text primary key,
       name text not null unique,
       email text,
+      title text,
+      focus_areas text,
       role_label text,
       is_active integer not null default 1,
       created_at text not null,
@@ -1222,11 +1287,13 @@ function mapStaffNote(row: StaffNoteRow): StaffNote {
 }
 
 function mapStaffMember(row: StaffMemberRow): StaffMember {
+  const legacyParts = splitLegacyStaffRoleLabel(row.role_label);
   return {
     id: row.id,
     name: row.name,
     email: row.email,
-    roleLabel: row.role_label,
+    title: row.title ?? legacyParts.title,
+    focusAreas: row.focus_areas ?? legacyParts.focusAreas,
     isActive: row.is_active === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1774,23 +1841,29 @@ export function upsertStaffMember(input: {
   id?: string;
   name: string;
   email?: string;
-  roleLabel?: string;
+  title?: string;
+  focusAreas?: string;
   isActive?: boolean;
 }) {
   const database = getDb();
   const now = nowIso();
+  const title = input.title?.trim() || null;
+  const focusAreas = input.focusAreas?.trim() || null;
+  const roleLabel = [title, focusAreas].filter(Boolean).join(" | ") || null;
 
   if (input.id) {
     database
       .prepare(
         `update staff_members
-         set name = ?, email = ?, role_label = ?, is_active = ?, updated_at = ?
+         set name = ?, email = ?, title = ?, focus_areas = ?, role_label = ?, is_active = ?, updated_at = ?
          where id = ?`,
       )
       .run(
         input.name.trim(),
         input.email?.trim() || null,
-        input.roleLabel?.trim() || null,
+        title,
+        focusAreas,
+        roleLabel,
         input.isActive === false ? 0 : 1,
         now,
         input.id,
@@ -1803,14 +1876,16 @@ export function upsertStaffMember(input: {
   database
     .prepare(
       `insert into staff_members (
-        id, name, email, role_label, is_active, created_at, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?)`,
+        id, name, email, title, focus_areas, role_label, is_active, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
       input.name.trim(),
       input.email?.trim() || null,
-      input.roleLabel?.trim() || null,
+      title,
+      focusAreas,
+      roleLabel,
       input.isActive === false ? 0 : 1,
       now,
       now,
