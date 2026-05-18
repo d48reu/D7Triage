@@ -5,7 +5,7 @@ import { loginStaffAction, type LoginState } from "@/server-actions/auth";
 
 const initialState: LoginState = {
   status: "idle",
-  message: "Use STAFF_PASSWORD from .env.local. Local default is district7-local.",
+  message: "Use STAFF_PASSWORD from .env.local. The local fallback password is only meant for development.",
 };
 
 export function StaffLoginForm() {

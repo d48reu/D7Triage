@@ -1,21 +1,38 @@
 # District 7 Issue Reporter
 
-Constituent-facing issue reporting and staff-assisted routing tool for District 7.
+Local-first constituent issue intake and staff triage tool for **Miami-Dade County Commission District 7**.
 
-This is a separate project from the District 7 knowledge base app. It may reuse proven patterns from that project, including Next.js, Supabase, OpenAI-assisted workflows, staff authentication, and management dashboards.
+## What It Does
 
-## Product Goal
+This app helps residents submit issues without needing to know which agency owns the problem, and gives staff a structured place to triage, route, follow up, and review trends.
 
-Make it easy for constituents to report local issues even when they do not know which agency owns the problem. The first release is a staff-assisted MVP: residents submit issues through a mobile web form, AI suggests classification and routing, and staff approve every response or referral.
+Current capabilities:
 
-## Initial Stack
+- public intake form at `/report`
+- optional photo upload
+- optional device geolocation capture
+- automatic server-side address geocoding through the U.S. Census geocoder when coordinates are missing
+- private resident tracking page at `/report/[trackingToken]`
+- local staff login
+- staff inbox, case detail, notes, status updates, and referrals
+- duplicate review workflow
+- editable agencies, routing rules, and jurisdiction heuristics
+- Miami-Dade District 7 boundary-aware hinting when coordinates are available
+- AI-assisted routing suggestions with guardrails and staff feedback
+- analytics, saved views, and CSV exports
+- notification preview center with editable templates
 
-- Next.js App Router
-- TypeScript
-- Tailwind CSS
-- Supabase Auth, Postgres, and Storage
-- OpenAI for staff-reviewed issue classification and draft responses
-- Resend for email confirmations and status updates
+## Current Architecture
+
+- `Next.js` App Router
+- `TypeScript`
+- `Tailwind CSS`
+- `better-sqlite3` for local persistence in `.data/issues.db`
+- local file storage in `.data/uploads`
+- optional `OpenAI` integration for staff-only routing suggestions
+- optional `Resend` integration reserved for later
+
+This repo still contains some future-facing dependencies and docs references from the earlier Supabase plan, but the **actual running app is local-first today**.
 
 ## Local Development
 
@@ -24,19 +41,54 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Environment Setup
 
-Copy `.env.example` to `.env.local` and fill in project keys when available.
+Copy [`.env.example`](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/.env.example>) to `.env.local`.
 
-## Current Routes
+Most local work only needs:
 
-- `/` project landing screen
-- `/report` constituent intake placeholder
-- `/staff` staff dashboard placeholder
+- `STAFF_PASSWORD`
+- optional `STAFF_SESSION_SECRET`
+- optional AI variables if you want routing suggestions enabled
+
+### Geocoding
+
+Automatic address geocoding uses the official U.S. Census geocoder from the server side when:
+
+- the report has a typed address, and
+- no device coordinates were captured
+
+That keeps the boundary and jurisdiction hints useful even when residents skip “Use My Location.”
+
+### Local Hardening Controls
+
+The current prototype includes:
+
+- configurable report rate limiting by IP and email
+- configurable photo count limits
+- file type and file size validation
+- hidden honeypot field on the intake form
+- dedicated staff session secret support
+- content-type hardening on attachment responses
+
+## Important Local Paths
+
+- Database: [`.data/issues.db`](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/.data/issues.db>)
+- Uploads: [`.data/uploads`](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/.data/uploads>)
+- Public intake: `/report`
+- Staff inbox: `/staff`
+- Routing admin: `/staff/routing`
+- Analytics: `/staff/analytics`
+- Notifications: `/staff/notifications`
+
+## Current Auth
+
+Staff auth is still local password-based and is suitable for development or tightly controlled internal testing only. Before any broader pilot, plan to replace it with a real identity system.
 
 ## Docs
 
-- `docs/product-brief.md`
-- `docs/implementation-plan.md`
+- [Product brief](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/product-brief.md>)
+- [Implementation plan](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/implementation-plan.md>)
+- [Pilot readiness checklist](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/pilot-readiness.md>)

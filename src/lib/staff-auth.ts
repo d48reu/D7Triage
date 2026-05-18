@@ -3,15 +3,58 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 const STAFF_COOKIE_NAME = "district7_staff_session";
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
+const DEFAULT_STAFF_PASSWORD = "district7-local";
 
 function getStaffPassword() {
-  return process.env.STAFF_PASSWORD || "district7-local";
+  const configuredPassword = process.env.STAFF_PASSWORD?.trim();
+  if (configuredPassword) {
+    return configuredPassword;
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return DEFAULT_STAFF_PASSWORD;
+  }
+
+  throw new Error("STAFF_PASSWORD must be configured in production.");
+}
+
+function getSessionSecret() {
+  const configuredSecret = process.env.STAFF_SESSION_SECRET?.trim();
+  if (configuredSecret) {
+    return configuredSecret;
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return getStaffPassword();
+  }
+
+  throw new Error("STAFF_SESSION_SECRET must be configured in production.");
+}
+
+function getSessionMaxAgeSeconds() {
+  const configuredHours = Number(process.env.STAFF_SESSION_MAX_AGE_HOURS);
+  const hours =
+    Number.isFinite(configuredHours) && configuredHours > 0
+      ? configuredHours
+      : 12;
+  return Math.floor(hours * 60 * 60);
+}
+
+export function getStaffAuthConfiguration() {
+  const configuredPassword = process.env.STAFF_PASSWORD?.trim();
+  const configuredSecret = process.env.STAFF_SESSION_SECRET?.trim();
+
+  return {
+    hasCustomPassword: Boolean(configuredPassword),
+    usingDefaultPassword: !configuredPassword,
+    usingDedicatedSessionSecret: Boolean(configuredSecret),
+    sessionMaxAgeHours: getSessionMaxAgeSeconds() / 3600,
+  };
 }
 
 function sign(value: string) {
   return crypto
-    .createHmac("sha256", getStaffPassword())
+    .createHmac("sha256", getSessionSecret())
     .update(value)
     .digest("base64url");
 }
@@ -40,7 +83,7 @@ function isValidSession(value?: string) {
   }
 
   const issuedAt = Number(parts[1]);
-  return Date.now() - issuedAt <= SESSION_MAX_AGE_SECONDS * 1000;
+  return Date.now() - issuedAt <= getSessionMaxAgeSeconds() * 1000;
 }
 
 export async function hasStaffSession() {
@@ -56,12 +99,13 @@ export async function requireStaffSession() {
 
 export async function createStaffSession() {
   const cookieStore = await cookies();
+  const maxAge = getSessionMaxAgeSeconds();
   cookieStore.set(STAFF_COOKIE_NAME, createSessionValue(), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
+    maxAge,
   });
 }
 

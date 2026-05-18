@@ -202,6 +202,18 @@ export default async function StaffReportPage({
                   : "Not captured"
               }
             />
+            <Detail
+              label="Location source"
+              value={formatLocationSource(report.locationSource)}
+            />
+            <Detail
+              label="Geocoding"
+              value={formatGeocodingStatus(report.geocodingStatus)}
+            />
+            <Detail
+              label="Matched address"
+              value={report.geocodedAddress || "Not available"}
+            />
             <Detail label="Email" value={report.residentEmail} />
             <Detail label="Name" value={report.residentName || "Not provided"} />
             <Detail label="Phone" value={report.residentPhone || "Not provided"} />
@@ -873,4 +885,30 @@ function describeNotificationTemplateVersion(
   }
 
   return `${currentTemplate.label}: current template changed after this stub was logged.`;
+}
+
+function formatLocationSource(value: "device" | "census_geocoder" | "none") {
+  switch (value) {
+    case "device":
+      return "Device location";
+    case "census_geocoder":
+      return "Census geocoder";
+    default:
+      return "Not captured";
+  }
+}
+
+function formatGeocodingStatus(
+  value: "captured" | "matched" | "failed" | "not_attempted",
+) {
+  switch (value) {
+    case "captured":
+      return "Coordinates captured from device";
+    case "matched":
+      return "Address matched automatically";
+    case "failed":
+      return "Address could not be matched";
+    default:
+      return "Not attempted";
+  }
 }

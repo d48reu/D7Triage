@@ -98,6 +98,7 @@ export function ReportForm() {
             name="description"
             required
             minLength={12}
+            maxLength={4000}
             className="min-h-36 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
             placeholder="Example: There is a large pothole near the school entrance and cars are swerving around it."
           />
@@ -110,12 +111,15 @@ export function ReportForm() {
           <input
             name="addressText"
             required
+            maxLength={250}
             className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
             placeholder="Street address, intersection, park, or landmark"
           />
           <p className="mt-2 text-xs text-slate-500">
             Cross streets, school names, park names, route numbers, and nearby
-            landmarks help staff determine jurisdiction faster.
+            landmarks help staff determine jurisdiction faster. If device
+            location is unavailable, the app will try to place the report from
+            the typed address.
           </p>
         </label>
 
@@ -126,7 +130,9 @@ export function ReportForm() {
                 Optional device location
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                If you allow it, we’ll attach coordinates for map-based boundary checks later.
+                If you allow it, we’ll attach coordinates for map-based
+                boundary checks. Otherwise, we’ll try to geocode the typed
+                address on the server.
               </p>
             </div>
             <button
@@ -159,7 +165,7 @@ export function ReportForm() {
             className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
           />
           <p className="mt-2 text-xs text-slate-500">
-            Optional. JPEG, PNG, WebP, or GIF. Max 8 MB each.
+            Optional. JPEG, PNG, WebP, or GIF. Up to 4 files, 8 MB each.
           </p>
         </label>
       </div>
@@ -170,7 +176,12 @@ export function ReportForm() {
 
       <div className="space-y-5 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field name="residentName" label="Name" placeholder="Optional" />
+          <Field
+            name="residentName"
+            label="Name"
+            placeholder="Optional"
+            maxLength={120}
+          />
           <Field
             name="residentEmail"
             label="Email"
@@ -181,13 +192,29 @@ export function ReportForm() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field name="residentPhone" label="Phone" placeholder="Optional" />
+          <Field
+            name="residentPhone"
+            label="Phone"
+            placeholder="Optional"
+            maxLength={40}
+          />
           <Field
             name="preferredLanguage"
             label="Preferred language"
             defaultValue="English"
+            maxLength={60}
           />
         </div>
+
+        <label className="hidden" aria-hidden="true">
+          <span>Company</span>
+          <input
+            name="company"
+            tabIndex={-1}
+            autoComplete="off"
+            className="hidden"
+          />
+        </label>
 
         <label className="flex gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
           <input
@@ -243,6 +270,7 @@ function Field({
   type = "text",
   required = false,
   defaultValue,
+  maxLength,
 }: {
   name: string;
   label: string;
@@ -250,6 +278,7 @@ function Field({
   type?: string;
   required?: boolean;
   defaultValue?: string;
+  maxLength?: number;
 }) {
   return (
     <label className="block">
@@ -261,6 +290,7 @@ function Field({
         type={type}
         required={required}
         defaultValue={defaultValue}
+        maxLength={maxLength}
         className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
         placeholder={placeholder}
       />

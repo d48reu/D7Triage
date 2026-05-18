@@ -2,58 +2,47 @@
 
 ## Summary
 
-The District 7 Issue Reporter is a public-facing intake tool and staff routing dashboard for constituent service issues. The product should help residents report problems without needing to know whether the responsible party is the city, county, state, a utility, a school district, a transit agency, private property, or another entity.
+The District 7 Issue Reporter is a constituent-facing intake tool and staff triage workspace for **Miami-Dade County Commission District 7**. It is designed to help residents report problems without needing to know which agency owns the issue, while giving staff a structured way to route, follow up, and learn from recurring patterns.
 
 ## Primary Users
 
-- Constituents reporting neighborhood issues
-- Constituent services staff triaging incoming reports
-- District office leadership reviewing issue trends and unresolved cases
+- residents reporting local issues
+- District 7 staff triaging and routing reports
+- office leadership reviewing trends, follow-up load, and recurring hotspots
 
 ## Core Problems
 
-- Residents often do not know where to route issues.
-- 311 can feel like a black box with weak follow-up.
-- Staff spend time reconstructing context, identifying ownership, and drafting similar responses.
-- Recurring issues are hard to identify across individual requests.
+- residents often do not know whether a problem belongs to the county, state, a city, a utility, transit, parks, schools, or private property
+- generic 311-style submission can feel opaque and weak on follow-up
+- staff lose time reconstructing context and manually repeating routing work
+- recurring issues are hard to see across multiple reports
 
-## MVP Scope
+## What The Prototype Already Covers
 
-- Public mobile-first report form
-- Address/location capture
-- Optional photo upload
-- Resident email confirmation
-- Private tracking link
-- Staff-only inbox and report detail views
-- AI-suggested category, urgency, responsible party, and draft response
-- Manual staff-approved referral tracking
-- Resident-visible status updates by email
+- mobile-first intake form
+- typed location plus optional device coordinates
+- automatic address geocoding when coordinates are missing
+- private resident tracking page
+- staff inbox and case detail views
+- editable agencies and routing rules
+- duplicate review workflow
+- referral outcome tracking
+- jurisdiction hints plus Miami-Dade District 7 boundary support
+- AI-assisted routing suggestions with manual review
+- analytics, exports, and notification previews
 
-## Out Of Scope For MVP
+## MVP Guardrails
 
-- Direct 311/Open311 submission
-- SMS updates
-- Public issue map
-- Resident accounts
-- Fully automated routing or closure
-- CRM/casework system integration
+- staff remain the authority for routing, referral, closure, and resident-facing communication
+- AI is advisory only
+- newsletter consent is separate from case-update consent
+- live email remains deferred until the office is ready for domain and IT decisions
+- the current auth and persistence approach are prototype-grade, not production-grade
 
-## Pilot Categories
+## Success Signals For The Next Phase
 
-- Roads and potholes
-- Sidewalks
-- Drainage and flooding
-- Solid waste and illegal dumping
-- Streetlights and signage
-- Parks
-- Trees
-- Traffic safety
-- Other / unsure
-
-## Success Metrics
-
-- Resident can submit a report in under two minutes.
-- Staff can review and assign likely routing in under one minute.
-- At least 80 percent of AI category suggestions are accepted or lightly edited by staff during pilot.
-- Every submitted report receives a confirmation email and a visible status.
-- Follow-up due reports are visible to staff before they become stale.
+- residents can submit a usable report in under two minutes
+- staff can identify a likely owner and next step within one review pass
+- duplicate issues are linked instead of handled as separate cases
+- jurisdiction clues reduce avoidable routing mistakes
+- the office can export newsletter-ready contacts only from explicit opt-ins

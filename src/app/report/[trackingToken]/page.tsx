@@ -58,6 +58,16 @@ export default async function TrackingPage({
             <Detail label="Category" value={report.category} />
             <Detail label="Location" value={report.addressText} />
             <Detail
+              label="Location review"
+              value={
+                report.geocodingStatus === "matched"
+                  ? "Mapped automatically from the typed address"
+                  : report.locationSource === "device"
+                    ? "Includes device coordinates"
+                    : "Using the typed location details"
+              }
+            />
+            <Detail
               label="Submitted"
               value={new Date(report.createdAt).toLocaleString()}
             />

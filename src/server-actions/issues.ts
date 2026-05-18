@@ -3,7 +3,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { geocodeAddress, isGeocodingEnabled } from "@/lib/geocoding";
 import { ISSUE_STATUSES, type IssueStatus } from "@/lib/issue-types";
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
 import {
@@ -11,6 +13,7 @@ import {
   addReferral,
   addStaffNote,
   createIssueReport,
+  enforceReportSubmissionRateLimit,
   getAgencyById,
   getAiSuggestionById,
   getIssueReportById,
@@ -62,12 +65,46 @@ export type ReviewAiSuggestionState = {
 
 const UPLOAD_DIR = path.join(process.cwd(), ".data", "uploads");
 const MAX_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
+const MAX_DESCRIPTION_LENGTH = 4000;
+const MAX_ADDRESS_LENGTH = 250;
+const MAX_NAME_LENGTH = 120;
+const MAX_PHONE_LENGTH = 40;
+const MAX_LANGUAGE_LENGTH = 60;
 const ALLOWED_PHOTO_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
 ]);
+const ALLOWED_PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+
+function parsePositiveIntegerEnv(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function isRateLimitingEnabled() {
+  const value = (process.env.REPORT_RATE_LIMIT_ENABLED || "true")
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "on"].includes(value);
+}
+
+function getMaxPhotoCount() {
+  return parsePositiveIntegerEnv(process.env.REPORT_MAX_PHOTOS, 4);
+}
+
+function getRateLimitWindowMinutes() {
+  return parsePositiveIntegerEnv(process.env.REPORT_RATE_LIMIT_WINDOW_MINUTES, 60);
+}
+
+function getRateLimitMaxPerIp() {
+  return parsePositiveIntegerEnv(process.env.REPORT_RATE_LIMIT_MAX_PER_IP, 12);
+}
+
+function getRateLimitMaxPerEmail() {
+  return parsePositiveIntegerEnv(process.env.REPORT_RATE_LIMIT_MAX_PER_EMAIL, 4);
+}
 
 function readRequiredText(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -81,11 +118,26 @@ function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "-");
 }
 
+function getFileExtension(fileName: string) {
+  const extension = path.extname(fileName || "").toLowerCase();
+  return extension || "";
+}
+
 function readOptionalNumber(formData: FormData, key: string) {
   const raw = String(formData.get(key) ?? "").trim();
   if (!raw) return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function getClientIpAddress() {
+  const headerStore = await headers();
+  const forwardedFor = headerStore.get("x-forwarded-for");
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0]?.trim() || null;
+  }
+
+  return headerStore.get("x-real-ip")?.trim() || null;
 }
 
 function serializeSuggestion(
@@ -145,10 +197,15 @@ export async function submitIssueReportAction(
   const addressText = String(formData.get("addressText") ?? "").trim();
   const residentEmail = String(formData.get("residentEmail") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
+  const residentName = String(formData.get("residentName") ?? "").trim();
+  const residentPhone = String(formData.get("residentPhone") ?? "").trim();
+  const preferredLanguage =
+    String(formData.get("preferredLanguage") ?? "").trim() || "English";
   const latitude = readOptionalNumber(formData, "latitude");
   const longitude = readOptionalNumber(formData, "longitude");
   const contactConsent = formData.get("contactConsent") === "on";
   const newsletterOptIn = formData.get("newsletterOptIn") === "on";
+  const honeypot = String(formData.get("company") ?? "").trim();
   const photos = formData
     .getAll("photos")
     .filter((value): value is File => value instanceof File && value.size > 0);
@@ -171,9 +228,60 @@ export async function submitIssueReportAction(
     };
   }
 
+  if (honeypot) {
+    return {
+      status: "error",
+      message: "Report could not be submitted.",
+    };
+  }
+
+  if (description.length > MAX_DESCRIPTION_LENGTH) {
+    return {
+      status: "error",
+      message: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (addressText.length > MAX_ADDRESS_LENGTH) {
+    return {
+      status: "error",
+      message: `Location or address must be ${MAX_ADDRESS_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (residentName.length > MAX_NAME_LENGTH) {
+    return {
+      status: "error",
+      message: `Name must be ${MAX_NAME_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (residentPhone.length > MAX_PHONE_LENGTH) {
+    return {
+      status: "error",
+      message: `Phone must be ${MAX_PHONE_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (preferredLanguage.length > MAX_LANGUAGE_LENGTH) {
+    return {
+      status: "error",
+      message: `Preferred language must be ${MAX_LANGUAGE_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (photos.length > getMaxPhotoCount()) {
+    return {
+      status: "error",
+      message: `You can attach up to ${getMaxPhotoCount()} photos per report.`,
+    };
+  }
+
   const invalidPhoto = photos.find(
     (photo) =>
-      !ALLOWED_PHOTO_TYPES.has(photo.type) || photo.size > MAX_PHOTO_SIZE_BYTES,
+      !ALLOWED_PHOTO_TYPES.has(photo.type) ||
+      !ALLOWED_PHOTO_EXTENSIONS.has(getFileExtension(photo.name)) ||
+      photo.size > MAX_PHOTO_SIZE_BYTES,
   );
 
   if (invalidPhoto) {
@@ -184,18 +292,70 @@ export async function submitIssueReportAction(
     };
   }
 
+  if (isRateLimitingEnabled()) {
+    const rateLimitResult = enforceReportSubmissionRateLimit({
+      ipAddress: await getClientIpAddress(),
+      residentEmail,
+      windowMinutes: getRateLimitWindowMinutes(),
+      maxPerIp: getRateLimitMaxPerIp(),
+      maxPerEmail: getRateLimitMaxPerEmail(),
+    });
+
+    if (!rateLimitResult.allowed) {
+      return {
+        status: "error",
+        message: rateLimitResult.message || "Report could not be submitted right now.",
+      };
+    }
+  }
+
+  let resolvedLatitude = latitude;
+  let resolvedLongitude = longitude;
+  let locationSource: "device" | "census_geocoder" | "none" =
+    latitude !== null && longitude !== null ? "device" : "none";
+  let geocodingStatus: "captured" | "matched" | "failed" | "not_attempted" =
+    latitude !== null && longitude !== null ? "captured" : "not_attempted";
+  let geocodedAddress: string | null = null;
+  let geocodingProvider: string | null = null;
+  let geocodedAt: string | null = null;
+
+  if (resolvedLatitude === null || resolvedLongitude === null) {
+    if (isGeocodingEnabled()) {
+      try {
+        const geocoded = await geocodeAddress(addressText);
+        if (geocoded) {
+          resolvedLatitude = geocoded.latitude;
+          resolvedLongitude = geocoded.longitude;
+          locationSource = "census_geocoder";
+          geocodingStatus = "matched";
+          geocodedAddress = geocoded.matchedAddress;
+          geocodingProvider = geocoded.provider;
+          geocodedAt = new Date().toISOString();
+        } else {
+          geocodingStatus = "failed";
+        }
+      } catch {
+        geocodingStatus = "failed";
+      }
+    }
+  }
+
   const report = createIssueReport({
     category,
     description,
     addressText,
-    latitude,
-    longitude,
+    latitude: resolvedLatitude,
+    longitude: resolvedLongitude,
+    locationSource,
+    geocodingStatus,
+    geocodedAddress,
+    geocodingProvider,
+    geocodedAt,
     residentEmail,
     contactConsent,
-    residentName: String(formData.get("residentName") ?? "").trim(),
-    residentPhone: String(formData.get("residentPhone") ?? "").trim(),
-    preferredLanguage:
-      String(formData.get("preferredLanguage") ?? "").trim() || "English",
+    residentName,
+    residentPhone,
+    preferredLanguage,
     newsletterOptIn,
   });
 

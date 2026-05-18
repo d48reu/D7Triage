@@ -1,45 +1,89 @@
 # District 7 Issue Reporter Implementation Plan
 
-## Phase 0: Discovery And Operating Model
+## Current State
 
-- Review recent constituent issue examples and finalize the pilot taxonomy.
-- Build the routing matrix with categories, owners, contacts, expected timelines, escalation paths, and resident-facing explanations.
-- Define emergency redirect language for life safety and urgent utility hazards.
+The app is now a **local-first internal prototype** for Miami-Dade County Commission District 7.
 
-## Phase 1: App Foundation
+Implemented today:
 
-- Maintain this as a separate Next.js app and Git repo.
-- Use Supabase for staff auth, Postgres, and file storage.
-- Use OpenAI for staff-reviewed classification, routing suggestions, summaries, and draft replies.
-- Use Resend for confirmation and status update email.
+- public issue intake
+- optional photos
+- optional device location capture
+- automatic server-side address geocoding via the U.S. Census geocoder
+- private tracking page
+- local staff auth
+- staff inbox and case detail views
+- referrals with outcome tracking
+- duplicate review workflow
+- editable agencies and routing rules
+- editable jurisdiction keywords and boundary GeoJSON
+- AI-assisted routing suggestions with cost guardrails
+- analytics, saved views, and CSV exports
+- notification previews, template editing, and review workflow
 
-## Phase 2: Core Case System
+## Phase 1: Local Prototype Foundation
 
-- Create tables for issue reports, attachments, status events, staff notes, agencies, routing rules, referrals, AI suggestions, and notification events.
-- Store resident-facing status separately from internal notes.
-- Track all staff status changes and referral actions in an auditable timeline.
+Completed:
 
-## Phase 3: Resident Intake
+- separate Next.js repo
+- SQLite persistence
+- local file uploads
+- local staff auth
+- public and staff route structure
 
-- Build `/report` as a mobile-first intake flow.
-- Capture description, location, optional photos, resident email, preferred language, and consent for updates.
-- Return a private tracking token and send a confirmation email.
+## Phase 2: Triage Operations
 
-## Phase 4: Staff Triage
+Completed:
 
-- Build `/staff` as the authenticated staff inbox.
-- Add report detail pages with photos, location, AI suggestions, notes, status history, referral actions, and draft responses.
-- Keep staff approval required for routing, resident messages, and closure.
+- staff inbox and case detail pages
+- status timeline
+- staff notes
+- referral logging
+- duplicate linking
+- editable routing guide
 
-## Phase 5: Pilot And Hardening
+## Phase 3: Routing Intelligence
 
-- Run a 4-8 week controlled pilot.
-- Measure time to first review, time to first response, AI suggestion acceptance, duplicate rate, overdue follow-ups, and resident satisfaction.
-- Add abuse protection, role-based permissions, audit logging, exports, and editable routing templates before broad launch.
+Completed:
 
-## Phase 6: Expansion
+- jurisdiction heuristics
+- official Miami-Dade District 7 boundary loaded into local config
+- AI routing suggestion flow
+- staff feedback loop for AI quality
 
-- Add structured referral emails.
-- Add 311/Open311 integration only after manual routing is validated.
-- Add SMS if email-only follow-up underperforms.
-- Add analytics for recurring hotspots and policy/budget insight.
+## Phase 4: Operations Visibility
+
+Completed:
+
+- analytics metrics
+- saved analytics views
+- date filters and trends
+- CSV exports
+- notification preview center
+
+## Phase 5: Pilot Hardening
+
+Now in progress:
+
+- stronger local auth configuration
+- intake rate limiting
+- upload count validation
+- attachment response hardening
+- docs refresh
+
+## Remaining Best Steps Before A Broader Pilot
+
+1. replace local staff auth with a real identity system
+2. decide whether SQLite remains sufficient or whether to move to shared/cloud persistence
+3. add a more explicit operational backup and retention plan
+4. tighten public copy and staff workflows with real District 7 usage
+5. add live email only when domain, IT, and sender approvals are ready
+
+## Deferred Until Later
+
+- live transactional email
+- newsletter sending workflow
+- 311/Open311 integration
+- SMS updates
+- public issue map
+- resident accounts

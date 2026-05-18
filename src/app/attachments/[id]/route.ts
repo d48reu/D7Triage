@@ -27,6 +27,7 @@ export async function GET(
         "Content-Type": attachment.mimeType || "application/octet-stream",
         "Content-Disposition": `inline; filename="${attachment.fileName}"`,
         "Cache-Control": "private, max-age=60",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch {

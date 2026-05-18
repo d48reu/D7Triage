@@ -23,6 +23,11 @@ export type IssueReport = {
   addressText: string;
   latitude: number | null;
   longitude: number | null;
+  locationSource: "device" | "census_geocoder" | "none";
+  geocodingStatus: "captured" | "matched" | "failed" | "not_attempted";
+  geocodedAddress: string | null;
+  geocodingProvider: string | null;
+  geocodedAt: string | null;
   residentName: string | null;
   residentEmail: string;
   residentPhone: string | null;
@@ -197,6 +202,11 @@ type IssueReportRow = {
   address_text: string;
   latitude: number | null;
   longitude: number | null;
+  location_source: "device" | "census_geocoder" | "none";
+  geocoding_status: "captured" | "matched" | "failed" | "not_attempted";
+  geocoded_address: string | null;
+  geocoding_provider: string | null;
+  geocoded_at: string | null;
   resident_name: string | null;
   resident_email: string;
   resident_phone: string | null;
@@ -376,6 +386,11 @@ export type CreateIssueReportInput = {
   addressText: string;
   latitude?: number | null;
   longitude?: number | null;
+  locationSource?: "device" | "census_geocoder" | "none";
+  geocodingStatus?: "captured" | "matched" | "failed" | "not_attempted";
+  geocodedAddress?: string | null;
+  geocodingProvider?: string | null;
+  geocodedAt?: string | null;
   residentName?: string;
   residentEmail: string;
   residentPhone?: string;
@@ -430,6 +445,26 @@ function ensureSchemaMigrations(database: Database.Database) {
 
   if (!hasColumn(database, "issue_reports", "longitude")) {
     database.exec("alter table issue_reports add column longitude real;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "location_source")) {
+    database.exec("alter table issue_reports add column location_source text not null default 'none';");
+  }
+
+  if (!hasColumn(database, "issue_reports", "geocoding_status")) {
+    database.exec("alter table issue_reports add column geocoding_status text not null default 'not_attempted';");
+  }
+
+  if (!hasColumn(database, "issue_reports", "geocoded_address")) {
+    database.exec("alter table issue_reports add column geocoded_address text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "geocoding_provider")) {
+    database.exec("alter table issue_reports add column geocoding_provider text;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "geocoded_at")) {
+    database.exec("alter table issue_reports add column geocoded_at text;");
   }
 
   if (!hasColumn(database, "issue_reports", "notification_review_status")) {
@@ -560,6 +595,17 @@ function ensureSchemaMigrations(database: Database.Database) {
   if (!hasColumn(database, "jurisdiction_settings", "district_boundary_geojson")) {
     database.exec("alter table jurisdiction_settings add column district_boundary_geojson text;");
   }
+
+  database.exec(`
+    create table if not exists submission_rate_limits (
+      id text primary key,
+      key_type text not null,
+      key_value text not null,
+      created_at text not null
+    );
+    create index if not exists idx_submission_rate_limits_lookup
+      on submission_rate_limits(key_type, key_value, created_at);
+  `);
 }
 
 function seedRoutingData(database: Database.Database) {
@@ -714,6 +760,11 @@ function getDb() {
       address_text text not null,
       latitude real,
       longitude real,
+      location_source text not null default 'none',
+      geocoding_status text not null default 'not_attempted',
+      geocoded_address text,
+      geocoding_provider text,
+      geocoded_at text,
       resident_name text,
       resident_email text not null,
       resident_phone text,
@@ -867,6 +918,13 @@ function getDb() {
       updated_at text not null
     );
 
+    create table if not exists submission_rate_limits (
+      id text primary key,
+      key_type text not null,
+      key_value text not null,
+      created_at text not null
+    );
+
     create index if not exists idx_issue_reports_status on issue_reports(status);
     create index if not exists idx_issue_reports_created_at on issue_reports(created_at);
     create index if not exists idx_issue_reports_duplicate_master on issue_reports(duplicate_of_report_id);
@@ -878,6 +936,8 @@ function getDb() {
     create index if not exists idx_routing_rules_category on routing_rules(category);
     create index if not exists idx_ai_suggestions_report on ai_suggestions(report_id);
     create index if not exists idx_analytics_views_name on analytics_views(name);
+    create index if not exists idx_submission_rate_limits_lookup
+      on submission_rate_limits(key_type, key_value, created_at);
   `);
 
   ensureSchemaMigrations(db);
@@ -898,6 +958,11 @@ function mapReport(row: IssueReportRow): IssueReport {
     addressText: row.address_text,
     latitude: row.latitude,
     longitude: row.longitude,
+    locationSource: row.location_source,
+    geocodingStatus: row.geocoding_status,
+    geocodedAddress: row.geocoded_address,
+    geocodingProvider: row.geocoding_provider,
+    geocodedAt: row.geocoded_at,
     residentName: row.resident_name,
     residentEmail: row.resident_email,
     residentPhone: row.resident_phone,
@@ -1101,14 +1166,16 @@ export function createIssueReport(input: CreateIssueReportInput) {
   const insertReport = database.prepare(`
     insert into issue_reports (
     id, public_tracking_token, status, category, description, address_text,
-      latitude, longitude, resident_name, resident_email, resident_phone, preferred_language,
+      latitude, longitude, location_source, geocoding_status, geocoded_address,
+      geocoding_provider, geocoded_at, resident_name, resident_email, resident_phone, preferred_language,
       contact_consent, newsletter_opt_in, newsletter_opt_in_at,
       notification_review_status, notification_review_note, notification_reviewed_at,
       duplicate_of_report_id, duplicate_review_decision, duplicate_reviewed_at,
       duplicate_review_note, created_at, updated_at
     ) values (
       @id, @publicTrackingToken, @status, @category, @description, @addressText,
-      @latitude, @longitude, @residentName, @residentEmail, @residentPhone, @preferredLanguage,
+      @latitude, @longitude, @locationSource, @geocodingStatus, @geocodedAddress,
+      @geocodingProvider, @geocodedAt, @residentName, @residentEmail, @residentPhone, @preferredLanguage,
       @contactConsent, @newsletterOptIn, @newsletterOptInAt, null, null, null,
       null, null, null, null, @createdAt, @updatedAt
     )
@@ -1132,6 +1199,11 @@ export function createIssueReport(input: CreateIssueReportInput) {
       addressText: input.addressText,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
+      locationSource: input.locationSource ?? "none",
+      geocodingStatus: input.geocodingStatus ?? "not_attempted",
+      geocodedAddress: input.geocodedAddress ?? null,
+      geocodingProvider: input.geocodingProvider ?? null,
+      geocodedAt: input.geocodedAt ?? null,
       residentName: input.residentName || null,
       residentEmail: input.residentEmail,
       residentPhone: input.residentPhone || null,
@@ -1164,6 +1236,94 @@ export function createIssueReport(input: CreateIssueReportInput) {
   })();
 
   return getIssueReportById(id);
+}
+
+function getRateLimitSecret() {
+  return (
+    process.env.RATE_LIMIT_SECRET?.trim() ||
+    process.env.STAFF_SESSION_SECRET?.trim() ||
+    process.env.STAFF_PASSWORD?.trim() ||
+    "district7-local"
+  );
+}
+
+function hashRateLimitValue(value: string) {
+  return crypto
+    .createHmac("sha256", getRateLimitSecret())
+    .update(value.trim().toLowerCase())
+    .digest("hex");
+}
+
+export function enforceReportSubmissionRateLimit(input: {
+  ipAddress: string | null;
+  residentEmail: string;
+  windowMinutes: number;
+  maxPerIp: number;
+  maxPerEmail: number;
+}) {
+  const database = getDb();
+  const createdAt = nowIso();
+  const cutoff = new Date(Date.now() - input.windowMinutes * 60 * 1000).toISOString();
+
+  return database.transaction(() => {
+    database
+      .prepare("delete from submission_rate_limits where datetime(created_at) < datetime(?)")
+      .run(cutoff);
+
+    if (input.ipAddress) {
+      const ipKey = hashRateLimitValue(input.ipAddress);
+      const ipCount = (
+        database
+          .prepare(
+            `select count(*) as count
+             from submission_rate_limits
+             where key_type = 'ip' and key_value = ?
+               and datetime(created_at) >= datetime(?)`,
+          )
+          .get(ipKey, cutoff) as { count: number }
+      ).count;
+
+      if (ipCount >= input.maxPerIp) {
+        return {
+          allowed: false,
+          message:
+            "Too many reports came from this network in a short window. Please wait a bit and try again.",
+        };
+      }
+    }
+
+    const emailKey = hashRateLimitValue(input.residentEmail);
+    const emailCount = (
+      database
+        .prepare(
+          `select count(*) as count
+           from submission_rate_limits
+           where key_type = 'email' and key_value = ?
+             and datetime(created_at) >= datetime(?)`,
+        )
+        .get(emailKey, cutoff) as { count: number }
+    ).count;
+
+    if (emailCount >= input.maxPerEmail) {
+      return {
+        allowed: false,
+        message:
+          "That email address has already submitted several reports recently. Please wait before sending another one.",
+      };
+    }
+
+    const insertAttempt = database.prepare(
+      "insert into submission_rate_limits (id, key_type, key_value, created_at) values (?, ?, ?, ?)",
+    );
+
+    if (input.ipAddress) {
+      insertAttempt.run(makeId(), "ip", hashRateLimitValue(input.ipAddress), createdAt);
+    }
+
+    insertAttempt.run(makeId(), "email", emailKey, createdAt);
+
+    return { allowed: true as const, message: null };
+  })();
 }
 
 export function listIssueReports() {
