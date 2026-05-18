@@ -83,6 +83,8 @@ export type JurisdictionConfig = {
   districtBoundaryGeoJson: string | null;
   municipalityBoundaryName: string | null;
   municipalityBoundaryGeoJson: string | null;
+  countyCommissionDistrictsName: string | null;
+  countyCommissionDistrictsGeoJson: string | null;
   updatedAt: string | null;
 };
 
@@ -420,6 +422,8 @@ type JurisdictionSettingsRow = {
   district_boundary_geojson: string | null;
   municipality_boundary_name: string | null;
   municipality_boundary_geojson: string | null;
+  county_commission_districts_name: string | null;
+  county_commission_districts_geojson: string | null;
   updated_at: string | null;
 };
 
@@ -823,6 +827,14 @@ function ensureSchemaMigrations(database: Database.Database) {
     database.exec("alter table jurisdiction_settings add column municipality_boundary_geojson text;");
   }
 
+  if (!hasColumn(database, "jurisdiction_settings", "county_commission_districts_name")) {
+    database.exec("alter table jurisdiction_settings add column county_commission_districts_name text;");
+  }
+
+  if (!hasColumn(database, "jurisdiction_settings", "county_commission_districts_geojson")) {
+    database.exec("alter table jurisdiction_settings add column county_commission_districts_geojson text;");
+  }
+
   database.exec("create unique index if not exists idx_routing_rules_category_municipality on routing_rules(category, ifnull(municipality_name, ''));");
 
   database.exec(`
@@ -1163,6 +1175,8 @@ function getDb() {
       district_boundary_geojson text,
       municipality_boundary_name text,
       municipality_boundary_geojson text,
+      county_commission_districts_name text,
+      county_commission_districts_geojson text,
       updated_at text
     );
 
@@ -1720,6 +1734,8 @@ export function getJurisdictionConfig(): JurisdictionConfig {
       districtBoundaryGeoJson: null,
       municipalityBoundaryName: null,
       municipalityBoundaryGeoJson: null,
+      countyCommissionDistrictsName: null,
+      countyCommissionDistrictsGeoJson: null,
       updatedAt: null,
     };
   }
@@ -1738,6 +1754,8 @@ export function getJurisdictionConfig(): JurisdictionConfig {
     districtBoundaryGeoJson: row.district_boundary_geojson,
     municipalityBoundaryName: row.municipality_boundary_name,
     municipalityBoundaryGeoJson: row.municipality_boundary_geojson,
+    countyCommissionDistrictsName: row.county_commission_districts_name,
+    countyCommissionDistrictsGeoJson: row.county_commission_districts_geojson,
     updatedAt: row.updated_at,
   };
 }
@@ -1756,6 +1774,8 @@ export function saveJurisdictionConfig(input: {
   districtBoundaryGeoJson?: string;
   municipalityBoundaryName?: string;
   municipalityBoundaryGeoJson?: string;
+  countyCommissionDistrictsName?: string;
+  countyCommissionDistrictsGeoJson?: string;
 }) {
   const updatedAt = nowIso();
 
@@ -1766,8 +1786,9 @@ export function saveJurisdictionConfig(input: {
         county_keywords, utility_keywords, private_property_keywords,
         school_keywords, transit_keywords, parks_keywords,
         district_boundary_name, district_boundary_geojson,
-        municipality_boundary_name, municipality_boundary_geojson, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        municipality_boundary_name, municipality_boundary_geojson,
+        county_commission_districts_name, county_commission_districts_geojson, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(id) do update set
         district_match_keywords = excluded.district_match_keywords,
         district_outside_keywords = excluded.district_outside_keywords,
@@ -1782,6 +1803,8 @@ export function saveJurisdictionConfig(input: {
         district_boundary_geojson = excluded.district_boundary_geojson,
         municipality_boundary_name = excluded.municipality_boundary_name,
         municipality_boundary_geojson = excluded.municipality_boundary_geojson,
+        county_commission_districts_name = excluded.county_commission_districts_name,
+        county_commission_districts_geojson = excluded.county_commission_districts_geojson,
         updated_at = excluded.updated_at`,
     )
     .run(
@@ -1799,6 +1822,8 @@ export function saveJurisdictionConfig(input: {
       input.districtBoundaryGeoJson?.trim() || null,
       input.municipalityBoundaryName?.trim() || null,
       input.municipalityBoundaryGeoJson?.trim() || null,
+      input.countyCommissionDistrictsName?.trim() || null,
+      input.countyCommissionDistrictsGeoJson?.trim() || null,
       updatedAt,
     );
 

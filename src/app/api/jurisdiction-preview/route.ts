@@ -5,6 +5,7 @@ import {
   formatOwnershipHint,
 } from "@/lib/jurisdiction";
 import { getJurisdictionConfig } from "@/lib/issues-repository";
+import { findCountyCommissionDistrictForPoint } from "@/lib/location-intelligence";
 import { resolveReportLocationIntelligence } from "@/lib/report-location-intelligence";
 
 export const runtime = "nodejs";
@@ -49,6 +50,11 @@ export async function POST(request: Request) {
       },
       jurisdictionConfig,
     );
+    const countyCommissionDistrict = findCountyCommissionDistrictForPoint(
+      locationIntelligence.latitude,
+      locationIntelligence.longitude,
+      jurisdictionConfig,
+    );
 
     return NextResponse.json({
       ok: true,
@@ -60,6 +66,9 @@ export async function POST(request: Request) {
       residentExplanation: assessment.residentExplanation,
       municipalityName: locationIntelligence.municipalityName,
       geocodedAddress: locationIntelligence.geocodedAddress,
+      countyCommissionDistrictNumber:
+        countyCommissionDistrict?.districtNumber ?? null,
+      countyCommissionerName: countyCommissionDistrict?.commissionerName ?? null,
     });
   } catch {
     return NextResponse.json(

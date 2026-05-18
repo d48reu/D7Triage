@@ -6,6 +6,7 @@ import {
   formatDistrictHintStatus,
   formatOwnershipHint,
 } from "@/lib/jurisdiction";
+import { findCountyCommissionDistrictForPoint } from "@/lib/location-intelligence";
 import {
   getJurisdictionConfig,
   getManagedRoutingRule,
@@ -28,6 +29,11 @@ export default async function StaffPage() {
   const reportRows = reports.map((report) => ({
     report,
     jurisdiction: analyzeReportJurisdiction(report, jurisdictionConfig),
+    countyCommissionDistrict: findCountyCommissionDistrictForPoint(
+      report.latitude,
+      report.longitude,
+      jurisdictionConfig,
+    ),
   }));
   const needsReview = reports.filter((report) => report.status === "received");
   const inProgress = reports.filter((report) =>
@@ -98,7 +104,7 @@ export default async function StaffPage() {
 
           {reports.length > 0 ? (
             <div className="divide-y divide-slate-200">
-              {reportRows.map(({ report, jurisdiction }) => (
+              {reportRows.map(({ report, jurisdiction, countyCommissionDistrict }) => (
                 <Link
                   key={report.id}
                   href={`/staff/reports/${report.id}`}
@@ -141,6 +147,15 @@ export default async function StaffPage() {
                       {formatOwnershipHint(jurisdiction.ownershipHint)} |{" "}
                       {formatDistrictHintStatus(jurisdiction.districtHintStatus)}
                     </div>
+                    {jurisdiction.districtHintStatus === "likely_outside_district" &&
+                    countyCommissionDistrict ? (
+                      <div className="mt-1 text-xs text-slate-500">
+                        County district {countyCommissionDistrict.districtNumber}
+                        {countyCommissionDistrict.commissionerName
+                          ? ` (${countyCommissionDistrict.commissionerName})`
+                          : ""}
+                      </div>
+                    ) : null}
                     {report.municipalityName ? (
                       <div className="mt-1 text-xs text-slate-500">
                         {report.municipalityName}

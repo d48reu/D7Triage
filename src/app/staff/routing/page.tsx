@@ -8,6 +8,7 @@ import {
 } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 import {
+  loadOfficialCommissionDistrictsAction,
   loadOfficialMunicipalitiesAction,
   saveAgencyAction,
   saveJurisdictionConfigAction,
@@ -149,6 +150,11 @@ export default async function RoutingGuidePage() {
               label="Municipality boundary dataset name"
               defaultValue={jurisdictionConfig.municipalityBoundaryName ?? ""}
             />
+            <Field
+              name="countyCommissionDistrictsName"
+              label="County commission districts dataset name"
+              defaultValue={jurisdictionConfig.countyCommissionDistrictsName ?? ""}
+            />
             <TextArea
               name="districtBoundaryGeoJson"
               label="District boundary GeoJSON"
@@ -162,6 +168,13 @@ export default async function RoutingGuidePage() {
               defaultValue={jurisdictionConfig.municipalityBoundaryGeoJson ?? ""}
               className="xl:col-span-2"
               helperText="Paste a GeoJSON FeatureCollection for Miami-Dade municipalities, or use the official loader below."
+            />
+            <TextArea
+              name="countyCommissionDistrictsGeoJson"
+              label="County commission districts GeoJSON"
+              defaultValue={jurisdictionConfig.countyCommissionDistrictsGeoJson ?? ""}
+              className="xl:col-span-2"
+              helperText="Paste a GeoJSON FeatureCollection for all Miami-Dade County commission districts, or use the official loader below."
             />
             <div className="xl:col-span-3 lg:col-span-2">
               <div className="flex flex-wrap gap-3">
@@ -178,10 +191,22 @@ export default async function RoutingGuidePage() {
                 >
                   Load Official Miami-Dade Municipalities
                 </button>
+                <button
+                  type="submit"
+                  formAction={loadOfficialCommissionDistrictsAction}
+                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Load Official County Commission Districts
+                </button>
               </div>
               {municipalityNames.length > 0 ? (
                 <p className="mt-3 text-xs text-slate-500">
                   Loaded municipalities: {municipalityNames.length}
+                </p>
+              ) : null}
+              {jurisdictionConfig.countyCommissionDistrictsGeoJson ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  County commission districts dataset is loaded.
                 </p>
               ) : null}
             </div>

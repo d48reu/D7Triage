@@ -15,6 +15,12 @@ export type ParcelMatch = {
   source: string;
 };
 
+export type CountyCommissionDistrictMatch = {
+  districtNumber: string;
+  commissionerName: string | null;
+  source: string;
+};
+
 type ParcelQueryResponse = {
   features?: Array<{
     attributes?: {
@@ -27,6 +33,8 @@ type ParcelQueryResponse = {
 
 const MIAMI_DADE_MUNICIPALITY_GEOJSON_URL =
   "https://gisweb.miamidade.gov/arcgis/rest/services/MD_MDPDViewer/MapServer/8/query?where=1%3D1&outFields=NAME%2CMUNICID&returnGeometry=true&f=geojson&outSR=4326";
+const MIAMI_DADE_COMMISSION_DISTRICTS_GEOJSON_URL =
+  "https://services.arcgis.com/8Pc9XBTAsYuxx9Ny/arcgis/rest/services/CommissionDistrict_gdb/FeatureServer/0/query?where=1%3D1&outFields=ID%2CCOMMNAME&returnGeometry=true&f=geojson&outSR=4326";
 const MIAMI_DADE_PARCEL_QUERY_BASE =
   "https://services5.arcgis.com/wI5GZmCtnUU8ueya/arcgis/rest/services/Miami_Dade_County_Parcel_Boundary/FeatureServer/0/query";
 
@@ -54,6 +62,33 @@ export async function fetchOfficialMiamiDadeMunicipalityBoundaries() {
 
   return {
     datasetName: "Miami-Dade County municipalities (official ArcGIS boundary layer)",
+    geoJson: raw,
+    featureCount: features.length,
+  };
+}
+
+export async function fetchOfficialMiamiDadeCommissionDistrictBoundaries() {
+  const response = await fetch(MIAMI_DADE_COMMISSION_DISTRICTS_GEOJSON_URL, {
+    method: "GET",
+    cache: "no-store",
+    signal: AbortSignal.timeout(getLookupTimeoutMs()),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Commission district boundary fetch failed with ${response.status}.`,
+    );
+  }
+
+  const raw = await response.text();
+  const features = parseGeoJsonFeatures(raw);
+  if (features.length === 0) {
+    throw new Error("Commission district boundary dataset was empty.");
+  }
+
+  return {
+    datasetName:
+      "Miami-Dade County commission districts (official ArcGIS boundary layer)",
     geoJson: raw,
     featureCount: features.length,
   };
@@ -93,6 +128,53 @@ export function findMunicipalityForPoint(
       jurisdictionConfig.municipalityBoundaryName ||
       "Miami-Dade County municipality boundary dataset",
   } satisfies MunicipalityMatch;
+}
+
+export function findCountyCommissionDistrictForPoint(
+  latitude: number | null,
+  longitude: number | null,
+  jurisdictionConfig: Pick<
+    JurisdictionConfig,
+    "countyCommissionDistrictsGeoJson" | "countyCommissionDistrictsName"
+  >,
+) {
+  if (
+    latitude === null ||
+    longitude === null ||
+    !jurisdictionConfig.countyCommissionDistrictsGeoJson
+  ) {
+    return null;
+  }
+
+  const point: Point = [longitude, latitude];
+  const features = parseGeoJsonFeatures(
+    jurisdictionConfig.countyCommissionDistrictsGeoJson,
+  );
+
+  const match = features.find((feature) => geometryContainsPoint(feature.geometry, point));
+  if (!match) {
+    return null;
+  }
+
+  const districtNumber =
+    match.properties.ID !== undefined && match.properties.ID !== null
+      ? String(match.properties.ID).trim()
+      : "";
+
+  if (!districtNumber) {
+    return null;
+  }
+
+  return {
+    districtNumber,
+    commissionerName:
+      match.properties.COMMNAME !== undefined && match.properties.COMMNAME !== null
+        ? String(match.properties.COMMNAME).trim() || null
+        : null,
+    source:
+      jurisdictionConfig.countyCommissionDistrictsName ||
+      "Miami-Dade County commission district boundary dataset",
+  } satisfies CountyCommissionDistrictMatch;
 }
 
 export async function lookupMiamiDadeParcelByPoint(

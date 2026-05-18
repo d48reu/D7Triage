@@ -9,6 +9,7 @@ import {
   formatDistrictHintStatus,
   formatOwnershipHint,
 } from "@/lib/jurisdiction";
+import { findCountyCommissionDistrictForPoint } from "@/lib/location-intelligence";
 import {
   findPotentialDuplicates,
   formatStaffMemberLabel,
@@ -77,6 +78,11 @@ export default async function StaffReportPage({
   const jurisdictionConfig = getJurisdictionConfig();
   const notificationTemplateMap = getNotificationTemplateMap();
   const jurisdiction = analyzeReportJurisdiction(report, jurisdictionConfig);
+  const countyCommissionDistrict = findCountyCommissionDistrictForPoint(
+    report.latitude,
+    report.longitude,
+    jurisdictionConfig,
+  );
   const isLikelyOutsideDistrict =
     jurisdiction.districtHintStatus === "likely_outside_district";
   const defaultOwnerLabel = routingRule?.ownerLabel ?? "District 7 triage";
@@ -243,6 +249,16 @@ export default async function StaffReportPage({
             <Detail
               label="Municipality"
               value={report.municipalityName || "Not resolved"}
+            />
+            <Detail
+              label="County commission district"
+              value={
+                countyCommissionDistrict
+                  ? countyCommissionDistrict.commissionerName
+                    ? `${countyCommissionDistrict.districtNumber} (${countyCommissionDistrict.commissionerName})`
+                    : countyCommissionDistrict.districtNumber
+                  : "Not resolved"
+              }
             />
             <Detail
               label="Municipality lookup"
@@ -497,6 +513,17 @@ export default async function StaffReportPage({
                 action below. It will mark the case accordingly and add a resident-facing
                 note to the timeline.
               </p>
+              {countyCommissionDistrict ? (
+                <p className="mt-3 text-sm leading-6 text-slate-800">
+                  Likely neighboring county district:{" "}
+                  <span className="font-semibold">
+                    District {countyCommissionDistrict.districtNumber}
+                  </span>
+                  {countyCommissionDistrict.commissionerName
+                    ? ` (${countyCommissionDistrict.commissionerName})`
+                    : ""}.
+                </p>
+              ) : null}
               <form action={updateIssueStatusAction} className="mt-4 space-y-3">
                 <input type="hidden" name="reportId" value={report.id} />
                 <input

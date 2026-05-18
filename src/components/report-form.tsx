@@ -34,6 +34,8 @@ export function ReportForm() {
     districtLabel?: string;
     municipalityName?: string | null;
     geocodedAddress?: string | null;
+    countyCommissionDistrictNumber?: string | null;
+    countyCommissionerName?: string | null;
   }>({
     status: "idle",
     message: "Optional. Preview whether the location appears to be inside District 7.",
@@ -108,6 +110,8 @@ export function ReportForm() {
             districtLabel: string;
             municipalityName?: string | null;
             geocodedAddress?: string | null;
+            countyCommissionDistrictNumber?: string | null;
+            countyCommissionerName?: string | null;
           }
         | { ok: false; message?: string };
 
@@ -133,6 +137,8 @@ export function ReportForm() {
         districtLabel: data.districtLabel,
         municipalityName: data.municipalityName,
         geocodedAddress: data.geocodedAddress,
+        countyCommissionDistrictNumber: data.countyCommissionDistrictNumber,
+        countyCommissionerName: data.countyCommissionerName,
       });
     } catch {
       setJurisdictionPreview({
@@ -244,6 +250,15 @@ export function ReportForm() {
                 ) : null}
                 {jurisdictionPreview.municipalityName ? (
                   <div>Municipality: {jurisdictionPreview.municipalityName}</div>
+                ) : null}
+                {jurisdictionPreview.countyCommissionDistrictNumber ? (
+                  <div>
+                    Likely county commission district:{" "}
+                    {jurisdictionPreview.countyCommissionDistrictNumber}
+                    {jurisdictionPreview.countyCommissionerName
+                      ? ` (${jurisdictionPreview.countyCommissionerName})`
+                      : ""}
+                  </div>
                 ) : null}
                 {jurisdictionPreview.geocodedAddress ? (
                   <div>Matched address: {jurisdictionPreview.geocodedAddress}</div>

@@ -1,7 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { fetchOfficialMiamiDadeMunicipalityBoundaries } from "@/lib/location-intelligence";
+import {
+  fetchOfficialMiamiDadeCommissionDistrictBoundaries,
+  fetchOfficialMiamiDadeMunicipalityBoundaries,
+} from "@/lib/location-intelligence";
 import {
   getJurisdictionConfig,
   saveJurisdictionConfig,
@@ -98,6 +101,12 @@ export async function saveJurisdictionConfigAction(formData: FormData) {
     municipalityBoundaryGeoJson: String(
       formData.get("municipalityBoundaryGeoJson") ?? "",
     ).trim(),
+    countyCommissionDistrictsName: String(
+      formData.get("countyCommissionDistrictsName") ?? "",
+    ).trim(),
+    countyCommissionDistrictsGeoJson: String(
+      formData.get("countyCommissionDistrictsGeoJson") ?? "",
+    ).trim(),
   });
 
   revalidatePath("/staff/routing");
@@ -122,6 +131,35 @@ export async function loadOfficialMunicipalitiesAction() {
     districtBoundaryGeoJson: current.districtBoundaryGeoJson ?? "",
     municipalityBoundaryName: dataset.datasetName,
     municipalityBoundaryGeoJson: dataset.geoJson,
+    countyCommissionDistrictsName: current.countyCommissionDistrictsName ?? "",
+    countyCommissionDistrictsGeoJson:
+      current.countyCommissionDistrictsGeoJson ?? "",
+  });
+
+  revalidatePath("/staff/routing");
+  revalidatePath("/staff");
+  revalidatePath("/staff/analytics");
+}
+
+export async function loadOfficialCommissionDistrictsAction() {
+  const dataset = await fetchOfficialMiamiDadeCommissionDistrictBoundaries();
+  const current = getJurisdictionConfig();
+  saveJurisdictionConfig({
+    districtMatchKeywords: current.districtMatchKeywords.join("\n"),
+    districtOutsideKeywords: current.districtOutsideKeywords.join("\n"),
+    stateKeywords: current.stateKeywords.join("\n"),
+    countyKeywords: current.countyKeywords.join("\n"),
+    utilityKeywords: current.utilityKeywords.join("\n"),
+    privatePropertyKeywords: current.privatePropertyKeywords.join("\n"),
+    schoolKeywords: current.schoolKeywords.join("\n"),
+    transitKeywords: current.transitKeywords.join("\n"),
+    parksKeywords: current.parksKeywords.join("\n"),
+    districtBoundaryName: current.districtBoundaryName ?? "",
+    districtBoundaryGeoJson: current.districtBoundaryGeoJson ?? "",
+    municipalityBoundaryName: current.municipalityBoundaryName ?? "",
+    municipalityBoundaryGeoJson: current.municipalityBoundaryGeoJson ?? "",
+    countyCommissionDistrictsName: dataset.datasetName,
+    countyCommissionDistrictsGeoJson: dataset.geoJson,
   });
 
   revalidatePath("/staff/routing");
