@@ -34,7 +34,7 @@ This checklist is for the first staff-only District 7 Issue Reporter pilot on Re
 
 - Runtime: Node
 - Plan: Starter or another paid plan that supports persistent disks
-- Build command: `npm install && npm run build`
+- Build command: `npm install --include=dev && npm run build`
 - Start command: `npm run start`
 - Health check path: `/`
 - Disk name: `district-7-data`
