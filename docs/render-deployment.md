@@ -1,6 +1,6 @@
 # Render Deployment
 
-This app can be shared as a stable demo site on Render with **minimal code changes** because it now supports a configurable persistent data directory.
+This app can be piloted on Render with **minimal code changes** because it supports a configurable persistent data directory.
 
 ## Why Render Fits This App
 
@@ -42,10 +42,12 @@ On Render, the app is configured to store data under:
 
 ## Minimum Required Environment Variables
 
-These must be set for a usable shared demo:
+These must be set for a usable staff pilot:
 
 - `NEXT_PUBLIC_APP_URL`
 - `STAFF_PASSWORD`
+- `DEMO_MODE=false`
+- `NEXT_PUBLIC_DEMO_MODE=false`
 
 These are optional:
 
@@ -56,6 +58,7 @@ These are optional:
 ## Notes
 
 - `STAFF_SESSION_SECRET` and `RATE_LIMIT_SECRET` are generated automatically by the blueprint.
-- AI routing is **off by default** in the blueprint.
+- AI routing is **off by default** in the blueprint and should stay off for the first baseline pilot pass.
 - Email delivery is still optional and can stay disabled.
 - The Render `starter` plan is used because persistent disks require a paid service tier.
+- See `docs/render-pilot-checklist.md` for the staff-only pilot workflow.

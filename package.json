@@ -12,7 +12,7 @@
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "better-sqlite3": "^12.9.0",
-    "next": "16.2.4",
+    "next": "^16.2.7",
     "openai": "^6.34.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -25,9 +25,14 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.4",
+    "eslint-config-next": "^16.2.7",
     "playwright": "^1.60.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.15"
+    }
   }
 }
