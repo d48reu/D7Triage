@@ -976,10 +976,6 @@ function seedJurisdictionSettings(database: Database.Database) {
       );
   }
 
-  if (!isDemoMode()) {
-    return;
-  }
-
   const existing = database
     .prepare(
       `select
@@ -1012,34 +1008,16 @@ function seedJurisdictionSettings(database: Database.Database) {
     .prepare(
       `update jurisdiction_settings
        set
-         district_match_keywords = ?,
-         district_outside_keywords = ?,
-         state_keywords = ?,
-         county_keywords = ?,
-         utility_keywords = ?,
-         private_property_keywords = ?,
-         school_keywords = ?,
-         transit_keywords = ?,
-         parks_keywords = ?,
-         district_boundary_name = ?,
-         district_boundary_geojson = ?,
-         municipality_boundary_name = ?,
-         municipality_boundary_geojson = ?,
-         county_commission_districts_name = ?,
-         county_commission_districts_geojson = ?,
+         district_boundary_name = coalesce(nullif(district_boundary_name, ''), ?),
+         district_boundary_geojson = coalesce(nullif(district_boundary_geojson, ''), ?),
+         municipality_boundary_name = coalesce(nullif(municipality_boundary_name, ''), ?),
+         municipality_boundary_geojson = coalesce(nullif(municipality_boundary_geojson, ''), ?),
+         county_commission_districts_name = coalesce(nullif(county_commission_districts_name, ''), ?),
+         county_commission_districts_geojson = coalesce(nullif(county_commission_districts_geojson, ''), ?),
          updated_at = ?
        where id = 1`,
     )
     .run(
-      DEMO_JURISDICTION_SEED.districtMatchKeywords,
-      DEMO_JURISDICTION_SEED.districtOutsideKeywords,
-      DEMO_JURISDICTION_SEED.stateKeywords,
-      DEMO_JURISDICTION_SEED.countyKeywords,
-      DEMO_JURISDICTION_SEED.utilityKeywords,
-      DEMO_JURISDICTION_SEED.privatePropertyKeywords,
-      DEMO_JURISDICTION_SEED.schoolKeywords,
-      DEMO_JURISDICTION_SEED.transitKeywords,
-      DEMO_JURISDICTION_SEED.parksKeywords,
       DEMO_JURISDICTION_SEED.districtBoundaryName,
       DEMO_JURISDICTION_SEED.districtBoundaryGeoJson,
       DEMO_JURISDICTION_SEED.municipalityBoundaryName,
