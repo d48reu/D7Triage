@@ -38,6 +38,62 @@ function getCensusBenchmark() {
   return process.env.GEOCODING_CENSUS_BENCHMARK || "Public_AR_Current";
 }
 
+function getAddressCandidates(addressText: string) {
+  const candidates = [addressText];
+  const dixieAlias = addressText.replace(
+    /\b(?:s\.?|south)?\s*dixie\s*(?:highway|hwy)\b/i,
+    "SW 37th Ave",
+  );
+
+  if (dixieAlias !== addressText) {
+    candidates.push(dixieAlias);
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+async function geocodeWithCensus(addressText: string) {
+  const candidates = getAddressCandidates(addressText);
+
+  for (const candidate of candidates) {
+    const url = new URL(
+      "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress",
+    );
+    url.searchParams.set("address", candidate);
+    url.searchParams.set("benchmark", getCensusBenchmark());
+    url.searchParams.set("format", "json");
+
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(getGeocodingTimeoutMs()),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Census geocoder request failed with ${response.status}.`);
+    }
+
+    const payload = (await response.json()) as CensusLocationsResponse;
+    const match = payload.result?.addressMatches?.[0];
+    const latitude = match?.coordinates?.y;
+    const longitude = match?.coordinates?.x;
+
+    if (match?.matchedAddress && Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return {
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        matchedAddress: match.matchedAddress,
+        provider: "census" as const,
+      };
+    }
+  }
+
+  return null;
+}
+
 export async function geocodeAddress(addressText: string) {
   const provider = getGeocodingProvider();
   const normalizedAddress = addressText.trim();
@@ -50,39 +106,5 @@ export async function geocodeAddress(addressText: string) {
     throw new Error(`Unsupported geocoding provider: ${provider}`);
   }
 
-  const url = new URL(
-    "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress",
-  );
-  url.searchParams.set("address", normalizedAddress);
-  url.searchParams.set("benchmark", getCensusBenchmark());
-  url.searchParams.set("format", "json");
-
-  const response = await fetch(url, {
-    method: "GET",
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
-    signal: AbortSignal.timeout(getGeocodingTimeoutMs()),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Census geocoder request failed with ${response.status}.`);
-  }
-
-  const payload = (await response.json()) as CensusLocationsResponse;
-  const match = payload.result?.addressMatches?.[0];
-  const latitude = match?.coordinates?.y;
-  const longitude = match?.coordinates?.x;
-
-  if (!match?.matchedAddress || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return null;
-  }
-
-  return {
-    latitude: Number(latitude),
-    longitude: Number(longitude),
-    matchedAddress: match.matchedAddress,
-    provider: "census" as const,
-  };
+  return geocodeWithCensus(normalizedAddress);
 }
