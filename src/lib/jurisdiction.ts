@@ -305,6 +305,48 @@ function applyCategoryBias(
   };
 
   switch (report.category) {
+    case "HOUSING":
+      addScore("private_property", "Housing category may involve property owner or code context");
+      break;
+    case "HOMELESS ASSISTANCE":
+    case "PANHANDLERS, HOMELESS NUISANCE":
+      addScore("county", "Homeless assistance category context");
+      break;
+    case "BUS":
+    case "METRORAIL":
+      addScore("transit", "Transit category context", 2);
+      break;
+    case "FLOODING":
+    case "GARBAGE/RECYCLING":
+    case "ILLEGAL DUMPING/TRASH":
+    case "WASD":
+    case "WATER METER READING":
+      addScore("county", "County service category context");
+      break;
+    case "STREETLIGHTS":
+    case "UTILITY RELATED":
+      addScore("utility", "Utility category context", 2);
+      break;
+    case "TRAFFIC":
+      addScore("municipal", "Traffic category context");
+      break;
+    case "NOISE":
+      addScore("municipal", "Code/enforcement category context");
+      break;
+    case "PEACOCKS":
+    case "ANIMALS":
+      addScore("county", "Animal services category context");
+      break;
+    case "SIDEWALKS":
+      addScore("municipal", "Sidewalk category context");
+      addScore("private_property", "Sidewalk issue may involve adjacent property");
+      if (report.rightOfWayHint === "probable_public_right_of_way") {
+        addScore("municipal", "Point appears outside a parcel, suggesting right-of-way", 2);
+      }
+      if (report.rightOfWayHint === "on_parcel") {
+        addScore("private_property", "Point appears to fall on a parcel");
+      }
+      break;
     case "Parks":
       addScore("parks", "Parks category context", 2);
       break;
@@ -458,7 +500,11 @@ function getConfidenceInfo(input: {
     };
   }
 
-  if (input.report.category === "Sidewalks" && municipalityKnown && !probableRow) {
+  if (
+    ["Sidewalks", "SIDEWALKS"].includes(input.report.category) &&
+    municipalityKnown &&
+    !probableRow
+  ) {
     return {
       confidence: "low" as const,
       reason:
@@ -466,7 +512,11 @@ function getConfidenceInfo(input: {
     };
   }
 
-  if (input.report.category === "Sidewalks" && probableRow && municipalityKnown) {
+  if (
+    ["Sidewalks", "SIDEWALKS"].includes(input.report.category) &&
+    probableRow &&
+    municipalityKnown
+  ) {
     return {
       confidence: "medium" as const,
       reason:

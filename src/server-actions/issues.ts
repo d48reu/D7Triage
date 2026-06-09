@@ -387,7 +387,10 @@ export async function updateIssueDetailsAction(formData: FormData) {
   const contactConsent = formData.get("contactConsent") === "on";
   const newsletterOptIn = formData.get("newsletterOptIn") === "on";
 
-  if (!ISSUE_CATEGORIES.includes(category as (typeof ISSUE_CATEGORIES)[number])) {
+  if (
+    category !== report.category &&
+    !ISSUE_CATEGORIES.includes(category as (typeof ISSUE_CATEGORIES)[number])
+  ) {
     throw new Error("Invalid category");
   }
 

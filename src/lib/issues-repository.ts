@@ -860,80 +860,72 @@ function ensureSchemaMigrations(database: Database.Database) {
 }
 
 function seedRoutingData(database: Database.Database) {
-  const agencyCount = (
-    database.prepare("select count(*) as count from agencies").get() as {
-      count: number;
-    }
-  ).count;
+  const insertAgency = database.prepare(`
+    insert into agencies (
+      id, name, contact_name, contact_email, contact_phone, contact_url,
+      default_referral_method, escalation_notes, is_active, created_at,
+      updated_at
+    ) values (
+      @id, @name, null, null, null, null, @defaultReferralMethod,
+      @escalationNotes, 1, @createdAt, @updatedAt
+    )
+  `);
+  const findAgency = database.prepare("select id from agencies where name = ?");
+  const now = nowIso();
+  const uniqueNames = Array.from(
+    new Set(ROUTING_RULES.map((rule) => rule.likelyResponsibleParty)),
+  );
 
-  if (agencyCount === 0) {
-    const insertAgency = database.prepare(`
-      insert into agencies (
-        id, name, contact_name, contact_email, contact_phone, contact_url,
-        default_referral_method, escalation_notes, is_active, created_at,
-        updated_at
-      ) values (
-        @id, @name, null, null, null, null, @defaultReferralMethod,
-        @escalationNotes, 1, @createdAt, @updatedAt
-      )
-    `);
+  for (const name of uniqueNames) {
+    const existing = findAgency.get(name) as { id: string } | undefined;
+    if (existing) continue;
 
-    const now = nowIso();
-    const uniqueNames = Array.from(
-      new Set(ROUTING_RULES.map((rule) => rule.likelyResponsibleParty)),
+    const matchingRule = ROUTING_RULES.find(
+      (rule) => rule.likelyResponsibleParty === name,
     );
 
-    for (const name of uniqueNames) {
-      const matchingRule = ROUTING_RULES.find(
-        (rule) => rule.likelyResponsibleParty === name,
-      );
-
-      insertAgency.run({
-        id: makeId(),
-        name,
-        defaultReferralMethod: "Email",
-        escalationNotes: matchingRule?.escalationNotes ?? null,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+    insertAgency.run({
+      id: makeId(),
+      name,
+      defaultReferralMethod: "Email",
+      escalationNotes: matchingRule?.escalationNotes ?? null,
+      createdAt: now,
+      updatedAt: now,
+    });
   }
 
-  const routingRuleCount = (
-    database.prepare("select count(*) as count from routing_rules").get() as {
-      count: number;
-    }
-  ).count;
+  const agencies = database
+    .prepare("select id, name from agencies")
+    .all() as { id: string; name: string }[];
+  const agencyMap = new Map(agencies.map((agency) => [agency.name, agency.id]));
+  const findGenericRule = database.prepare(
+    "select id from routing_rules where category = ? and municipality_name is null",
+  );
+  const insertRule = database.prepare(`
+    insert into routing_rules (
+      id, category, agency_id, owner_label, staff_guidance,
+      resident_explanation, escalation_notes, created_at, updated_at
+    ) values (
+      @id, @category, @agencyId, @ownerLabel, @staffGuidance,
+      @residentExplanation, @escalationNotes, @createdAt, @updatedAt
+    )
+  `);
 
-  if (routingRuleCount === 0) {
-    const agencies = database
-      .prepare("select id, name from agencies")
-      .all() as { id: string; name: string }[];
-    const agencyMap = new Map(agencies.map((agency) => [agency.name, agency.id]));
-    const insertRule = database.prepare(`
-      insert into routing_rules (
-        id, category, agency_id, owner_label, staff_guidance,
-        resident_explanation, escalation_notes, created_at, updated_at
-      ) values (
-        @id, @category, @agencyId, @ownerLabel, @staffGuidance,
-        @residentExplanation, @escalationNotes, @createdAt, @updatedAt
-      )
-    `);
-    const now = nowIso();
+  for (const rule of ROUTING_RULES) {
+    const existing = findGenericRule.get(rule.category) as { id: string } | undefined;
+    if (existing) continue;
 
-    for (const rule of ROUTING_RULES) {
-      insertRule.run({
-        id: makeId(),
-        category: rule.category,
-        agencyId: agencyMap.get(rule.likelyResponsibleParty) ?? null,
-        ownerLabel: rule.likelyResponsibleParty,
-        staffGuidance: rule.staffGuidance,
-        residentExplanation: rule.residentExplanation,
-        escalationNotes: rule.escalationNotes,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+    insertRule.run({
+      id: makeId(),
+      category: rule.category,
+      agencyId: agencyMap.get(rule.likelyResponsibleParty) ?? null,
+      ownerLabel: rule.likelyResponsibleParty,
+      staffGuidance: rule.staffGuidance,
+      residentExplanation: rule.residentExplanation,
+      escalationNotes: rule.escalationNotes,
+      createdAt: now,
+      updatedAt: now,
+    });
   }
 }
 

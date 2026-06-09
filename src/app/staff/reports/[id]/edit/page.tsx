@@ -21,6 +21,12 @@ export default async function EditStaffReportPage({
     notFound();
   }
 
+  const categoryOptions = ISSUE_CATEGORIES.includes(
+    report.category as (typeof ISSUE_CATEGORIES)[number],
+  )
+    ? ISSUE_CATEGORIES
+    : [report.category, ...ISSUE_CATEGORIES];
+
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
@@ -64,7 +70,7 @@ export default async function EditStaffReportPage({
                   defaultValue={report.category}
                   className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                 >
-                  {ISSUE_CATEGORIES.map((category) => (
+                  {categoryOptions.map((category) => (
                     <option key={category} value={category}>
                       {category}
                     </option>
@@ -191,4 +197,3 @@ export default async function EditStaffReportPage({
     </main>
   );
 }
-

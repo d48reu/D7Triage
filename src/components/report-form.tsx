@@ -16,31 +16,31 @@ const EXAMPLE_REPORTS = [
   {
     id: "sidewalk",
     title: "Broken sidewalk near a home",
-    category: "Sidewalks",
+    category: "SIDEWALKS",
     addressText: "3636 SW 16th Terrace, Miami, FL 33145",
     description:
       "The sidewalk in front of this address is cracked and lifted in several places, creating a tripping hazard for people walking by.",
   },
   {
     id: "roads",
-    title: "Pothole on a neighborhood street",
-    category: "Roads and potholes",
+    title: "Traffic concern on a neighborhood street",
+    category: "TRAFFIC",
     addressText: "655 NW 37th Avenue, Miami, FL 33125",
     description:
       "There is a large pothole near the travel lane and drivers are swerving around it. It has gotten noticeably worse over the last week.",
   },
   {
-    id: "parks",
-    title: "Park lighting issue",
-    category: "Parks",
-    addressText: "Alice Wainwright Park, Miami, FL 33133",
+    id: "streetlights",
+    title: "Streetlight issue",
+    category: "STREETLIGHTS",
+    addressText: "3750 S Dixie Highway, Miami, FL 33145",
     description:
-      "Several lights along the walking path are out, making the park much darker after sunset and harder to use safely.",
+      "Several streetlights near this location are out, making the area much darker after sunset and harder to use safely.",
   },
   {
     id: "outside",
     title: "Outside-district example",
-    category: "Roads and potholes",
+    category: "TRAFFIC",
     addressText: "100 Washington Ave, Miami Beach, FL 33139",
     description:
       "There is a pothole near the curb lane that residents have been avoiding. This example helps show how the app handles reports outside District 7.",
