@@ -2365,6 +2365,53 @@ export function updateIssueLocationIntelligence(input: {
   return getIssueReportById(input.reportId);
 }
 
+export function updateIssueDetails(input: {
+  reportId: string;
+  category: string;
+  description: string;
+  addressText: string;
+  residentName?: string | null;
+  residentEmail: string;
+  residentPhone?: string | null;
+  preferredLanguage?: string | null;
+  contactConsent: boolean;
+  newsletterOptIn: boolean;
+}) {
+  const report = getIssueReportById(input.reportId);
+  if (!report) return null;
+
+  const now = nowIso();
+  const newsletterOptInAt = input.newsletterOptIn
+    ? report.newsletterOptInAt || now
+    : null;
+
+  getDb()
+    .prepare(
+      `update issue_reports
+       set category = ?, description = ?, address_text = ?,
+           resident_name = ?, resident_email = ?, resident_phone = ?,
+           preferred_language = ?, contact_consent = ?, newsletter_opt_in = ?,
+           newsletter_opt_in_at = ?, updated_at = ?
+       where id = ?`,
+    )
+    .run(
+      input.category,
+      input.description,
+      input.addressText,
+      input.residentName?.trim() || null,
+      input.residentEmail,
+      input.residentPhone?.trim() || null,
+      input.preferredLanguage?.trim() || "English",
+      input.contactConsent ? 1 : 0,
+      input.newsletterOptIn ? 1 : 0,
+      newsletterOptInAt,
+      now,
+      input.reportId,
+    );
+
+  return getIssueReportById(input.reportId);
+}
+
 export function assignIssueReport(input: {
   reportId: string;
   staffMemberId?: string | null;

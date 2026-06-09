@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo-mode";
-import { ISSUE_STATUSES, type IssueStatus } from "@/lib/issue-types";
+import { ISSUE_CATEGORIES, ISSUE_STATUSES, type IssueStatus } from "@/lib/issue-types";
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
 import { getUploadsDir } from "@/lib/data-paths";
 import { resolveReportLocationIntelligence } from "@/lib/report-location-intelligence";
@@ -25,6 +25,7 @@ import {
   markIssueAsDistinct,
   markIssueAsDuplicate,
   updateIssueLocationIntelligence,
+  updateIssueDetails,
   updateAiSuggestionFeedback,
   updateReferralOutcome,
   updateIssueStatus,
@@ -365,6 +366,108 @@ export async function updateIssueStatusAction(formData: FormData) {
   revalidatePath(`/staff/reports/${reportId}`);
   revalidatePath(`/report/${report.publicTrackingToken}`);
   redirect(`/staff/reports/${reportId}`);
+}
+
+export async function updateIssueDetailsAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const report = getIssueReportById(reportId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  const category = readRequiredText(formData, "category");
+  const description = readRequiredText(formData, "description");
+  const addressText = readRequiredText(formData, "addressText");
+  const residentEmail = readRequiredText(formData, "residentEmail");
+  const residentName = String(formData.get("residentName") ?? "").trim();
+  const residentPhone = String(formData.get("residentPhone") ?? "").trim();
+  const preferredLanguage =
+    String(formData.get("preferredLanguage") ?? "").trim() || "English";
+  const contactConsent = formData.get("contactConsent") === "on";
+  const newsletterOptIn = formData.get("newsletterOptIn") === "on";
+
+  if (!ISSUE_CATEGORIES.includes(category as (typeof ISSUE_CATEGORIES)[number])) {
+    throw new Error("Invalid category");
+  }
+
+  if (!residentEmail.includes("@")) {
+    throw new Error("Enter a valid email address.");
+  }
+
+  if (description.length > MAX_DESCRIPTION_LENGTH) {
+    throw new Error(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`);
+  }
+
+  if (addressText.length > MAX_ADDRESS_LENGTH) {
+    throw new Error(`Location or address must be ${MAX_ADDRESS_LENGTH} characters or fewer.`);
+  }
+
+  if (residentName.length > MAX_NAME_LENGTH) {
+    throw new Error(`Name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+  }
+
+  if (residentPhone.length > MAX_PHONE_LENGTH) {
+    throw new Error(`Phone must be ${MAX_PHONE_LENGTH} characters or fewer.`);
+  }
+
+  if (preferredLanguage.length > MAX_LANGUAGE_LENGTH) {
+    throw new Error(`Preferred language must be ${MAX_LANGUAGE_LENGTH} characters or fewer.`);
+  }
+
+  const changedFields = [
+    report.category !== category ? "category" : null,
+    report.description !== description ? "description" : null,
+    report.addressText !== addressText ? "location/address" : null,
+    (report.residentName ?? "") !== residentName ? "resident name" : null,
+    report.residentEmail !== residentEmail ? "resident email" : null,
+    (report.residentPhone ?? "") !== residentPhone ? "resident phone" : null,
+    report.preferredLanguage !== preferredLanguage ? "preferred language" : null,
+    report.contactConsent !== contactConsent ? "case update consent" : null,
+    report.newsletterOptIn !== newsletterOptIn ? "newsletter consent" : null,
+  ].filter((field): field is string => Boolean(field));
+  const addressChanged = report.addressText !== addressText;
+
+  updateIssueDetails({
+    reportId,
+    category,
+    description,
+    addressText,
+    residentName,
+    residentEmail,
+    residentPhone,
+    preferredLanguage,
+    contactConsent,
+    newsletterOptIn,
+  });
+
+  if (addressChanged) {
+    const locationIntelligence = await resolveReportLocationIntelligence({
+      addressText,
+      latitude: null,
+      longitude: null,
+    });
+
+    updateIssueLocationIntelligence({
+      reportId,
+      ...locationIntelligence,
+    });
+  }
+
+  if (changedFields.length > 0) {
+    addStaffNote({
+      reportId,
+      body: `Case details edited by staff. Updated fields: ${changedFields.join(", ")}.${
+        addressChanged ? " Location intelligence was refreshed from the edited address." : ""
+      }`,
+    });
+  }
+
+  revalidatePath("/staff");
+  revalidatePath("/staff/analytics");
+  revalidatePath(`/staff/reports/${reportId}`);
+  revalidatePath(`/report/${report.publicTrackingToken}`);
+  redirect(`/staff/reports/${reportId}?detailsSaved=1`);
 }
 
 export async function assignIssueReportAction(formData: FormData) {

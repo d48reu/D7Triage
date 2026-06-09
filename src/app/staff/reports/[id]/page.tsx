@@ -59,6 +59,10 @@ export default async function StaffReportPage({
     (Array.isArray(query.assignmentSaved)
       ? query.assignmentSaved[0]
       : query.assignmentSaved) === "1";
+  const detailsSaved =
+    (Array.isArray(query.detailsSaved)
+      ? query.detailsSaved[0]
+      : query.detailsSaved) === "1";
   const report = getIssueReportById(id);
 
   if (!report) {
@@ -108,6 +112,12 @@ export default async function StaffReportPage({
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
+              href={`/staff/reports/${report.id}/edit`}
+              className="rounded-md bg-sky-700 px-3 py-2 text-sm font-medium text-white hover:bg-sky-800"
+            >
+              Edit Details
+            </Link>
+            <Link
               href="/staff/notifications"
               className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
@@ -128,6 +138,11 @@ export default async function StaffReportPage({
           {demoMode ? (
             <div className="mb-5">
               <DemoSiteNotice body="This hosted demo keeps AI routing live on seeded cases. Other edits may reset between sessions, so treat staff-side changes here as temporary." />
+            </div>
+          ) : null}
+          {detailsSaved ? (
+            <div className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+              Case details saved.
             </div>
           ) : null}
 
