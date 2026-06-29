@@ -380,9 +380,15 @@ function applyCategoryBias(
       break;
   }
 
-  if (report.municipalityName) {
+  if (isUnincorporatedMiamiDade(report.municipalityName)) {
+    addScore("county", "Unincorporated Miami-Dade identified", 3);
+  } else if (report.municipalityName) {
     addScore("municipal", `Municipality identified: ${report.municipalityName}`);
   }
+}
+
+function isUnincorporatedMiamiDade(value: string | null | undefined) {
+  return value?.trim().toLowerCase() === "unincorporated miami-dade";
 }
 
 function getEnvJurisdictionKeywordConfig(): JurisdictionKeywordConfig {
