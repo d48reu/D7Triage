@@ -120,6 +120,16 @@ export const ROUTING_RULES: RoutingRule[] = [
       "Escalate aggressive behavior, traffic hazards, or repeated damage claims with documentation.",
   },
   {
+    category: "PARKS",
+    likelyResponsibleParty: "Parks department or facility operator",
+    staffGuidance:
+      "Capture park name, amenity, condition, and whether the concern is maintenance, safety, programming, access, lighting, or cleanliness.",
+    residentExplanation:
+      "Park issues are routed to the team responsible for that facility or amenity.",
+    escalationNotes:
+      "Escalate safety hazards, broken playground equipment, restroom outages, lighting concerns, and blocked access.",
+  },
+  {
     category: "ILLEGAL DUMPING/TRASH",
     likelyResponsibleParty: "Solid Waste / code compliance",
     staffGuidance:
@@ -198,4 +208,3 @@ export function getRoutingRule(category: string) {
     ROUTING_RULES[ISSUE_CATEGORIES.length - 1]
   );
 }
-

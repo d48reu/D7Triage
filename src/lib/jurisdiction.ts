@@ -337,6 +337,9 @@ function applyCategoryBias(
     case "ANIMALS":
       addScore("county", "Animal services category context");
       break;
+    case "PARKS":
+      addScore("parks", "Parks category context", 2);
+      break;
     case "SIDEWALKS":
       addScore("municipal", "Sidewalk category context");
       addScore("private_property", "Sidewalk issue may involve adjacent property");
