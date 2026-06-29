@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, type FormEvent } from "react";
 import { ISSUE_CATEGORIES } from "@/lib/issue-types";
 import {
   submitIssueReportAction,
@@ -11,6 +11,14 @@ const initialState: SubmitIssueReportState = {
   status: "idle",
   message: "Reports are saved locally and reviewed by staff.",
 };
+const MAX_PHOTO_COUNT = 4;
+const MAX_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
+const ALLOWED_PHOTO_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 
 const EXAMPLE_REPORTS = [
   {
@@ -60,6 +68,7 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
   const [category, setCategory] = useState<string>("Other / unsure");
   const [description, setDescription] = useState("");
   const [addressText, setAddressText] = useState("");
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [locationState, setLocationState] = useState<{
     latitude: string;
     longitude: string;
@@ -103,6 +112,37 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
       message: "Optional. Helps future map and boundary checks if available.",
     });
     resetJurisdictionPreview();
+  }
+
+  function validatePhotos(files: FileList | null) {
+    const photos = Array.from(files ?? []).filter((file) => file.size > 0);
+
+    if (photos.length > MAX_PHOTO_COUNT) {
+      return `You can attach up to ${MAX_PHOTO_COUNT} photos per report.`;
+    }
+
+    const invalidPhoto = photos.find(
+      (photo) =>
+        !ALLOWED_PHOTO_TYPES.has(photo.type) ||
+        photo.size > MAX_PHOTO_SIZE_BYTES,
+    );
+
+    if (invalidPhoto) {
+      return "Photos must be JPEG, PNG, WebP, or GIF files and each must be 8 MB or smaller.";
+    }
+
+    return null;
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    const input = event.currentTarget.elements.namedItem("photos");
+    const nextPhotoError =
+      input instanceof HTMLInputElement ? validatePhotos(input.files) : null;
+
+    setPhotoError(nextPhotoError);
+    if (nextPhotoError) {
+      event.preventDefault();
+    }
   }
 
   function captureLocation() {
@@ -213,7 +253,11 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
   }
 
   return (
-    <form action={formAction} className="rounded-md border border-slate-200 bg-white shadow-sm">
+    <form
+      action={formAction}
+      onSubmit={handleSubmit}
+      className="rounded-md border border-slate-200 bg-white shadow-sm"
+    >
       <div className="border-b border-slate-200 px-5 py-4">
         <h2 className="text-lg font-semibold">Issue details</h2>
           <p className="mt-1 text-sm text-slate-600">
@@ -415,6 +459,7 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
             multiple
             accept="image/jpeg,image/png,image/webp,image/gif"
             disabled={demoMode}
+            onChange={(event) => setPhotoError(validatePhotos(event.target.files))}
             className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
           />
           <p className="mt-2 text-xs text-slate-500">
@@ -422,6 +467,11 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
               ? "Disabled in the hosted demo so the site stays lightweight and stable."
               : "Optional. JPEG, PNG, WebP, or GIF. Up to 4 files, 8 MB each."}
           </p>
+          {photoError ? (
+            <p className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">
+              {photoError}
+            </p>
+          ) : null}
         </label>
       </div>
 
