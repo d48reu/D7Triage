@@ -13,6 +13,7 @@ import { resolveReportLocationIntelligence } from "@/lib/report-location-intelli
 import {
   addAttachment,
   assignIssueReport,
+  addIssueAuditEvents,
   addReferral,
   addStaffNote,
   createIssueReport,
@@ -168,6 +169,61 @@ function serializeSuggestion(
     feedbackNote: suggestion.feedbackNote,
     feedbackCreatedAt: suggestion.feedbackCreatedAt,
     createdAt: suggestion.createdAt,
+  };
+}
+
+type CaseDetailAuditChange = {
+  fieldName: string;
+  fieldLabel: string;
+  oldValue: string | null;
+  newValue: string | null;
+};
+
+function normalizeAuditText(value: string | null | undefined) {
+  const normalized = (value ?? "").trim();
+  return normalized || null;
+}
+
+function booleanAuditText(value: boolean) {
+  return value ? "Yes" : "No";
+}
+
+function buildTextAuditChange(
+  fieldName: string,
+  fieldLabel: string,
+  oldValue: string | null | undefined,
+  newValue: string | null | undefined,
+): CaseDetailAuditChange | null {
+  const normalizedOldValue = normalizeAuditText(oldValue);
+  const normalizedNewValue = normalizeAuditText(newValue);
+
+  if (normalizedOldValue === normalizedNewValue) {
+    return null;
+  }
+
+  return {
+    fieldName,
+    fieldLabel,
+    oldValue: normalizedOldValue,
+    newValue: normalizedNewValue,
+  };
+}
+
+function buildBooleanAuditChange(
+  fieldName: string,
+  fieldLabel: string,
+  oldValue: boolean,
+  newValue: boolean,
+): CaseDetailAuditChange | null {
+  if (oldValue === newValue) {
+    return null;
+  }
+
+  return {
+    fieldName,
+    fieldLabel,
+    oldValue: booleanAuditText(oldValue),
+    newValue: booleanAuditText(newValue),
   };
 }
 
@@ -418,17 +474,33 @@ export async function updateIssueDetailsAction(formData: FormData) {
     throw new Error(`Preferred language must be ${MAX_LANGUAGE_LENGTH} characters or fewer.`);
   }
 
-  const changedFields = [
-    report.category !== category ? "category" : null,
-    report.description !== description ? "description" : null,
-    report.addressText !== addressText ? "location/address" : null,
-    (report.residentName ?? "") !== residentName ? "resident name" : null,
-    report.residentEmail !== residentEmail ? "resident email" : null,
-    (report.residentPhone ?? "") !== residentPhone ? "resident phone" : null,
-    report.preferredLanguage !== preferredLanguage ? "preferred language" : null,
-    report.contactConsent !== contactConsent ? "case update consent" : null,
-    report.newsletterOptIn !== newsletterOptIn ? "newsletter consent" : null,
-  ].filter((field): field is string => Boolean(field));
+  const detailChanges = [
+    buildTextAuditChange("category", "Category", report.category, category),
+    buildTextAuditChange("description", "Description", report.description, description),
+    buildTextAuditChange("addressText", "Location/address", report.addressText, addressText),
+    buildTextAuditChange("residentName", "Resident name", report.residentName, residentName),
+    buildTextAuditChange("residentEmail", "Resident email", report.residentEmail, residentEmail),
+    buildTextAuditChange("residentPhone", "Resident phone", report.residentPhone, residentPhone),
+    buildTextAuditChange(
+      "preferredLanguage",
+      "Preferred language",
+      report.preferredLanguage,
+      preferredLanguage,
+    ),
+    buildBooleanAuditChange(
+      "contactConsent",
+      "Case update consent",
+      report.contactConsent,
+      contactConsent,
+    ),
+    buildBooleanAuditChange(
+      "newsletterOptIn",
+      "Newsletter consent",
+      report.newsletterOptIn,
+      newsletterOptIn,
+    ),
+  ].filter((change): change is CaseDetailAuditChange => Boolean(change));
+  const changedFields = detailChanges.map((change) => change.fieldLabel.toLowerCase());
   const addressChanged = report.addressText !== addressText;
 
   updateIssueDetails({
@@ -458,6 +530,12 @@ export async function updateIssueDetailsAction(formData: FormData) {
   }
 
   if (changedFields.length > 0) {
+    addIssueAuditEvents({
+      reportId,
+      actorLabel: "Staff",
+      changes: detailChanges,
+    });
+
     addStaffNote({
       reportId,
       body: `Case details edited by staff. Updated fields: ${changedFields.join(", ")}.${

@@ -20,6 +20,7 @@ import {
   getManagedRoutingRule,
   getNotificationTemplateMap,
   getIssueReportById,
+  listIssueAuditEvents,
   listLinkedDuplicateReports,
   listAgencies,
   listAttachments,
@@ -71,6 +72,7 @@ export default async function StaffReportPage({
 
   const events = listStatusEvents(report.id);
   const notes = listStaffNotes(report.id);
+  const auditEvents = listIssueAuditEvents(report.id);
   const referrals = listReferrals(report.id);
   const agencies = listAgencies().filter((agency) => agency.isActive);
   const allStaffMembers = listStaffMembers();
@@ -841,7 +843,7 @@ export default async function StaffReportPage({
 
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
           <h2 className="text-lg font-semibold">Timeline</h2>
-          <div className="mt-4 grid gap-6 lg:grid-cols-3">
+          <div className="mt-4 grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-700">
                 Status events
@@ -995,6 +997,48 @@ export default async function StaffReportPage({
               ) : (
                 <p className="text-sm text-slate-600">
                   No internal notes have been added yet.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-slate-700">
+                Audit history
+              </h3>
+              {auditEvents.length > 0 ? (
+                auditEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    className="rounded-md border border-slate-200 bg-slate-50 p-4"
+                  >
+                    <div className="text-sm font-semibold">{event.fieldLabel}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {event.actorLabel} |{" "}
+                      {new Date(event.createdAt).toLocaleString()}
+                    </div>
+                    <div className="mt-3 space-y-3 text-xs text-slate-600">
+                      <div>
+                        <div className="font-semibold uppercase tracking-[0.08em]">
+                          Before
+                        </div>
+                        <p className="mt-1 break-words whitespace-pre-wrap text-sm leading-5 text-slate-800">
+                          {event.oldValue || "Blank"}
+                        </p>
+                      </div>
+                      <div>
+                        <div className="font-semibold uppercase tracking-[0.08em]">
+                          After
+                        </div>
+                        <p className="mt-1 break-words whitespace-pre-wrap text-sm leading-5 text-slate-800">
+                          {event.newValue || "Blank"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-600">
+                  No case detail edits have been recorded yet.
                 </p>
               )}
             </div>

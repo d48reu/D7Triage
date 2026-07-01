@@ -123,6 +123,18 @@ export type StaffNote = {
   createdAt: string;
 };
 
+export type IssueAuditEvent = {
+  id: string;
+  reportId: string;
+  eventType: string;
+  fieldName: string;
+  fieldLabel: string;
+  oldValue: string | null;
+  newValue: string | null;
+  actorLabel: string;
+  createdAt: string;
+};
+
 export type StaffMember = {
   id: string;
   name: string;
@@ -287,6 +299,18 @@ type StaffNoteRow = {
   id: string;
   report_id: string;
   body: string;
+  created_at: string;
+};
+
+type IssueAuditEventRow = {
+  id: string;
+  report_id: string;
+  event_type: string;
+  field_name: string;
+  field_label: string;
+  old_value: string | null;
+  new_value: string | null;
+  actor_label: string;
   created_at: string;
 };
 
@@ -1247,6 +1271,18 @@ function getDb() {
       created_at text not null
     );
 
+    create table if not exists issue_audit_events (
+      id text primary key,
+      report_id text not null references issue_reports(id) on delete cascade,
+      event_type text not null,
+      field_name text not null,
+      field_label text not null,
+      old_value text,
+      new_value text,
+      actor_label text not null,
+      created_at text not null
+    );
+
     create table if not exists staff_members (
       id text primary key,
       name text not null unique,
@@ -1387,6 +1423,7 @@ function getDb() {
     create index if not exists idx_issue_reports_assigned_staff on issue_reports(assigned_staff_id);
     create index if not exists idx_status_events_report on issue_status_events(report_id);
     create index if not exists idx_staff_notes_report on staff_notes(report_id);
+    create index if not exists idx_audit_events_report on issue_audit_events(report_id, created_at);
     create index if not exists idx_referrals_report on referrals(report_id);
     create index if not exists idx_attachments_report on issue_attachments(report_id);
     create index if not exists idx_notification_events_report on notification_events(report_id);
@@ -1481,6 +1518,20 @@ function mapStaffNote(row: StaffNoteRow): StaffNote {
     id: row.id,
     reportId: row.report_id,
     body: row.body,
+    createdAt: row.created_at,
+  };
+}
+
+function mapIssueAuditEvent(row: IssueAuditEventRow): IssueAuditEvent {
+  return {
+    id: row.id,
+    reportId: row.report_id,
+    eventType: row.event_type,
+    fieldName: row.field_name,
+    fieldLabel: row.field_label,
+    oldValue: row.old_value,
+    newValue: row.new_value,
+    actorLabel: row.actor_label,
     createdAt: row.created_at,
   };
 }
@@ -2468,6 +2519,19 @@ export function listStaffNotes(reportId: string) {
   return rows.map(mapStaffNote);
 }
 
+export function listIssueAuditEvents(reportId: string) {
+  const rows = getDb()
+    .prepare(
+      `select *
+       from issue_audit_events
+       where report_id = ?
+       order by datetime(created_at) desc, id desc`,
+    )
+    .all(reportId) as IssueAuditEventRow[];
+
+  return rows.map(mapIssueAuditEvent);
+}
+
 export function listReferrals(reportId: string) {
   const rows = getDb()
     .prepare(
@@ -3088,6 +3152,45 @@ export function addStaffNote(input: { reportId: string; body: string }) {
       "insert into staff_notes (id, report_id, body, created_at) values (?, ?, ?, ?)",
     )
     .run(makeId(), input.reportId, input.body, nowIso());
+}
+
+export function addIssueAuditEvents(input: {
+  reportId: string;
+  actorLabel?: string;
+  eventType?: string;
+  changes: Array<{
+    fieldName: string;
+    fieldLabel: string;
+    oldValue?: string | null;
+    newValue?: string | null;
+  }>;
+}) {
+  if (input.changes.length === 0) return;
+
+  const database = getDb();
+  const createdAt = nowIso();
+  const statement = database.prepare(
+    `insert into issue_audit_events (
+      id, report_id, event_type, field_name, field_label,
+      old_value, new_value, actor_label, created_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+
+  database.transaction(() => {
+    for (const change of input.changes) {
+      statement.run(
+        makeId(),
+        input.reportId,
+        input.eventType || "case_details_updated",
+        change.fieldName,
+        change.fieldLabel,
+        change.oldValue ?? null,
+        change.newValue ?? null,
+        input.actorLabel?.trim() || "Staff",
+        createdAt,
+      );
+    }
+  })();
 }
 
 export function addReferral(input: {
