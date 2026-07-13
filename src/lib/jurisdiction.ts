@@ -1,4 +1,5 @@
 import { geometryContainsPoint, parseGeoJsonFeatures } from "@/lib/geojson-utils";
+import { inferIssueCategoryFromText } from "@/lib/issue-types";
 
 type ReportLike = {
   category: string;
@@ -304,9 +305,15 @@ function applyCategoryBias(
     }
   };
 
-  switch (report.category) {
+  const inferredCategory = inferIssueCategoryFromText({
+    category: report.category,
+    description: report.description,
+    addressText: report.addressText,
+  });
+
+  switch (inferredCategory) {
     case "HOUSING":
-      addScore("private_property", "Housing category may involve property owner or code context");
+      addScore("county", "Housing category context");
       break;
     case "HOMELESS ASSISTANCE":
     case "PANHANDLERS, HOMELESS NUISANCE":
@@ -350,34 +357,16 @@ function applyCategoryBias(
         addScore("private_property", "Point appears to fall on a parcel");
       }
       break;
-    case "Parks":
-      addScore("parks", "Parks category context", 2);
-      break;
-    case "Streetlights and signage":
-      addScore("utility", "Streetlight/signage category context");
-      break;
-    case "Traffic safety":
-      addScore("municipal", "Traffic category context");
-      break;
-    case "Trees":
-      addScore("municipal", "Tree issue category context");
-      addScore("private_property", "Tree issue may involve adjacent private property");
-      if (/\bpower line\b/i.test(report.description)) {
-        addScore("utility", "Tree hazard intersects utility clue");
-      }
-      break;
-    case "Sidewalks":
-      addScore("municipal", "Sidewalk category context");
-      addScore("private_property", "Sidewalk issue may involve adjacent property");
-      if (report.rightOfWayHint === "probable_public_right_of_way") {
-        addScore("municipal", "Point appears outside a parcel, suggesting right-of-way", 2);
-      }
-      if (report.rightOfWayHint === "on_parcel") {
-        addScore("private_property", "Point appears to fall on a parcel");
-      }
-      break;
     default:
       break;
+  }
+
+  if (/\btree\b/i.test(report.category)) {
+    addScore("municipal", "Tree issue category context");
+    addScore("private_property", "Tree issue may involve adjacent private property");
+    if (/\bpower line\b/i.test(report.description)) {
+      addScore("utility", "Tree hazard intersects utility clue");
+    }
   }
 
   if (isUnincorporatedMiamiDade(report.municipalityName)) {

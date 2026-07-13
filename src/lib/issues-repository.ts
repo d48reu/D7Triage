@@ -11,7 +11,11 @@ import {
   DEMO_STAFF_MEMBERS,
 } from "@/demo-data/demo-seed";
 import { isDemoMode } from "@/lib/demo-mode";
-import { ISSUE_CATEGORIES, type IssueStatus } from "@/lib/issue-types";
+import {
+  ISSUE_CATEGORIES,
+  normalizeIssueCategory,
+  type IssueStatus,
+} from "@/lib/issue-types";
 import {
   NOTIFICATION_TEMPLATE_DEFINITIONS,
   type NotificationTemplateKey,
@@ -2247,8 +2251,8 @@ export function listManagedRoutingRules() {
   mapped.sort(
     (a, b) => {
       const categoryDiff =
-        (orderMap.get(a.category) ?? Number.MAX_SAFE_INTEGER) -
-        (orderMap.get(b.category) ?? Number.MAX_SAFE_INTEGER);
+        (orderMap.get(normalizeIssueCategory(a.category)) ?? Number.MAX_SAFE_INTEGER) -
+        (orderMap.get(normalizeIssueCategory(b.category)) ?? Number.MAX_SAFE_INTEGER);
       if (categoryDiff !== 0) {
         return categoryDiff;
       }
@@ -2264,12 +2268,13 @@ export function listManagedRoutingRules() {
 
 export function getManagedRoutingRule(category: string, municipalityName?: string | null) {
   const rules = listManagedRoutingRules();
+  const normalizedCategory = normalizeIssueCategory(category);
   const normalizedMunicipality = municipalityName?.trim().toLowerCase() || null;
 
   if (normalizedMunicipality) {
     const municipalityMatch = rules.find(
       (rule) =>
-        rule.category === category &&
+        normalizeIssueCategory(rule.category) === normalizedCategory &&
         rule.municipalityName?.trim().toLowerCase() === normalizedMunicipality,
     );
 
@@ -2279,7 +2284,11 @@ export function getManagedRoutingRule(category: string, municipalityName?: strin
   }
 
   return (
-    rules.find((rule) => rule.category === category && !rule.municipalityName) ??
+    rules.find(
+      (rule) =>
+        normalizeIssueCategory(rule.category) === normalizedCategory &&
+        !rule.municipalityName,
+    ) ??
     rules.find(
       (rule) => rule.category === "Other / unsure" && !rule.municipalityName,
     ) ??

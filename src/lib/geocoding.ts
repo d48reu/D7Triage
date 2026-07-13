@@ -38,8 +38,74 @@ function getCensusBenchmark() {
   return process.env.GEOCODING_CENSUS_BENCHMARK || "Public_AR_Current";
 }
 
-function getAddressCandidates(addressText: string) {
-  const candidates = [addressText];
+function cleanStreetFragment(value: string) {
+  return value
+    .replace(/\bcorner of\b/i, "")
+    .replace(/\bat the corner of\b/i, "")
+    .replace(/\.$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function appendDefaultCity(value: string) {
+  return /\bfl(?:orida)?\b/i.test(value) ? value : `${value}, Miami, FL`;
+}
+
+function getStreetAliases(value: string) {
+  if (/\bcoral way\b/i.test(value)) {
+    return [value.replace(/\bcoral way\b/i, "SW 22nd St"), value];
+  }
+
+  return [value];
+}
+
+function getIntersectionCandidate(addressText: string) {
+  const normalized = addressText.trim();
+  const corridorMatch = normalized.match(
+    /^(.+?),?\s+between\s+(.+?)\s+and\s+(.+?)(?:,|$)/i,
+  );
+
+  if (corridorMatch) {
+    const baseStreet = cleanStreetFragment(corridorMatch[1]);
+    const firstCrossStreet = cleanStreetFragment(corridorMatch[3]);
+    const secondCrossStreet = cleanStreetFragment(corridorMatch[2]);
+
+    return [firstCrossStreet, secondCrossStreet].flatMap((crossStreet) =>
+      getStreetAliases(baseStreet).map((street) =>
+        appendDefaultCity(`${street} and ${crossStreet}`),
+      ),
+    );
+  }
+
+  const intersectionMatch = normalized.match(
+    /^(?:at\s+)?(?:the\s+)?(?:corner of\s+)?(.+?)\s+(?:and|&|\/)\s+(.+?)(?:,|$)/i,
+  );
+
+  if (!intersectionMatch) {
+    return [];
+  }
+
+  return [
+    ...getStreetAliases(cleanStreetFragment(intersectionMatch[1])).map((street) =>
+      appendDefaultCity(`${street} and ${cleanStreetFragment(intersectionMatch[2])}`),
+    ),
+  ];
+}
+
+export function getAddressCandidates(addressText: string) {
+  const normalizedAddress = addressText.trim();
+  const candidates = [normalizedAddress];
+  const semicolonCandidates = normalizedAddress
+    .split(";")
+    .map((candidate) => candidate.trim())
+    .filter((candidate) => candidate.length > 0);
+
+  if (semicolonCandidates.length > 1) {
+    candidates.push(...semicolonCandidates);
+  }
+
+  candidates.push(...getIntersectionCandidate(normalizedAddress));
+
   const dixieAlias = addressText.replace(
     /\b(?:s\.?|south)?\s*dixie\s*(?:highway|hwy)\b/i,
     "SW 37th Ave",

@@ -1,6 +1,10 @@
 import OpenAI from "openai";
 import type { Response as OpenAIResponse } from "openai/resources/responses/responses";
-import { ISSUE_CATEGORIES } from "@/lib/issue-types";
+import {
+  ISSUE_CATEGORIES,
+  inferIssueCategoryFromText,
+  normalizeIssueCategory,
+} from "@/lib/issue-types";
 import { analyzeReportJurisdiction } from "@/lib/jurisdiction";
 import {
   type Agency,
@@ -27,6 +31,12 @@ type RawAiSuggestion = {
   recommendedNextStep: string;
   missingInformation: string[];
   draftResponse: string;
+};
+
+type CategoryReportLike = {
+  category: string;
+  description: string;
+  addressText: string;
 };
 
 export type AiRoutingAvailability = {
@@ -100,6 +110,24 @@ export function getAiRoutingAvailability(): AiRoutingAvailability {
     model: getRoutingModel(),
     maxGenerationsPerReportPerDay: getMaxGenerationsPerReportPerDay(),
   };
+}
+
+export function normalizeAiSuggestionCategory(
+  report: CategoryReportLike,
+  suggestedCategory: string,
+) {
+  const inferredCategory = inferIssueCategoryFromText(report);
+  const normalizedReportCategory = normalizeIssueCategory(report.category);
+  const normalizedSuggestedCategory = normalizeIssueCategory(suggestedCategory);
+
+  if (
+    inferredCategory !== "Other / unsure" &&
+    inferredCategory !== normalizedReportCategory
+  ) {
+    return inferredCategory;
+  }
+
+  return normalizedSuggestedCategory;
 }
 
 function estimateTokenCount(text: string) {
@@ -238,7 +266,7 @@ function buildPrompt(input: {
       2,
     ),
     "",
-    "Choose the best category and agency only from the provided data. If nothing clearly fits, return suggestedAgencyId as 'none' and keep confidence low. Do not invent a new agency. Draft a resident response that is factual, brief, and does not overpromise.",
+    "Choose the best category and agency only from the provided data. Preserve the submitted category unless the report text clearly points to a better category. Storm drain, catch basin, drainage, and flooding issues belong under FLOODING, not WATER METER READING. Housing vouchers, rent, lease, landlord, HCD, and tenant issues belong under HOUSING. If nothing clearly fits, return suggestedAgencyId as 'none' and keep confidence low. Do not invent a new agency. Draft a resident response that is factual, brief, and does not overpromise.",
   ].join("\n");
 }
 
@@ -315,6 +343,10 @@ export async function generateAiRoutingSuggestion(reportId: string) {
   })) as OpenAIResponse;
 
   const parsed = JSON.parse(extractResponseText(response)) as RawAiSuggestion;
+  const suggestedCategory = normalizeAiSuggestionCategory(
+    report,
+    parsed.suggestedCategory,
+  );
   const agencyId =
     parsed.suggestedAgencyId !== "none" ? parsed.suggestedAgencyId : null;
   const agency = agencyId
@@ -325,7 +357,7 @@ export async function generateAiRoutingSuggestion(reportId: string) {
   return addAiSuggestion({
     reportId,
     summary: parsed.summary,
-    suggestedCategory: parsed.suggestedCategory,
+    suggestedCategory,
     suggestedUrgency: parsed.suggestedUrgency,
     suggestedResponsibleParty:
       agency?.name || parsed.suggestedResponsibleParty,

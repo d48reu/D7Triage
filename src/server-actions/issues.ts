@@ -6,7 +6,13 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo-mode";
-import { ISSUE_CATEGORIES, ISSUE_STATUSES, type IssueStatus } from "@/lib/issue-types";
+import {
+  ISSUE_STATUSES,
+  inferIssueCategoryFromText,
+  isKnownIssueCategoryInput,
+  normalizeIssueCategory,
+  type IssueStatus,
+} from "@/lib/issue-types";
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
 import { getUploadsDir } from "@/lib/data-paths";
 import { resolveReportLocationIntelligence } from "@/lib/report-location-intelligence";
@@ -227,6 +233,20 @@ function buildBooleanAuditChange(
   };
 }
 
+function resolveSubmittedCategory(input: {
+  category: string;
+  description: string;
+  addressText: string;
+}) {
+  const normalizedCategory = normalizeIssueCategory(input.category);
+
+  if (normalizedCategory === "Other / unsure" || normalizedCategory !== input.category) {
+    return inferIssueCategoryFromText(input);
+  }
+
+  return normalizedCategory;
+}
+
 async function savePhotoAttachments(reportId: string, photos: File[]) {
   if (photos.length === 0) return;
 
@@ -257,7 +277,12 @@ export async function submitIssueReportAction(
   const description = String(formData.get("description") ?? "").trim();
   const addressText = String(formData.get("addressText") ?? "").trim();
   const residentEmail = String(formData.get("residentEmail") ?? "").trim();
-  const category = String(formData.get("category") ?? "").trim();
+  const submittedCategory = String(formData.get("category") ?? "").trim();
+  const category = resolveSubmittedCategory({
+    category: submittedCategory,
+    description,
+    addressText,
+  });
   const residentName = String(formData.get("residentName") ?? "").trim();
   const residentPhone = String(formData.get("residentPhone") ?? "").trim();
   const preferredLanguage =
@@ -271,10 +296,17 @@ export async function submitIssueReportAction(
     .getAll("photos")
     .filter((value): value is File => value instanceof File && value.size > 0);
 
-  if (!category || !description || !addressText || !residentEmail) {
+  if (!submittedCategory || !description || !addressText || !residentEmail) {
     return {
       status: "error",
       message: "Category, description, location, and email are required.",
+    };
+  }
+
+  if (!isKnownIssueCategoryInput(submittedCategory)) {
+    return {
+      status: "error",
+      message: "Choose a valid category.",
     };
   }
 
@@ -432,9 +464,14 @@ export async function updateIssueDetailsAction(formData: FormData) {
     throw new Error("Report not found");
   }
 
-  const category = readRequiredText(formData, "category");
+  const submittedCategory = readRequiredText(formData, "category");
   const description = readRequiredText(formData, "description");
   const addressText = readRequiredText(formData, "addressText");
+  const category = resolveSubmittedCategory({
+    category: submittedCategory,
+    description,
+    addressText,
+  });
   const residentEmail = readRequiredText(formData, "residentEmail");
   const residentName = String(formData.get("residentName") ?? "").trim();
   const residentPhone = String(formData.get("residentPhone") ?? "").trim();
@@ -444,8 +481,8 @@ export async function updateIssueDetailsAction(formData: FormData) {
   const newsletterOptIn = formData.get("newsletterOptIn") === "on";
 
   if (
-    category !== report.category &&
-    !ISSUE_CATEGORIES.includes(category as (typeof ISSUE_CATEGORIES)[number])
+    submittedCategory !== report.category &&
+    !isKnownIssueCategoryInput(submittedCategory)
   ) {
     throw new Error("Invalid category");
   }
