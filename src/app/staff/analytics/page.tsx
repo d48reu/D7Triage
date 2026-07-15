@@ -888,13 +888,13 @@ function buildPilotReviewItems(input: {
     }
 
     if (
-      report.status === "needs_review" &&
+      ["received", "needs_review"].includes(report.status) &&
       new Date(report.createdAt) < staleReviewCutoff
     ) {
       items.push({
         report,
         reason: "Still waiting on first triage",
-        detail: "This case has been in needs review for more than one day.",
+        detail: "This case has been waiting for first triage for more than one day.",
         priority: 2,
       });
     }
