@@ -7,6 +7,7 @@ import {
   analyzeReportJurisdiction,
   formatDistrictHintStatus,
   formatOwnershipHint,
+  type JurisdictionAssessment,
 } from "@/lib/jurisdiction";
 import {
   listAiSuggestions,
@@ -15,6 +16,8 @@ import {
   listIssueReports,
   listNewsletterContacts,
   listReferrals,
+  type AiSuggestion,
+  type IssueReport,
 } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 
@@ -120,6 +123,10 @@ export default async function StaffAnalyticsPage({
   const reportsRoutedThisWindow = reports.filter((report) =>
     reportsWithReferrals.has(report.id),
   );
+  const pilotReviewItems = buildPilotReviewItems({
+    jurisdictionAssessments,
+    suggestionsByReportId: groupSuggestionsByReportId(allSuggestions),
+  });
   const reportTrend = buildDailyTrend(reports.map((report) => report.createdAt), filterRange, "Reports");
   const referralTrend = buildDailyTrend(
     allReferrals.map((referral) => referral.createdAt),
@@ -464,6 +471,39 @@ export default async function StaffAnalyticsPage({
           </div>
         </Panel>
 
+        <Panel title="Pilot review queue">
+          {pilotReviewItems.length > 0 ? (
+            <div className="space-y-2">
+              {pilotReviewItems.slice(0, 12).map((item) => (
+                <Link
+                  key={`${item.report.id}-${item.reason}`}
+                  href={`/staff/reports/${item.report.id}`}
+                  className="block rounded-md border border-slate-200 bg-slate-50 px-4 py-3 hover:bg-slate-100"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="font-medium text-slate-900">
+                      {item.reason}
+                    </div>
+                    <div className="text-sm text-slate-600">
+                      {formatStatus(item.report.status)}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-sm text-slate-700">
+                    {item.report.category} at {item.report.addressText}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    {item.detail}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">
+              No pilot review flags in this window.
+            </p>
+          )}
+        </Panel>
+
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <Panel title="AI feedback outcomes">
             <CountList
@@ -795,6 +835,87 @@ function buildExportQuerySuffix(input: {
 
   const serialized = query.toString();
   return serialized ? `?${serialized}` : "";
+}
+
+function groupSuggestionsByReportId(suggestions: AiSuggestion[]) {
+  return suggestions.reduce((map, suggestion) => {
+    const existing = map.get(suggestion.reportId) ?? [];
+    existing.push(suggestion);
+    map.set(suggestion.reportId, existing);
+    return map;
+  }, new Map<string, AiSuggestion[]>());
+}
+
+function buildPilotReviewItems(input: {
+  jurisdictionAssessments: Array<{
+    report: IssueReport;
+    assessment: JurisdictionAssessment;
+  }>;
+  suggestionsByReportId: Map<string, AiSuggestion[]>;
+}) {
+  const staleReviewCutoff = new Date();
+  staleReviewCutoff.setDate(staleReviewCutoff.getDate() - 1);
+
+  return input.jurisdictionAssessments.flatMap(({ report, assessment }) => {
+    const items: Array<{
+      report: IssueReport;
+      reason: string;
+      detail: string;
+      priority: number;
+    }> = [];
+    const suggestions = input.suggestionsByReportId.get(report.id) ?? [];
+
+    if (assessment.districtHintStatus === "unclear") {
+      items.push({
+        report,
+        reason: "District check unclear",
+        detail: "Confirm whether this address is inside District 7 before referral.",
+        priority: 1,
+      });
+    }
+
+    if (
+      report.municipalityName?.toLowerCase() === "unincorporated miami-dade" &&
+      assessment.ownershipHint === "municipal"
+    ) {
+      items.push({
+        report,
+        reason: "Unincorporated case needs county/D7 review",
+        detail:
+          "Unincorporated Miami-Dade inside District 7 should be handled as county-side responsibility.",
+        priority: 0,
+      });
+    }
+
+    if (
+      report.status === "needs_review" &&
+      new Date(report.createdAt) < staleReviewCutoff
+    ) {
+      items.push({
+        report,
+        reason: "Still waiting on first triage",
+        detail: "This case has been in needs review for more than one day.",
+        priority: 2,
+      });
+    }
+
+    if (
+      suggestions.some((suggestion) => suggestion.feedbackDisposition === null)
+    ) {
+      items.push({
+        report,
+        reason: "AI suggestion awaiting feedback",
+        detail: "Accept, edit, or reject the AI suggestion so routing quality can improve.",
+        priority: 3,
+      });
+    }
+
+    return items;
+  }).sort(
+    (a, b) =>
+      a.priority - b.priority ||
+      new Date(b.report.createdAt).getTime() - new Date(a.report.createdAt).getTime(),
+  );
 }
 
 function buildDailyTrend(
