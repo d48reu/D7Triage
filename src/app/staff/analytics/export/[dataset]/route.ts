@@ -11,6 +11,10 @@ import {
   listNewsletterContacts,
   listReferrals,
 } from "@/lib/issues-repository";
+import {
+  buildPilotDataBackup,
+  buildPilotDataBackupFileName,
+} from "@/lib/pilot-data-backup";
 import { requireStaffSession } from "@/lib/staff-auth";
 
 export const runtime = "nodejs";
@@ -23,6 +27,15 @@ export async function GET(
   await requireStaffSession();
   const { dataset } = await context.params;
   const url = new URL(request.url);
+
+  if (dataset === "pilot-backup") {
+    return NextResponse.json(buildPilotDataBackup(), {
+      headers: {
+        "Content-Disposition": `attachment; filename="${buildPilotDataBackupFileName()}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
 
   const csv = buildCsv(dataset, {
     preset: url.searchParams.get("preset") ?? "all",

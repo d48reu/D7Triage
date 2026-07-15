@@ -425,7 +425,17 @@ export default async function StaffAnalyticsPage({
         </section>
 
         <Panel title="Exports">
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            Download the pilot backup JSON at the end of each day with real case
+            entry. Attachment metadata is included here; attachment files remain
+            on the Render persistent disk.
+          </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <ExportLink
+              href="/staff/analytics/export/pilot-backup"
+              label="Pilot backup JSON"
+              description="Cases, audit history, routing data, and staff metadata."
+            />
             <ExportLink
               href={`/staff/analytics/export/newsletter-contacts${exportQuerySuffix}`}
               label="Newsletter contacts CSV"

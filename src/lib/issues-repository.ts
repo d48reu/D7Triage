@@ -1895,6 +1895,14 @@ export function listIssueReports() {
   return rows.map(mapReport);
 }
 
+export function listAllIssueReports() {
+  const rows = getDb()
+    .prepare("select * from issue_reports order by datetime(created_at) desc")
+    .all() as IssueReportRow[];
+
+  return rows.map(mapReport);
+}
+
 export function listNewsletterContacts() {
   const rows = getDb()
     .prepare(

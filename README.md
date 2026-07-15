@@ -22,6 +22,7 @@ Current capabilities:
 - Miami-Dade District 7 boundary-aware hinting when coordinates are available
 - AI-assisted routing suggestions with guardrails and staff feedback
 - analytics, saved views, and CSV exports
+- staff-only pilot backup JSON export
 - notification preview center with editable templates
 
 ## Current Architecture
@@ -106,5 +107,6 @@ Staff auth is still local password-based and is suitable for development or tigh
 - [Product brief](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/product-brief.md>)
 - [Implementation plan](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/implementation-plan.md>)
 - [Pilot readiness checklist](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/pilot-readiness.md>)
+- [Staff pilot operations](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/staff-pilot-operations.md>)
 - [Render deployment guide](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/render-deployment.md>)
 - [Vercel demo deployment guide](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/docs/vercel-demo-deployment.md>)
