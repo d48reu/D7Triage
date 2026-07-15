@@ -2268,22 +2268,36 @@ export function listManagedRoutingRules() {
 
 export function getManagedRoutingRule(category: string, municipalityName?: string | null) {
   const rules = listManagedRoutingRules();
+  const exactCategory = category.trim();
   const normalizedCategory = normalizeIssueCategory(category);
   const normalizedMunicipality = municipalityName?.trim().toLowerCase() || null;
 
   if (normalizedMunicipality) {
-    const municipalityMatch = rules.find(
+    const exactMunicipalityMatch = rules.find(
+      (rule) =>
+        rule.category === exactCategory &&
+        rule.municipalityName?.trim().toLowerCase() === normalizedMunicipality,
+    );
+
+    if (exactMunicipalityMatch) {
+      return exactMunicipalityMatch;
+    }
+
+    const normalizedMunicipalityMatch = rules.find(
       (rule) =>
         normalizeIssueCategory(rule.category) === normalizedCategory &&
         rule.municipalityName?.trim().toLowerCase() === normalizedMunicipality,
     );
 
-    if (municipalityMatch) {
-      return municipalityMatch;
+    if (normalizedMunicipalityMatch) {
+      return normalizedMunicipalityMatch;
     }
   }
 
   return (
+    rules.find(
+      (rule) => rule.category === exactCategory && !rule.municipalityName,
+    ) ??
     rules.find(
       (rule) =>
         normalizeIssueCategory(rule.category) === normalizedCategory &&
