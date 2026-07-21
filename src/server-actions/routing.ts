@@ -78,7 +78,7 @@ export async function sendAssignmentTestEmailAction(formData: FormData) {
   });
 
   revalidatePath("/staff/routing");
-  redirect(`/staff/routing?${query.toString()}`);
+  redirect(`/staff/routing?${query.toString()}#assignment-email-readiness`);
 }
 
 export async function saveRoutingRuleAction(formData: FormData) {
