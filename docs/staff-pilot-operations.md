@@ -105,10 +105,15 @@ Required Render environment variables:
 
 Before relying on this workflow:
 
-1. Confirm each active staff member has the correct email address in **Staff routing**.
-2. Assign one low-risk real case to yourself or another staff member.
-3. Confirm the assignment email arrives.
-4. Confirm the case timeline includes an internal update showing whether the assignment notification was sent, skipped, or failed.
+1. In Render, set `RESEND_API_KEY`.
+2. In Render, set `ISSUE_REPORT_FROM_EMAIL` to a verified sender address.
+3. In Render, confirm `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`.
+4. Redeploy the service after changing environment variables.
+5. Open **Staff routing** and check **Assignment email readiness**.
+6. Confirm each active staff member has the correct email address in **Staff routing**.
+7. Assign one low-risk real case to yourself or another staff member.
+8. Confirm the assignment email arrives.
+9. Confirm the case timeline includes an internal update showing whether the assignment notification was sent, skipped, or failed.
 
 Assignment emails are only for internal staff. They do not turn on constituent email.
 

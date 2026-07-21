@@ -67,6 +67,19 @@ function getAssignmentEmailConfig() {
   };
 }
 
+export function getStaffAssignmentEmailReadiness() {
+  const config = getAssignmentEmailConfig();
+
+  return {
+    enabled: config.enabled,
+    hasResendApiKey: Boolean(config.apiKey),
+    hasFromEmail: Boolean(config.fromEmail),
+    fromEmail: config.fromEmail,
+    ready: Boolean(config.enabled && config.apiKey && config.fromEmail),
+    reason: config.reason,
+  };
+}
+
 function getAppUrl() {
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   return (configuredUrl || "http://localhost:3000").replace(/\/$/, "");

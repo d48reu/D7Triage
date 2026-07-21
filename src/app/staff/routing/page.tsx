@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { parseGeoJsonFeatures } from "@/lib/geojson-utils";
+import { getStaffAssignmentEmailReadiness } from "@/lib/staff-assignment-notifications";
 import {
   getJurisdictionConfig,
   listAgencies,
@@ -21,6 +22,11 @@ export default async function RoutingGuidePage() {
   const agencies = listAgencies();
   const routingRules = listManagedRoutingRules();
   const staffMembers = listStaffMembers();
+  const activeStaffMembers = staffMembers.filter((staffMember) => staffMember.isActive);
+  const activeStaffMissingEmail = activeStaffMembers.filter(
+    (staffMember) => !staffMember.email?.trim(),
+  );
+  const assignmentEmailReadiness = getStaffAssignmentEmailReadiness();
   const jurisdictionConfig = getJurisdictionConfig();
   const municipalityNames = Array.from(
     new Set(
@@ -211,6 +217,73 @@ export default async function RoutingGuidePage() {
               ) : null}
             </div>
           </form>
+        </section>
+
+        <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">Assignment email readiness</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                These internal emails go only to assigned staff members when a case owner changes.
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                assignmentEmailReadiness.ready && activeStaffMissingEmail.length === 0
+                  ? "bg-emerald-100 text-emerald-900"
+                  : "bg-amber-100 text-amber-900"
+              }`}
+            >
+              {assignmentEmailReadiness.ready && activeStaffMissingEmail.length === 0
+                ? "Ready"
+                : "Needs setup"}
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <ReadinessItem
+              label="Assignment email"
+              value={assignmentEmailReadiness.enabled ? "Enabled" : "Disabled"}
+              ready={assignmentEmailReadiness.enabled}
+            />
+            <ReadinessItem
+              label="Resend API key"
+              value={assignmentEmailReadiness.hasResendApiKey ? "Configured" : "Missing"}
+              ready={assignmentEmailReadiness.hasResendApiKey}
+            />
+            <ReadinessItem
+              label="From email"
+              value={assignmentEmailReadiness.fromEmail ?? "Missing"}
+              ready={assignmentEmailReadiness.hasFromEmail}
+            />
+            <ReadinessItem
+              label="Active staff emails"
+              value={`${activeStaffMembers.length - activeStaffMissingEmail.length}/${activeStaffMembers.length} configured`}
+              ready={activeStaffMissingEmail.length === 0}
+            />
+          </div>
+
+          {assignmentEmailReadiness.ready ? (
+            <p className="mt-4 text-sm leading-6 text-slate-700">
+              Assign one low-risk case to yourself to confirm delivery. The case timeline
+              will record whether the notification was sent, skipped, or failed.
+            </p>
+          ) : (
+            <p className="mt-4 text-sm leading-6 text-slate-700">
+              To enable assignment emails, set `RESEND_API_KEY`,
+              `ISSUE_REPORT_FROM_EMAIL`, and `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`
+              in Render, then redeploy.
+            </p>
+          )}
+
+          {activeStaffMissingEmail.length > 0 ? (
+            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              Missing emails:{" "}
+              {activeStaffMissingEmail
+                .map((staffMember) => staffMember.name)
+                .join(", ")}
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
@@ -672,6 +745,34 @@ function Field({
         className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
       />
     </label>
+  );
+}
+
+function ReadinessItem({
+  label,
+  value,
+  ready,
+}: {
+  label: string;
+  value: string;
+  ready: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+        {label}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-slate-900">{value}</span>
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+            ready ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"
+          }`}
+        >
+          {ready ? "OK" : "Needs setup"}
+        </span>
+      </div>
+    </div>
   );
 }
 
