@@ -14,11 +14,19 @@ import {
   saveAgencyAction,
   saveJurisdictionConfigAction,
   saveRoutingRuleAction,
+  sendAssignmentTestEmailAction,
   saveStaffMemberAction,
 } from "@/server-actions/routing";
 
-export default async function RoutingGuidePage() {
+export default async function RoutingGuidePage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireStaffSession();
+  const params = (await searchParams) ?? {};
+  const assignmentEmailTest = readSearchParam(params, "assignmentEmailTest");
+  const assignmentEmailMessage = readSearchParam(params, "assignmentEmailMessage");
   const agencies = listAgencies();
   const routingRules = listManagedRoutingRules();
   const staffMembers = listStaffMembers();
@@ -240,6 +248,18 @@ export default async function RoutingGuidePage() {
             </span>
           </div>
 
+          {assignmentEmailMessage ? (
+            <div
+              className={`mt-4 rounded-md border px-4 py-3 text-sm font-medium ${
+                assignmentEmailTest === "sent"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  : "border-amber-200 bg-amber-50 text-amber-950"
+              }`}
+            >
+              {assignmentEmailMessage}
+            </div>
+          ) : null}
+
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <ReadinessItem
               label="Assignment email"
@@ -355,12 +375,21 @@ export default async function RoutingGuidePage() {
                     Active
                   </label>
                   <div className="flex items-end">
-                    <button
-                      type="submit"
-                      className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
-                    >
-                      Save Staff Member
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
+                      >
+                        Save Staff Member
+                      </button>
+                      <button
+                        type="submit"
+                        formAction={sendAssignmentTestEmailAction}
+                        className="rounded-md border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-50"
+                      >
+                        Send Test Email
+                      </button>
+                    </div>
                   </div>
                 </form>
               ))
@@ -717,6 +746,17 @@ export default async function RoutingGuidePage() {
       </div>
     </main>
   );
+}
+
+function readSearchParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+) {
+  const value = params[key];
+  if (Array.isArray(value)) {
+    return value[0] ?? "";
+  }
+  return value ?? "";
 }
 
 function Field({

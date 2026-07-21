@@ -1,17 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   fetchOfficialMiamiDadeCommissionDistrictBoundaries,
   fetchOfficialMiamiDadeMunicipalityBoundaries,
 } from "@/lib/location-intelligence";
 import {
+  getStaffMemberById,
   getJurisdictionConfig,
   saveJurisdictionConfig,
   upsertAgency,
   upsertRoutingRule,
   upsertStaffMember,
 } from "@/lib/issues-repository";
+import { sendStaffAssignmentTestEmail } from "@/lib/staff-assignment-notifications";
 
 function readRequiredText(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -54,6 +57,28 @@ export async function saveStaffMemberAction(formData: FormData) {
 
   revalidatePath("/staff/routing");
   revalidatePath("/staff");
+}
+
+export async function sendAssignmentTestEmailAction(formData: FormData) {
+  const staffMemberId = readRequiredText(formData, "staffMemberId");
+  const staffMember = getStaffMemberById(staffMemberId);
+
+  if (!staffMember) {
+    throw new Error("Staff member not found");
+  }
+
+  const result = await sendStaffAssignmentTestEmail(staffMember);
+  const message =
+    result.status === "sent"
+      ? `Test email sent to ${result.recipient}.`
+      : `Test email ${result.status}: ${result.reason}.`;
+  const query = new URLSearchParams({
+    assignmentEmailTest: result.status,
+    assignmentEmailMessage: message,
+  });
+
+  revalidatePath("/staff/routing");
+  redirect(`/staff/routing?${query.toString()}`);
 }
 
 export async function saveRoutingRuleAction(formData: FormData) {

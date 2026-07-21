@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, type FormEvent } from "react";
+import { useActionState, useState, type FormEvent, type ReactNode } from "react";
 import { ISSUE_CATEGORIES } from "@/lib/issue-types";
 import {
   submitIssueReportAction,
@@ -258,12 +258,20 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
       onSubmit={handleSubmit}
       className="rounded-md border border-slate-200 bg-white shadow-sm"
     >
-      <div className="border-b border-slate-200 px-5 py-4">
-        <h2 className="text-lg font-semibold">Issue details</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Use plain language. Staff will review and route it.
-          </p>
+      <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              New item
+            </p>
+            <h2 className="mt-1 text-xl font-semibold">Create case</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <BoardPill label="Status" value="Received" />
+            <BoardPill label="Owner" value="District 7 triage" />
+          </div>
         </div>
+      </div>
 
       <div className="space-y-5 p-5">
         {demoMode ? (
@@ -310,114 +318,110 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
           </div>
         </div>
 
-        <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-800">
-            Category
-          </span>
-          <select
-            name="category"
-            required
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-            className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-          >
-            {ISSUE_CATEGORIES.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="overflow-hidden rounded-md border border-slate-200">
+          <div className="grid grid-cols-[150px_1fr] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+            <div>Column</div>
+            <div>Value</div>
+          </div>
 
-        <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-800">
-            Description
-          </span>
-          <textarea
-            name="description"
-            required
-            minLength={12}
-            maxLength={4000}
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            className="min-h-36 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-            placeholder="Example: There is a large pothole near the school entrance and cars are swerving around it."
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-800">
-            Location or address
-          </span>
-          <input
-            name="addressText"
-            required
-            maxLength={250}
-            value={addressText}
-            onChange={(event) => {
-              setAddressText(event.target.value);
-              resetJurisdictionPreview();
-            }}
-            className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-            placeholder="Street address, intersection, park, or landmark"
-          />
-          <p className="mt-2 text-xs text-slate-500">
-            Cross streets, school names, park names, route numbers, and nearby
-            landmarks help staff determine jurisdiction faster. If device
-            location is unavailable, the app will try to place the report from
-            the typed address.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={previewJurisdiction}
-              disabled={jurisdictionPreview.status === "loading"}
-              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+          <BoardRow label="Category" required>
+            <select
+              name="category"
+              required
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
             >
-              {jurisdictionPreview.status === "loading"
-                ? "Checking..."
-                : "Check District 7 Coverage"}
-            </button>
-            <span className="text-xs text-slate-500">
-              This preview does not block submission.
-            </span>
-          </div>
-          <div
-            className={`mt-3 rounded-md px-3 py-2 text-sm ${
-              jurisdictionPreview.status === "error"
-                ? "bg-rose-50 text-rose-800"
-                : jurisdictionPreview.districtHintStatus === "likely_outside_district"
-                  ? "bg-amber-50 text-amber-900"
-                  : jurisdictionPreview.districtHintStatus === "likely_in_district"
-                    ? "bg-emerald-50 text-emerald-800"
-                    : "bg-slate-50 text-slate-600"
-            }`}
-          >
-            {jurisdictionPreview.message}
-            {jurisdictionPreview.status === "success" ? (
-              <div className="mt-2 space-y-1 text-xs">
-                {jurisdictionPreview.districtLabel ? (
-                  <div>{jurisdictionPreview.districtLabel}</div>
-                ) : null}
-                {jurisdictionPreview.municipalityName ? (
-                  <div>Municipality: {jurisdictionPreview.municipalityName}</div>
-                ) : null}
-                {jurisdictionPreview.countyCommissionDistrictNumber ? (
-                  <div>
-                    Likely county commission district:{" "}
-                    {jurisdictionPreview.countyCommissionDistrictNumber}
-                    {jurisdictionPreview.countyCommissionerName
-                      ? ` (${jurisdictionPreview.countyCommissionerName})`
-                      : ""}
-                  </div>
-                ) : null}
-                {jurisdictionPreview.geocodedAddress ? (
-                  <div>Matched address: {jurisdictionPreview.geocodedAddress}</div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </label>
+              {ISSUE_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </BoardRow>
+
+          <BoardRow label="Description" required>
+            <textarea
+              name="description"
+              required
+              minLength={12}
+              maxLength={4000}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              className="min-h-32 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              placeholder="Example: There is a large pothole near the school entrance and cars are swerving around it."
+            />
+          </BoardRow>
+
+          <BoardRow label="Location" required>
+            <input
+              name="addressText"
+              required
+              maxLength={250}
+              value={addressText}
+              onChange={(event) => {
+                setAddressText(event.target.value);
+                resetJurisdictionPreview();
+              }}
+              className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              placeholder="Street address, intersection, park, or landmark"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Cross streets, school names, park names, route numbers, and nearby
+              landmarks help staff determine jurisdiction faster.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={previewJurisdiction}
+                disabled={jurisdictionPreview.status === "loading"}
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+              >
+                {jurisdictionPreview.status === "loading"
+                  ? "Checking..."
+                  : "Check District 7 Coverage"}
+              </button>
+              <span className="text-xs text-slate-500">
+                Preview only. Staff can still submit and review.
+              </span>
+            </div>
+            <div
+              className={`mt-3 rounded-md px-3 py-2 text-sm ${
+                jurisdictionPreview.status === "error"
+                  ? "bg-rose-50 text-rose-800"
+                  : jurisdictionPreview.districtHintStatus === "likely_outside_district"
+                    ? "bg-amber-50 text-amber-900"
+                    : jurisdictionPreview.districtHintStatus === "likely_in_district"
+                      ? "bg-emerald-50 text-emerald-800"
+                      : "bg-slate-50 text-slate-600"
+              }`}
+            >
+              {jurisdictionPreview.message}
+              {jurisdictionPreview.status === "success" ? (
+                <div className="mt-2 space-y-1 text-xs">
+                  {jurisdictionPreview.districtLabel ? (
+                    <div>{jurisdictionPreview.districtLabel}</div>
+                  ) : null}
+                  {jurisdictionPreview.municipalityName ? (
+                    <div>Municipality: {jurisdictionPreview.municipalityName}</div>
+                  ) : null}
+                  {jurisdictionPreview.countyCommissionDistrictNumber ? (
+                    <div>
+                      Likely county commission district:{" "}
+                      {jurisdictionPreview.countyCommissionDistrictNumber}
+                      {jurisdictionPreview.countyCommissionerName
+                        ? ` (${jurisdictionPreview.countyCommissionerName})`
+                        : ""}
+                    </div>
+                  ) : null}
+                  {jurisdictionPreview.geocodedAddress ? (
+                    <div>Matched address: {jurisdictionPreview.geocodedAddress}</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </BoardRow>
+        </div>
 
         <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -449,9 +453,12 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
           ) : null}
         </div>
 
-        <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-800">
-            Photos
+        <label className="block rounded-md border border-slate-200 bg-white p-4">
+          <span className="mb-2 flex items-center justify-between gap-3 text-sm font-medium text-slate-800">
+            <span>Attachments</span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+              Optional
+            </span>
           </span>
           <input
             name="photos"
@@ -476,7 +483,10 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
       </div>
 
       <div className="border-y border-slate-200 bg-slate-50 px-5 py-4">
-        <h2 className="text-lg font-semibold">Follow-up contact</h2>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Contact columns
+        </p>
+        <h2 className="mt-1 text-lg font-semibold">Follow-up contact</h2>
       </div>
 
       <div className="space-y-5 p-5">
@@ -604,5 +614,38 @@ function Field({
         placeholder={placeholder}
       />
     </label>
+  );
+}
+
+function BoardPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+      <span className="text-slate-500">{label}</span>
+      <span>{value}</span>
+    </span>
+  );
+}
+
+function BoardRow({
+  label,
+  required = false,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid gap-3 border-b border-slate-200 px-4 py-4 last:border-b-0 md:grid-cols-[150px_1fr]">
+      <div>
+        <div className="text-sm font-semibold text-slate-900">{label}</div>
+        {required ? (
+          <div className="mt-2 inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-800">
+            Required
+          </div>
+        ) : null}
+      </div>
+      <div>{children}</div>
+    </div>
   );
 }

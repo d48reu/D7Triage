@@ -138,9 +138,39 @@ function buildAssignmentEmail(input: {
   return { subject, text, html, caseUrl };
 }
 
-export async function sendStaffAssignmentNotification(input: {
-  report: IssueReport;
+function buildTestEmail(staffMember: StaffMember) {
+  const appUrl = getAppUrl();
+  const subject = "District 7 assignment email test";
+  const text = [
+    `Hi ${staffMember.name},`,
+    "",
+    "This is a test of District 7 Issue Reporter assignment emails.",
+    "",
+    "If you received this, internal assignment notifications are working.",
+    "",
+    `Open the staff inbox: ${appUrl}/staff`,
+    "",
+    "District 7 Issue Reporter",
+  ].join("\n");
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.5;">
+      <p>Hi ${escapeHtml(staffMember.name)},</p>
+      <p>This is a test of District 7 Issue Reporter assignment emails.</p>
+      <p>If you received this, internal assignment notifications are working.</p>
+      <p><a href="${escapeHtml(`${appUrl}/staff`)}">Open the staff inbox</a></p>
+      <p style="color: #475569; font-size: 13px;">District 7 Issue Reporter</p>
+    </div>
+  `;
+
+  return { subject, text, html };
+}
+
+async function sendStaffEmail(input: {
   staffMember: StaffMember;
+  subject: string;
+  text: string;
+  html: string;
+  idempotencyKey: string;
 }): Promise<AssignmentNotificationResult> {
   const recipient = input.staffMember.email?.trim();
   if (!recipient) {
@@ -158,19 +188,18 @@ export async function sendStaffAssignmentNotification(input: {
     };
   }
 
-  const email = buildAssignmentEmail(input);
   const resend = getResendClient(config.apiKey);
   const { data, error } = await resend.emails.send(
     {
       from: config.fromEmail,
       to: recipient,
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
     },
     {
       headers: {
-        "Idempotency-Key": `staff-assignment-${input.report.id}-${input.staffMember.id}-${input.report.updatedAt}`,
+        "Idempotency-Key": input.idempotencyKey,
       },
     },
   );
@@ -187,4 +216,31 @@ export async function sendStaffAssignmentNotification(input: {
     recipient,
     messageId: data?.id ?? null,
   };
+}
+
+export async function sendStaffAssignmentNotification(input: {
+  report: IssueReport;
+  staffMember: StaffMember;
+}): Promise<AssignmentNotificationResult> {
+  const email = buildAssignmentEmail(input);
+  return sendStaffEmail({
+    staffMember: input.staffMember,
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
+    idempotencyKey: `staff-assignment-${input.report.id}-${input.staffMember.id}-${input.report.updatedAt}`,
+  });
+}
+
+export async function sendStaffAssignmentTestEmail(
+  staffMember: StaffMember,
+): Promise<AssignmentNotificationResult> {
+  const email = buildTestEmail(staffMember);
+  return sendStaffEmail({
+    staffMember,
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
+    idempotencyKey: `staff-assignment-test-${staffMember.id}-${Date.now()}`,
+  });
 }
