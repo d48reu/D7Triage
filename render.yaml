@@ -58,3 +58,5 @@ services:
         sync: false
       - key: ISSUE_REPORT_FROM_EMAIL
         sync: false
+      - key: STAFF_ASSIGNMENT_EMAIL_ENABLED
+        value: true

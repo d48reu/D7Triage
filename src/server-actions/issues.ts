@@ -16,6 +16,7 @@ import {
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
 import { getUploadsDir } from "@/lib/data-paths";
 import { resolveReportLocationIntelligence } from "@/lib/report-location-intelligence";
+import { sendStaffAssignmentNotification } from "@/lib/staff-assignment-notifications";
 import {
   addAttachment,
   assignIssueReport,
@@ -28,6 +29,7 @@ import {
   getAiSuggestionById,
   getIssueReportById,
   getLatestAiSuggestion,
+  getStaffMemberById,
   listAttachments,
   listReferrals,
   markIssueAsDistinct,
@@ -246,6 +248,50 @@ function resolveSubmittedCategory(input: {
   }
 
   return normalizedCategory;
+}
+
+async function notifyAssignedStaff(input: {
+  reportId: string;
+  staffMemberId: string | null;
+}) {
+  if (!input.staffMemberId) return;
+
+  const report = getIssueReportById(input.reportId);
+  const staffMember = getStaffMemberById(input.staffMemberId);
+
+  if (!report || !staffMember) {
+    addStaffNote({
+      reportId: input.reportId,
+      body: "Assignment notification not sent: assigned case or staff member could not be found.",
+    });
+    return;
+  }
+
+  try {
+    const result = await sendStaffAssignmentNotification({ report, staffMember });
+
+    if (result.status === "sent") {
+      addStaffNote({
+        reportId: report.id,
+        body: `Assignment notification sent to ${staffMember.name} <${result.recipient}>.${
+          result.messageId ? ` Message ID: ${result.messageId}.` : ""
+        }`,
+      });
+      return;
+    }
+
+    addStaffNote({
+      reportId: report.id,
+      body: `Assignment notification ${result.status}: ${result.reason}.`,
+    });
+  } catch (error) {
+    addStaffNote({
+      reportId: report.id,
+      body: `Assignment notification failed: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }.`,
+    });
+  }
 }
 
 async function savePhotoAttachments(reportId: string, photos: File[]) {
@@ -474,8 +520,10 @@ export async function saveQuickTriageAction(formData: FormData) {
     throw new Error("Report not found");
   }
 
-  if ((report.assignedStaffId ?? null) !== staffMemberId) {
+  const assignmentChanged = (report.assignedStaffId ?? null) !== staffMemberId;
+  if (assignmentChanged) {
     assignIssueReport({ reportId, staffMemberId });
+    await notifyAssignedStaff({ reportId, staffMemberId });
   }
 
   if (report.status !== status || publicNote) {
@@ -671,15 +719,19 @@ export async function updateIssueDetailsAction(formData: FormData) {
 export async function assignIssueReportAction(formData: FormData) {
   const reportId = readRequiredText(formData, "reportId");
   const report = getIssueReportById(reportId);
+  const staffMemberId =
+    String(formData.get("staffMemberId") ?? "").trim() || null;
 
   if (!report) {
     throw new Error("Report not found");
   }
 
-  assignIssueReport({
-    reportId,
-    staffMemberId: String(formData.get("staffMemberId") ?? "").trim() || null,
-  });
+  const assignmentChanged = (report.assignedStaffId ?? null) !== staffMemberId;
+  assignIssueReport({ reportId, staffMemberId });
+
+  if (assignmentChanged) {
+    await notifyAssignedStaff({ reportId, staffMemberId });
+  }
 
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);

@@ -82,6 +82,7 @@ Optional for launch:
 - `OPENAI_API_KEY`
 - `RESEND_API_KEY`
 - `ISSUE_REPORT_FROM_EMAIL`
+- `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`
 
 ## Custom Domain Steps
 

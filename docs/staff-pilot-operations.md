@@ -93,6 +93,25 @@ For this pilot, treat **unincorporated Miami-Dade within District 7** as Distric
 
 If staff disagrees with an AI suggestion, update the managed routing rule or capture the example during weekly review.
 
+## Assignment Notifications
+
+When a case owner changes, the app sends an internal assignment email to the assigned staff member when email is configured.
+
+Required Render environment variables:
+
+- `RESEND_API_KEY`
+- `ISSUE_REPORT_FROM_EMAIL`
+- `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`
+
+Before relying on this workflow:
+
+1. Confirm each active staff member has the correct email address in **Staff routing**.
+2. Assign one low-risk real case to yourself or another staff member.
+3. Confirm the assignment email arrives.
+4. Confirm the case timeline includes an internal note showing whether the assignment notification was sent, skipped, or failed.
+
+Assignment emails are only for internal staff. They do not turn on constituent email.
+
 ## Before Expanding Beyond Staff
 
 Do not open the app to constituents until these are green:
