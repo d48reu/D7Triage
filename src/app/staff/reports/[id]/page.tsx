@@ -34,10 +34,10 @@ import { requireStaffSession } from "@/lib/staff-auth";
 import {
   addReferralAction,
   addStaffNoteAction,
-  assignIssueReportAction,
   markDistinctAction,
   markDuplicateAction,
   refreshLocationIntelligenceAction,
+  saveQuickTriageAction,
   updateReferralOutcomeAction,
   updateIssueStatusAction,
 } from "@/server-actions/issues";
@@ -56,14 +56,14 @@ export default async function StaffReportPage({
   const { id } = await params;
   const query = (await searchParams) ?? {};
   const demoMode = isDemoMode();
-  const assignmentSaved =
-    (Array.isArray(query.assignmentSaved)
-      ? query.assignmentSaved[0]
-      : query.assignmentSaved) === "1";
   const detailsSaved =
     (Array.isArray(query.detailsSaved)
       ? query.detailsSaved[0]
       : query.detailsSaved) === "1";
+  const triageSaved =
+    (Array.isArray(query.triageSaved)
+      ? query.triageSaved[0]
+      : query.triageSaved) === "1";
   const report = getIssueReportById(id);
 
   if (!report) {
@@ -153,6 +153,126 @@ export default async function StaffReportPage({
       </header>
 
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="rounded-md border border-sky-200 bg-white p-5 shadow-sm lg:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-800">
+                Quick triage
+              </p>
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+                Set owner, status, and first notes
+              </h2>
+              <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-700">
+                <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">
+                  {report.category}
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">
+                  {report.addressText}
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">
+                  Current: {formatStatus(report.status)}
+                </span>
+              </div>
+            </div>
+            <Link
+              href={`/staff/reports/${report.id}/edit`}
+              className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100"
+            >
+              Edit Details
+            </Link>
+          </div>
+
+          {triageSaved ? (
+            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+              Quick triage saved.
+            </div>
+          ) : null}
+
+          <form
+            action={saveQuickTriageAction}
+            className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_0.9fr_1.1fr_1.1fr_auto]"
+          >
+            <input type="hidden" name="reportId" value={report.id} />
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-800">
+                Owner
+              </span>
+              <select
+                name="staffMemberId"
+                defaultValue={report.assignedStaffId ?? ""}
+                className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              >
+                <option value="">Unassigned</option>
+                {staffMembers.map((staffMember) => (
+                  <option key={staffMember.id} value={staffMember.id}>
+                    {formatStaffMemberLabel(staffMember)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-800">
+                Status
+              </span>
+              <select
+                name="status"
+                required
+                defaultValue={report.status}
+                className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              >
+                {ISSUE_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {formatStatus(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-800">
+                Internal note
+              </span>
+              <textarea
+                name="internalNote"
+                className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                placeholder="Staff-only next step, context, or follow-up."
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-800">
+                Public note
+              </span>
+              <textarea
+                name="publicNote"
+                className="min-h-20 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                placeholder="Optional update shown on the tracking page."
+              />
+            </label>
+            <div className="flex items-end">
+              <button
+                type="submit"
+                className="h-11 w-full rounded-md bg-sky-700 px-5 text-sm font-semibold text-white hover:bg-sky-800 xl:w-auto"
+              >
+                Save Triage
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="font-semibold text-slate-900">Needs review:</span>{" "}
+              location or owner still needs checking.
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="font-semibold text-slate-900">Routed:</span>{" "}
+              referral was sent and logged.
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="font-semibold text-slate-900">Awaiting agency:</span>{" "}
+              staff is waiting on a response.
+            </div>
+          </div>
+        </section>
+
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
           {demoMode ? (
             <div className="mb-5">
@@ -668,44 +788,6 @@ export default async function StaffReportPage({
           />
 
           <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold">Assignment</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Assign this case so the inbox shows clear ownership for follow-up.
-            </p>
-            {assignmentSaved ? (
-              <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
-                Assignment saved.
-              </div>
-            ) : null}
-            <form action={assignIssueReportAction} className="mt-4 space-y-4">
-              <input type="hidden" name="reportId" value={report.id} />
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Staff member
-                </span>
-                <select
-                  name="staffMemberId"
-                  defaultValue={report.assignedStaffId ?? ""}
-                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-                >
-                  <option value="">Unassigned</option>
-                  {staffMembers.map((staffMember) => (
-                    <option key={staffMember.id} value={staffMember.id}>
-                      {formatStaffMemberLabel(staffMember)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="submit"
-                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-              >
-                Save Assignment
-              </button>
-            </form>
-          </section>
-
-          <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Record referral</h2>
             <form action={addReferralAction} className="mt-4 space-y-4">
               <input type="hidden" name="reportId" value={report.id} />
@@ -826,54 +908,6 @@ export default async function StaffReportPage({
                 className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
               >
                 Save Referral
-              </button>
-            </form>
-          </section>
-
-          <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold">Update status</h2>
-            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
-              <div className="font-semibold text-slate-900">Common choices</div>
-              <div className="mt-2 space-y-1 leading-5">
-                <div><span className="font-medium">Needs review:</span> location or owner still needs checking.</div>
-                <div><span className="font-medium">Routed:</span> referral was sent and logged.</div>
-                <div><span className="font-medium">Awaiting agency:</span> staff is waiting on a response.</div>
-                <div><span className="font-medium">Resolved:</span> complete, duplicate cleanup, or internal test.</div>
-              </div>
-            </div>
-            <form action={updateIssueStatusAction} className="mt-4 space-y-4">
-              <input type="hidden" name="reportId" value={report.id} />
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Status
-                </span>
-                <select
-                  name="status"
-                  defaultValue={report.status}
-                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-                >
-                  {ISSUE_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {formatStatus(status)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Public note
-                </span>
-                <textarea
-                  name="publicNote"
-                  className="min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-                  placeholder="Optional note shown on the tracking page"
-                />
-              </label>
-              <button
-                type="submit"
-                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
-              >
-                Save Status
               </button>
             </form>
           </section>

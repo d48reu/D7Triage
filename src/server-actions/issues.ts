@@ -456,6 +456,42 @@ export async function updateIssueStatusAction(formData: FormData) {
   redirect(`/staff/reports/${reportId}`);
 }
 
+export async function saveQuickTriageAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const status = readRequiredText(formData, "status") as IssueStatus;
+  const staffMemberId =
+    String(formData.get("staffMemberId") ?? "").trim() || null;
+  const publicNote = String(formData.get("publicNote") ?? "").trim();
+  const internalNote = String(formData.get("internalNote") ?? "").trim();
+
+  if (!ISSUE_STATUSES.includes(status)) {
+    throw new Error("Invalid status");
+  }
+
+  const report = getIssueReportById(reportId);
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  if ((report.assignedStaffId ?? null) !== staffMemberId) {
+    assignIssueReport({ reportId, staffMemberId });
+  }
+
+  if (report.status !== status || publicNote) {
+    updateIssueStatus({ reportId, status, publicNote });
+  }
+
+  if (internalNote) {
+    addStaffNote({ reportId, body: internalNote });
+  }
+
+  revalidatePath("/staff");
+  revalidatePath("/staff/analytics");
+  revalidatePath(`/staff/reports/${reportId}`);
+  revalidatePath(`/report/${report.publicTrackingToken}`);
+  redirect(`/staff/reports/${reportId}?triageSaved=1`);
+}
+
 export async function updateIssueDetailsAction(formData: FormData) {
   const reportId = readRequiredText(formData, "reportId");
   const report = getIssueReportById(reportId);
