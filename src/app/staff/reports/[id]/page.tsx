@@ -188,6 +188,15 @@ export default async function StaffReportPage({
             </div>
           ) : null}
 
+          <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Issue description
+            </div>
+            <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-900">
+              {report.description}
+            </p>
+          </div>
+
           <form
             action={saveQuickTriageAction}
             className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_0.9fr_1.1fr_1.1fr_auto]"
