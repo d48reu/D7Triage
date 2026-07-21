@@ -24,7 +24,7 @@ The pilot backup JSON includes:
 
 - cases
 - status history
-- staff notes
+- internal updates
 - field-level audit history
 - referrals
 - attachment metadata
@@ -72,7 +72,7 @@ For each incoming call or staff-entered case:
 8. Assign the case if a staff owner is clear.
 9. Add a referral when the case is sent to an agency or department.
 10. Move the status as the case progresses.
-11. Add a staff note for any important call-back, referral, or resolution context.
+11. Add an internal update for any important call-back, referral, or resolution context.
 
 The staff inbox should be worked from **Active** or **Received** first. The main goal is that real cases do not stay in `received` after staff has reviewed them.
 
@@ -108,7 +108,7 @@ Before relying on this workflow:
 1. Confirm each active staff member has the correct email address in **Staff routing**.
 2. Assign one low-risk real case to yourself or another staff member.
 3. Confirm the assignment email arrives.
-4. Confirm the case timeline includes an internal note showing whether the assignment notification was sent, skipped, or failed.
+4. Confirm the case timeline includes an internal update showing whether the assignment notification was sent, skipped, or failed.
 
 Assignment emails are only for internal staff. They do not turn on constituent email.
 

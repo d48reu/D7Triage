@@ -2,7 +2,7 @@ import { DemoSiteNotice } from "@/components/demo-site-notice";
 import Link from "next/link";
 import { logoutStaffAction } from "@/server-actions/auth";
 import { isDemoMode } from "@/lib/demo-mode";
-import { formatStatus } from "@/lib/issue-types";
+import { formatStatus, type IssueStatus } from "@/lib/issue-types";
 import {
   analyzeReportJurisdiction,
   formatDistrictHintStatus,
@@ -16,6 +16,7 @@ import {
   listIssueReports,
   listReferrals,
   listStaffMembers,
+  listStaffNotes,
 } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 import {
@@ -48,6 +49,7 @@ export default async function StaffPage({
   const reportRows = reports.map((report) => {
     const jurisdiction = analyzeReportJurisdiction(report, jurisdictionConfig);
     const referrals = listReferrals(report.id);
+    const latestStaffUpdate = listStaffNotes(report.id)[0] ?? null;
     const aiSuggestions = listAiSuggestions(report.id);
     const ownerLabel =
       getManagedRoutingRule(report.category, report.municipalityName)?.ownerLabel ??
@@ -56,6 +58,22 @@ export default async function StaffPage({
       ? (staffMemberNameById.get(report.assignedStaffId) ?? "Unknown staff member")
       : "";
 
+    const flags = buildStaffInboxFlags({
+      report,
+      jurisdiction,
+      referrals,
+      aiSuggestions,
+    });
+    const followUpDate =
+      referrals.find((referral) => referral.followUpDate)?.followUpDate ?? null;
+    const nextAction = getNextAction({
+      status: report.status,
+      assignedStaffName,
+      flags,
+      referralsCount: referrals.length,
+      followUpDate,
+    });
+
     return {
       report,
       jurisdiction,
@@ -63,16 +81,16 @@ export default async function StaffPage({
       aiSuggestions,
       ownerLabel,
       assignedStaffName,
-      flags: buildStaffInboxFlags({
-        report,
-        jurisdiction,
-        referrals,
-        aiSuggestions,
-      }),
+      flags,
+      latestStaffUpdate,
+      followUpDate,
+      nextAction,
       searchableText: buildStaffInboxSearchText({
         report,
         ownerLabel,
         assignedStaffName,
+        latestUpdate: latestStaffUpdate?.body,
+        nextAction,
       }),
       countyCommissionDistrict: findCountyCommissionDistrictForPoint(
         report.latitude,
@@ -93,7 +111,6 @@ export default async function StaffPage({
       row.report.status,
     ),
   ).length;
-  const flaggedCount = reportRows.filter((row) => row.flags.length > 0).length;
   const unassignedCount = reports.filter((report) =>
     !report.assignedStaffId &&
     !["resolved", "closed_outside_jurisdiction", "closed_duplicate"].includes(report.status),
@@ -157,7 +174,7 @@ export default async function StaffPage({
           <Metric label="All reports" value={reports.length} />
           <Metric label="Received" value={receivedCount} />
           <Metric label="Active" value={activeCount} />
-          <Metric label="Flagged" value={flaggedCount} />
+          <Metric label="Unassigned" value={unassignedCount.length} />
         </section>
 
         <section className="mt-6 rounded-md border border-slate-200 bg-white p-4 shadow-sm">
@@ -216,20 +233,33 @@ export default async function StaffPage({
         </section>
 
         <section className="mt-6 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[1fr_220px_140px_160px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 max-lg:hidden">
-            <div>Report</div>
-            <div>Likely owner</div>
+          <div className="grid grid-cols-[1.2fr_180px_150px_210px_1fr_96px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 max-xl:hidden">
+            <div>Case</div>
+            <div>Owner</div>
             <div>Status</div>
-            <div>Submitted</div>
+            <div>Next action</div>
+            <div>Latest update</div>
+            <div>Open</div>
           </div>
 
           {filteredRows.length > 0 ? (
             <div className="divide-y divide-slate-200">
-              {filteredRows.map(({ report, jurisdiction, countyCommissionDistrict, ownerLabel, assignedStaffName, flags, referrals }) => (
+              {filteredRows.map(({
+                report,
+                jurisdiction,
+                countyCommissionDistrict,
+                ownerLabel,
+                assignedStaffName,
+                flags,
+                referrals,
+                latestStaffUpdate,
+                followUpDate,
+                nextAction,
+              }) => (
                 <Link
                   key={report.id}
                   href={`/staff/reports/${report.id}`}
-                  className="grid gap-3 px-4 py-4 transition hover:bg-slate-50 lg:grid-cols-[1fr_220px_140px_160px]"
+                  className="grid gap-3 px-4 py-4 transition hover:bg-slate-50 xl:grid-cols-[1.2fr_180px_150px_210px_1fr_96px]"
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -254,15 +284,13 @@ export default async function StaffPage({
                     <div className="mt-1 text-xs text-slate-500">
                       {report.addressText}
                     </div>
-                    <div className="mt-2 text-xs font-medium text-slate-600">
-                      Assigned:{" "}
-                      {assignedStaffName || "Unassigned"}
-                      {referrals.length > 0 ? ` | Referrals: ${referrals.length}` : ""}
-                    </div>
                   </div>
-                  <div className="text-sm text-slate-600">
-                    <div>
-                      {ownerLabel}
+                  <div className="text-sm text-slate-700">
+                    <div className="font-medium text-slate-900">
+                      {assignedStaffName || "Unassigned"}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Suggested: {ownerLabel}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
                       {formatOwnershipHint(jurisdiction.ownershipHint)} |{" "}
@@ -283,11 +311,43 @@ export default async function StaffPage({
                       </div>
                     ) : null}
                   </div>
-                  <div className="hidden text-sm text-slate-700 lg:block">
-                    {formatStatus(report.status)}
+                  <div className="text-sm text-slate-700">
+                    <StatusBadge status={report.status} />
+                    <div className="mt-2 text-xs text-slate-500 xl:hidden">
+                      Updated {new Date(report.updatedAt).toLocaleString()}
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500 lg:text-sm">
-                    {new Date(report.createdAt).toLocaleString()}
+                  <div className="text-sm text-slate-700">
+                    <div className="font-medium text-slate-900">{nextAction}</div>
+                    {followUpDate ? (
+                      <div className="mt-1 rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">
+                        Follow up {formatDateOnly(followUpDate)}
+                      </div>
+                    ) : null}
+                    {referrals.length > 0 ? (
+                      <div className="mt-1 text-xs text-slate-500">
+                        Referrals: {referrals.length}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="text-sm text-slate-600">
+                    {latestStaffUpdate ? (
+                      <>
+                        <div className="line-clamp-2 leading-6">
+                          {latestStaffUpdate.body}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {new Date(latestStaffUpdate.createdAt).toLocaleString()}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-slate-500">No internal updates yet</span>
+                    )}
+                  </div>
+                  <div className="flex items-start xl:justify-end">
+                    <span className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                      Open
+                    </span>
                   </div>
                 </Link>
               ))}
@@ -343,6 +403,88 @@ function FlagBadge({ label }: { label: string }) {
       {label}
     </span>
   );
+}
+
+function StatusBadge({ status }: { status: IssueStatus }) {
+  const style =
+    status === "received"
+      ? "border-slate-200 bg-slate-50 text-slate-800"
+      : status === "needs_review" || status === "needs_more_info"
+        ? "border-amber-200 bg-amber-50 text-amber-900"
+        : status === "routed" || status === "awaiting_agency"
+          ? "border-sky-200 bg-sky-50 text-sky-900"
+          : status === "follow_up_due"
+            ? "border-rose-200 bg-rose-50 text-rose-900"
+            : "border-emerald-200 bg-emerald-50 text-emerald-900";
+
+  return (
+    <span className={`inline-flex rounded border px-2 py-1 text-xs font-semibold ${style}`}>
+      {formatStatus(status)}
+    </span>
+  );
+}
+
+function getNextAction(input: {
+  status: IssueStatus;
+  assignedStaffName: string;
+  flags: string[];
+  referralsCount: number;
+  followUpDate: string | null;
+}) {
+  if (input.flags.includes("Unassigned")) {
+    return "Assign owner";
+  }
+
+  if (input.flags.includes("Check location")) {
+    return "Confirm jurisdiction";
+  }
+
+  if (input.status === "received") {
+    return "First triage";
+  }
+
+  if (input.status === "needs_review" || input.status === "needs_more_info") {
+    return "Gather missing info";
+  }
+
+  if (input.flags.includes("Referral missing")) {
+    return "Log referral";
+  }
+
+  if (input.status === "routed" && input.referralsCount > 0) {
+    return "Wait for agency";
+  }
+
+  if (input.status === "awaiting_agency") {
+    return input.followUpDate ? "Monitor follow-up date" : "Wait for agency";
+  }
+
+  if (input.status === "follow_up_due") {
+    return "Follow up now";
+  }
+
+  if (
+    input.status === "resolved" ||
+    input.status === "closed_duplicate" ||
+    input.status === "closed_outside_jurisdiction"
+  ) {
+    return "No action";
+  }
+
+  return input.assignedStaffName ? "Continue assigned work" : "Review";
+}
+
+function formatDateOnly(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (!Number.isFinite(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function Metric({ label, value }: { label: string; value: number }) {

@@ -164,7 +164,7 @@ export default async function StaffReportPage({
                 Quick triage
               </p>
               <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-                Set owner, status, and first notes
+                Set owner, status, and first updates
               </h2>
               <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-700">
                 <span className="rounded-full bg-slate-100 px-3 py-1 font-medium">
@@ -242,7 +242,7 @@ export default async function StaffReportPage({
             </label>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-800">
-                Internal note
+                Internal update
               </span>
               <textarea
                 name="internalNote"
@@ -964,7 +964,7 @@ export default async function StaffReportPage({
           </section>
 
           <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold">Internal note</h2>
+            <h2 className="text-lg font-semibold">Internal update</h2>
             <div className="mt-3 space-y-2">
               {suggestedNoteTemplates.map((template) => (
                 <details
@@ -992,7 +992,7 @@ export default async function StaffReportPage({
                 type="submit"
                 className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
               >
-                Add Note
+                Add Update
               </button>
             </form>
           </section>
@@ -1108,7 +1108,7 @@ export default async function StaffReportPage({
                         </label>
                         <label className="block">
                           <span className="mb-2 block text-sm font-semibold text-slate-700">
-                            Internal notes
+                            Internal referral updates
                           </span>
                           <textarea
                             name="notes"
@@ -1135,7 +1135,7 @@ export default async function StaffReportPage({
 
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-700">
-                Staff notes
+                Internal updates
               </h3>
               {notes.length > 0 ? (
                 notes.map((note) => (
@@ -1153,7 +1153,7 @@ export default async function StaffReportPage({
                 ))
               ) : (
                 <p className="text-sm text-slate-600">
-                  No internal notes have been added yet.
+                  No internal updates have been added yet.
                 </p>
               )}
             </div>

@@ -145,4 +145,9 @@ test("filterStaffInboxRows defaults unknown filters to active and searches text"
     filterStaffInboxRows({ rows, filter: "resolved_closed", query: "housing" }).length,
     1,
   );
+  assert.equal(
+    filterStaffInboxRows({ rows, filter: "unassigned", query: "" }).length,
+    1,
+  );
+  assert.equal(normalizeStaffInboxFilter("follow_up_due"), "follow_up_due");
 });

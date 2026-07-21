@@ -6,10 +6,13 @@ export type StaffInboxFilter =
   | "active"
   | "all"
   | "received"
+  | "unassigned"
   | "needs_review"
   | "routed"
   | "awaiting_agency"
   | "needs_more_info"
+  | "follow_up_due"
+  | "recently_updated"
   | "resolved_closed";
 
 export type StaffInboxRow = {
@@ -52,6 +55,14 @@ export function getStaffInboxFilterOptions(rows: StaffInboxRow[]) {
       count: count((row) => row.report.status === "received"),
     },
     {
+      key: "unassigned" as const,
+      label: "Unassigned",
+      count: count(
+        (row) =>
+          !row.report.assignedStaffId && !CLOSED_STATUSES.has(row.report.status),
+      ),
+    },
+    {
       key: "needs_review" as const,
       label: "Needs review",
       count: count((row) => row.report.status === "needs_review"),
@@ -72,6 +83,21 @@ export function getStaffInboxFilterOptions(rows: StaffInboxRow[]) {
       count: count((row) => row.report.status === "needs_more_info"),
     },
     {
+      key: "follow_up_due" as const,
+      label: "Follow-up due",
+      count: count((row) => row.report.status === "follow_up_due"),
+    },
+    {
+      key: "recently_updated" as const,
+      label: "Recently updated",
+      count: count((row) => {
+        const updatedAt = new Date(row.report.updatedAt);
+        const updatedWithinTwoDays =
+          Date.now() - updatedAt.getTime() <= 2 * 24 * 60 * 60 * 1000;
+        return Number.isFinite(updatedAt.getTime()) && updatedWithinTwoDays;
+      }),
+    },
+    {
       key: "resolved_closed" as const,
       label: "Resolved/closed",
       count: count((row) => CLOSED_STATUSES.has(row.report.status)),
@@ -88,10 +114,13 @@ export function normalizeStaffInboxFilter(value: string | undefined): StaffInbox
   switch (value) {
     case "all":
     case "received":
+    case "unassigned":
     case "needs_review":
     case "routed":
     case "awaiting_agency":
     case "needs_more_info":
+    case "follow_up_due":
+    case "recently_updated":
     case "resolved_closed":
       return value;
     default:
@@ -155,6 +184,8 @@ export function buildStaffInboxSearchText(row: {
   report: IssueReport;
   ownerLabel: string;
   assignedStaffName: string;
+  latestUpdate?: string | null;
+  nextAction?: string | null;
 }) {
   return [
     row.report.category,
@@ -168,6 +199,8 @@ export function buildStaffInboxSearchText(row: {
     row.report.municipalityName,
     row.ownerLabel,
     row.assignedStaffName,
+    row.latestUpdate,
+    row.nextAction,
   ]
     .filter(Boolean)
     .join(" ")
@@ -182,10 +215,18 @@ export function filterStaffInboxRows<T extends StaffInboxRow>(input: {
   const query = input.query.trim().toLowerCase();
 
   return input.rows.filter((row) => {
+    const updatedAt = new Date(row.report.updatedAt);
+    const recentlyUpdated =
+      Number.isFinite(updatedAt.getTime()) &&
+      Date.now() - updatedAt.getTime() <= 2 * 24 * 60 * 60 * 1000;
     const matchesFilter =
       input.filter === "all" ||
       (input.filter === "active" && ACTIVE_STATUSES.has(row.report.status)) ||
       (input.filter === "resolved_closed" && CLOSED_STATUSES.has(row.report.status)) ||
+      (input.filter === "unassigned" &&
+        !row.report.assignedStaffId &&
+        !CLOSED_STATUSES.has(row.report.status)) ||
+      (input.filter === "recently_updated" && recentlyUpdated) ||
       row.report.status === input.filter;
 
     if (!matchesFilter) {
