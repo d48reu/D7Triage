@@ -342,56 +342,66 @@ export default async function RoutingGuidePage({
           <div className="mt-5 space-y-4">
             {staffMembers.length > 0 ? (
               staffMembers.map((staffMember) => (
-                <form
+                <div
                   key={staffMember.id}
-                  action={saveStaffMemberAction}
-                  className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 xl:grid-cols-4"
+                  className="rounded-md border border-slate-200 bg-slate-50 p-4"
                 >
-                  <input type="hidden" name="staffMemberId" value={staffMember.id} />
-                  <Field name="name" label="Staff name" defaultValue={staffMember.name} required />
-                  <Field
-                    name="email"
-                    label="Email"
-                    type="email"
-                    defaultValue={staffMember.email ?? ""}
-                  />
-                  <Field
-                    name="title"
-                    label="Title"
-                    defaultValue={staffMember.title ?? ""}
-                  />
-                  <TextArea
-                    name="focusAreas"
-                    label="Focus areas"
-                    defaultValue={staffMember.focusAreas ?? ""}
-                    helperText="Comma-separated or sentence-style portfolio notes."
-                  />
-                  <label className="flex items-center gap-2 pt-7 text-sm text-slate-700">
-                    <input
-                      name="isActive"
-                      type="checkbox"
-                      defaultChecked={staffMember.isActive}
+                  <form
+                    action={saveStaffMemberAction}
+                    className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+                  >
+                    <input type="hidden" name="staffMemberId" value={staffMember.id} />
+                    <Field name="name" label="Staff name" defaultValue={staffMember.name} required />
+                    <Field
+                      name="email"
+                      label="Email"
+                      type="email"
+                      defaultValue={staffMember.email ?? ""}
                     />
-                    Active
-                  </label>
-                  <div className="flex items-end">
-                    <div className="flex flex-wrap gap-2">
+                    <Field
+                      name="title"
+                      label="Title"
+                      defaultValue={staffMember.title ?? ""}
+                    />
+                    <TextArea
+                      name="focusAreas"
+                      label="Focus areas"
+                      defaultValue={staffMember.focusAreas ?? ""}
+                      helperText="Comma-separated or sentence-style portfolio notes."
+                    />
+                    <label className="flex items-center gap-2 pt-7 text-sm text-slate-700">
+                      <input
+                        name="isActive"
+                        type="checkbox"
+                        defaultChecked={staffMember.isActive}
+                      />
+                      Active
+                    </label>
+                    <div className="flex items-end">
                       <button
                         type="submit"
                         className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
                       >
                         Save Staff Member
                       </button>
-                      <button
-                        type="submit"
-                        formAction={sendAssignmentTestEmailAction}
-                        className="rounded-md border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-50"
-                      >
-                        Send Test Email
-                      </button>
                     </div>
-                  </div>
-                </form>
+                  </form>
+                  <form
+                    action={sendAssignmentTestEmailAction}
+                    className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3"
+                  >
+                    <input type="hidden" name="staffMemberId" value={staffMember.id} />
+                    <button
+                      type="submit"
+                      className="rounded-md border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-50"
+                    >
+                      Send Test Email
+                    </button>
+                    <span className="text-xs text-slate-500">
+                      Sends to the saved email for {staffMember.name}.
+                    </span>
+                  </form>
+                </div>
               ))
             ) : (
               <p className="text-sm text-slate-600">
