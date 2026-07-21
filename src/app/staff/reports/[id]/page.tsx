@@ -101,6 +101,23 @@ export default async function StaffReportPage({
   const assignedStaffMember = report.assignedStaffId
     ? allStaffMembers.find((staffMember) => staffMember.id === report.assignedStaffId) ?? null
     : null;
+  const triageItems = buildCaseTriageItems({
+    status: report.status,
+    assigned: Boolean(report.assignedStaffId),
+    referralsCount: referrals.length,
+    districtHintStatus: jurisdiction.districtHintStatus,
+    geocodingStatus: report.geocodingStatus,
+    latestAiFeedbackDisposition: latestSuggestion
+      ? latestSuggestion.feedbackDisposition
+      : undefined,
+    description: report.description,
+  });
+  const suggestedNoteTemplates = buildSuggestedNoteTemplates({
+    isLikelyInternalTest: triageItems.some((item) => item.label === "Internal test?"),
+    districtUnclear: jurisdiction.districtHintStatus === "unclear",
+    aiFeedbackPending: Boolean(latestSuggestion && !latestSuggestion.feedbackDisposition),
+    hasReferral: referrals.length > 0,
+  });
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -529,6 +546,36 @@ export default async function StaffReportPage({
         </section>
 
         <aside className="space-y-6">
+          <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold">Triage checklist</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Work these items before leaving the case.
+            </p>
+            {triageItems.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {triageItems.map((item) => (
+                  <div
+                    key={item.label}
+                    className={`rounded-md border px-3 py-2 text-sm ${
+                      item.tone === "urgent"
+                        ? "border-rose-200 bg-rose-50 text-rose-900"
+                        : item.tone === "warning"
+                          ? "border-amber-200 bg-amber-50 text-amber-950"
+                          : "border-slate-200 bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <div className="font-semibold">{item.label}</div>
+                    <div className="mt-1 leading-5">{item.detail}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                No obvious triage gaps are flagged for this case.
+              </div>
+            )}
+          </section>
+
           {isLikelyOutsideDistrict ? (
             <section className="rounded-md border border-rose-200 bg-rose-50 p-5 shadow-sm">
               <h2 className="text-lg font-semibold text-slate-950">
@@ -579,6 +626,7 @@ export default async function StaffReportPage({
 
           <AiSuggestionPanel
             reportId={report.id}
+            reportCategory={report.category}
             initialSuggestion={
               latestSuggestion
                 ? {
@@ -784,6 +832,15 @@ export default async function StaffReportPage({
 
           <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Update status</h2>
+            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+              <div className="font-semibold text-slate-900">Common choices</div>
+              <div className="mt-2 space-y-1 leading-5">
+                <div><span className="font-medium">Needs review:</span> location or owner still needs checking.</div>
+                <div><span className="font-medium">Routed:</span> referral was sent and logged.</div>
+                <div><span className="font-medium">Awaiting agency:</span> staff is waiting on a response.</div>
+                <div><span className="font-medium">Resolved:</span> complete, duplicate cleanup, or internal test.</div>
+              </div>
+            </div>
             <form action={updateIssueStatusAction} className="mt-4 space-y-4">
               <input type="hidden" name="reportId" value={report.id} />
               <label className="block">
@@ -823,6 +880,21 @@ export default async function StaffReportPage({
 
           <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Internal note</h2>
+            <div className="mt-3 space-y-2">
+              {suggestedNoteTemplates.map((template) => (
+                <details
+                  key={template.label}
+                  className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                >
+                  <summary className="cursor-pointer font-medium text-slate-800">
+                    {template.label}
+                  </summary>
+                  <p className="mt-2 whitespace-pre-wrap leading-6 text-slate-700">
+                    {template.body}
+                  </p>
+                </details>
+              ))}
+            </div>
             <form action={addStaffNoteAction} className="mt-4 space-y-4">
               <input type="hidden" name="reportId" value={report.id} />
               <textarea
@@ -1081,6 +1153,134 @@ export default async function StaffReportPage({
       </div>
     </main>
   );
+}
+
+function buildCaseTriageItems(input: {
+  status: string;
+  assigned: boolean;
+  referralsCount: number;
+  districtHintStatus: string;
+  geocodingStatus: string;
+  latestAiFeedbackDisposition?: string | null;
+  description: string;
+}) {
+  const items: Array<{
+    label: string;
+    detail: string;
+    tone: "urgent" | "warning" | "neutral";
+  }> = [];
+  const isClosed = [
+    "resolved",
+    "closed_outside_jurisdiction",
+    "closed_duplicate",
+  ].includes(input.status);
+
+  if (input.status === "received") {
+    items.push({
+      label: "Move out of received",
+      detail: "Set a working status once staff has reviewed, routed, or resolved it.",
+      tone: "urgent",
+    });
+  }
+
+  if (!input.assigned && !isClosed) {
+    items.push({
+      label: "Assign owner",
+      detail: "Choose a staff owner when follow-up is expected.",
+      tone: "warning",
+    });
+  }
+
+  if (
+    input.referralsCount === 0 &&
+    ["routed", "awaiting_agency", "follow_up_due"].includes(input.status)
+  ) {
+    items.push({
+      label: "Referral missing",
+      detail: "This status implies a handoff, but no referral has been logged yet.",
+      tone: "urgent",
+    });
+  }
+
+  if (input.districtHintStatus === "unclear" || input.geocodingStatus === "failed") {
+    items.push({
+      label: "Confirm location",
+      detail: "The app could not confidently place this address or corridor.",
+      tone: "warning",
+    });
+  }
+
+  if (input.latestAiFeedbackDisposition === null) {
+    items.push({
+      label: "Review AI suggestion",
+      detail: "Accept, accept with edits, or reject the latest AI suggestion.",
+      tone: "neutral",
+    });
+  }
+
+  if (/\b(test|smoke|persistence|upload test|body limit)\b/i.test(input.description)) {
+    items.push({
+      label: "Internal test?",
+      detail: "If this is only a pilot test record, add a note and mark it resolved.",
+      tone: "neutral",
+    });
+  }
+
+  return items;
+}
+
+function buildSuggestedNoteTemplates(input: {
+  isLikelyInternalTest: boolean;
+  districtUnclear: boolean;
+  aiFeedbackPending: boolean;
+  hasReferral: boolean;
+}) {
+  const templates = [
+    {
+      label: "Referral already started",
+      body:
+        "Staff referral/contact already initiated before this case was triaged in the app. Logged here so the pilot record reflects current follow-up status.",
+    },
+    {
+      label: "Manual routing review",
+      body:
+        "Staff reviewed the case details and selected the routing/status manually based on current office handling.",
+    },
+  ];
+
+  if (input.districtUnclear) {
+    templates.push({
+      label: "Location manually reviewed",
+      body:
+        "Address/corridor language did not geocode cleanly. Staff manually reviewed the location before routing.",
+    });
+  }
+
+  if (input.aiFeedbackPending) {
+    templates.push({
+      label: "Bad AI suggestion",
+      body:
+        "AI suggestion rejected because the suggested category/responsible party did not match the case facts. Staff triaged manually.",
+    });
+  }
+
+  if (input.isLikelyInternalTest) {
+    templates.push({
+      label: "Internal test record",
+      body:
+        "Internal pilot test record. Used to verify upload/persistence/edit behavior. No constituent follow-up needed.",
+    });
+  }
+
+  if (input.hasReferral) {
+    templates.push({
+      label: "Follow-up pending",
+      body:
+        "Referral has been logged. Staff is waiting on agency/department response before the next status update.",
+    });
+  }
+
+  return templates;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

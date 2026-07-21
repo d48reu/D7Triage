@@ -64,13 +64,17 @@ For each incoming call or staff-entered case:
 
 1. Create the report while the information is fresh.
 2. Attach any available photo.
-3. Check the District 7 coverage preview when an address is available.
-4. Review the AI routing suggestion.
-5. Edit details if new information comes in.
-6. Assign the case if a staff owner is clear.
-7. Add a referral when the case is sent to an agency or department.
-8. Move the status as the case progresses.
-9. Add a staff note for any important call-back, referral, or resolution context.
+3. Open the case from the staff inbox.
+4. Use the inbox filters and flags to find cases still waiting on triage.
+5. Check the case-page triage checklist.
+6. Edit details if the category, address, or description is wrong.
+7. Review the AI routing suggestion when one exists.
+8. Assign the case if a staff owner is clear.
+9. Add a referral when the case is sent to an agency or department.
+10. Move the status as the case progresses.
+11. Add a staff note for any important call-back, referral, or resolution context.
+
+The staff inbox should be worked from **Active** or **Received** first. The main goal is that real cases do not stay in `received` after staff has reviewed them.
 
 Recommended status discipline:
 

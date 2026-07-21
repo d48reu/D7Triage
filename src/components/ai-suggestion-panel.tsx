@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, type ReactNode } from "react";
-import { formatStatus } from "@/lib/issue-types";
+import { formatStatus, normalizeIssueCategory } from "@/lib/issue-types";
 import {
   generateAiRoutingSuggestionAction,
   type GenerateAiSuggestionState,
@@ -13,6 +13,7 @@ type Suggestion = NonNullable<GenerateAiSuggestionState["suggestion"]>;
 
 export function AiSuggestionPanel({
   reportId,
+  reportCategory,
   initialSuggestion,
   isEnabled,
   availabilityMessage,
@@ -21,6 +22,7 @@ export function AiSuggestionPanel({
   allowFeedback = true,
 }: {
   reportId: string;
+  reportCategory: string;
   initialSuggestion: Suggestion | null;
   isEnabled: boolean;
   availabilityMessage: string;
@@ -53,6 +55,10 @@ export function AiSuggestionPanel({
   );
 
   const suggestion = reviewState.suggestion ?? state.suggestion;
+  const normalizedReportCategory = normalizeIssueCategory(reportCategory);
+  const suggestionCategoryConflict = suggestion
+    ? normalizeIssueCategory(suggestion.suggestedCategory) !== normalizedReportCategory
+    : false;
 
   return (
     <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
@@ -97,6 +103,17 @@ export function AiSuggestionPanel({
 
       {suggestion ? (
         <div className="mt-5 space-y-4">
+          {suggestionCategoryConflict ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-950">
+              This saved AI suggestion does not match the current case category.
+              Current category:{" "}
+              <span className="font-semibold">{normalizedReportCategory}</span>.
+              Suggested category:{" "}
+              <span className="font-semibold">{suggestion.suggestedCategory}</span>.
+              Regenerate after editing the case or reject this suggestion if it is stale.
+            </div>
+          ) : null}
+
           <div className="grid gap-3 sm:grid-cols-2">
             <Detail
               label="Suggested category"

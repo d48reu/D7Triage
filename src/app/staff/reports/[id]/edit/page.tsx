@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ISSUE_CATEGORIES } from "@/lib/issue-types";
+import {
+  inferIssueCategoryFromText,
+  ISSUE_CATEGORIES,
+} from "@/lib/issue-types";
 import { getIssueReportById } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 import { updateIssueDetailsAction } from "@/server-actions/issues";
@@ -21,11 +24,12 @@ export default async function EditStaffReportPage({
     notFound();
   }
 
-  const categoryOptions = ISSUE_CATEGORIES.includes(
-    report.category as (typeof ISSUE_CATEGORIES)[number],
-  )
-    ? ISSUE_CATEGORIES
-    : [report.category, ...ISSUE_CATEGORIES];
+  const suggestedCategory = inferIssueCategoryFromText({
+    category: report.category,
+    description: report.description,
+    addressText: report.addressText,
+  });
+  const hasLegacyCategory = report.category !== suggestedCategory;
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -55,6 +59,14 @@ export default async function EditStaffReportPage({
             Staff edits update the case record. If the address changes, location
             intelligence will be refreshed from the edited address.
           </div>
+          {hasLegacyCategory ? (
+            <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-slate-800">
+              This case uses an older category label:{" "}
+              <span className="font-semibold">{report.category}</span>. The
+              suggested current category is{" "}
+              <span className="font-semibold">{suggestedCategory}</span>.
+            </div>
+          ) : null}
 
           <form action={updateIssueDetailsAction} className="mt-5 space-y-5">
             <input type="hidden" name="reportId" value={report.id} />
@@ -67,10 +79,10 @@ export default async function EditStaffReportPage({
                 <select
                   name="category"
                   required
-                  defaultValue={report.category}
+                  defaultValue={suggestedCategory}
                   className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                 >
-                  {categoryOptions.map((category) => (
+                  {ISSUE_CATEGORIES.map((category) => (
                     <option key={category} value={category}>
                       {category}
                     </option>
