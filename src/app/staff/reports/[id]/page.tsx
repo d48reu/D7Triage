@@ -33,6 +33,7 @@ import {
 import { requireStaffSession } from "@/lib/staff-auth";
 import {
   addReferralAction,
+  addIssuePhotosAction,
   addStaffNoteAction,
   markDistinctAction,
   markDuplicateAction,
@@ -64,6 +65,9 @@ export default async function StaffReportPage({
     (Array.isArray(query.triageSaved)
       ? query.triageSaved[0]
       : query.triageSaved) === "1";
+  const photoSaved =
+    (Array.isArray(query.photoSaved) ? query.photoSaved[0] : query.photoSaved) ===
+    "1";
   const report = getIssueReportById(id);
 
   if (!report) {
@@ -265,6 +269,44 @@ export default async function StaffReportPage({
               </button>
             </div>
           </form>
+
+          <div className="mt-4 rounded-md border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Attach photo
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Current photos: {attachments.length}. JPEG, PNG, WebP, or GIF,
+                  8 MB each.
+                </p>
+              </div>
+              {photoSaved ? (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
+                  Photo uploaded.
+                </div>
+              ) : null}
+            </div>
+            <form
+              action={addIssuePhotosAction}
+              className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]"
+            >
+              <input type="hidden" name="reportId" value={report.id} />
+              <input
+                name="photos"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                className="block w-full rounded-md border border-slate-300 bg-white text-sm text-slate-700 file:mr-4 file:h-11 file:border-0 file:bg-slate-100 file:px-4 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+              />
+              <button
+                type="submit"
+                className="h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Upload Photo
+              </button>
+            </form>
+          </div>
 
           <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">

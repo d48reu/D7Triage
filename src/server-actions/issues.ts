@@ -28,6 +28,7 @@ import {
   getAiSuggestionById,
   getIssueReportById,
   getLatestAiSuggestion,
+  listAttachments,
   listReferrals,
   markIssueAsDistinct,
   markIssueAsDuplicate,
@@ -490,6 +491,49 @@ export async function saveQuickTriageAction(formData: FormData) {
   revalidatePath(`/staff/reports/${reportId}`);
   revalidatePath(`/report/${report.publicTrackingToken}`);
   redirect(`/staff/reports/${reportId}?triageSaved=1`);
+}
+
+export async function addIssuePhotosAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const photos = formData
+    .getAll("photos")
+    .filter((value): value is File => value instanceof File && value.size > 0);
+  const report = getIssueReportById(reportId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  if (photos.length === 0) {
+    throw new Error("Choose at least one photo to upload.");
+  }
+
+  if (listAttachments(reportId).length + photos.length > getMaxPhotoCount()) {
+    throw new Error(`Each report can have up to ${getMaxPhotoCount()} photos.`);
+  }
+
+  const invalidPhoto = photos.find(
+    (photo) =>
+      !ALLOWED_PHOTO_TYPES.has(photo.type) ||
+      !ALLOWED_PHOTO_EXTENSIONS.has(getFileExtension(photo.name)) ||
+      photo.size > MAX_PHOTO_SIZE_BYTES,
+  );
+
+  if (invalidPhoto) {
+    throw new Error(
+      "Photos must be JPEG, PNG, WebP, or GIF files and each must be 8 MB or smaller.",
+    );
+  }
+
+  await savePhotoAttachments(reportId, photos);
+  addStaffNote({
+    reportId,
+    body: `${photos.length} staff photo${photos.length === 1 ? "" : "s"} attached.`,
+  });
+
+  revalidatePath("/staff");
+  revalidatePath(`/staff/reports/${reportId}`);
+  redirect(`/staff/reports/${reportId}?photoSaved=1`);
 }
 
 export async function updateIssueDetailsAction(formData: FormData) {
