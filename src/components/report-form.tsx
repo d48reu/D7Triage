@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, type FormEvent, type ReactNode } from "react";
+import { useActionState, useMemo, useState, type FormEvent } from "react";
 import { ISSUE_CATEGORIES } from "@/lib/issue-types";
 import {
   submitIssueReportAction,
@@ -9,7 +9,7 @@ import {
 
 const initialState: SubmitIssueReportState = {
   status: "idle",
-  message: "Reports are saved locally and reviewed by staff.",
+  message: "Fill the new row, then create the item.",
 };
 const MAX_PHOTO_COUNT = 4;
 const MAX_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
@@ -22,36 +22,44 @@ const ALLOWED_PHOTO_TYPES = new Set([
 
 const EXAMPLE_REPORTS = [
   {
-    id: "sidewalk",
-    title: "Broken sidewalk near a home",
-    category: "SIDEWALKS",
-    addressText: "3636 SW 16th Terrace, Miami, FL 33145",
-    description:
-      "The sidewalk in front of this address is cracked and lifted in several places, creating a tripping hazard for people walking by.",
-  },
-  {
-    id: "roads",
-    title: "Traffic concern on a neighborhood street",
+    id: "traffic",
+    title: "Lorenzo Cruz",
     category: "TRAFFIC",
-    addressText: "655 NW 37th Avenue, Miami, FL 33125",
+    addressText: "6690 SW 40th St, Miami, FL 33155",
+    phone: "305.724.7000",
+    email: "frontdesk@example.com",
     description:
-      "There is a large pothole near the travel lane and drivers are swerving around it. It has gotten noticeably worse over the last week.",
+      "REQUEST TO PERFORM TRAFFIC STUDY, INSTALL SPEEDBUMPS, OR REVIEW SIGNAL TIMING NEAR THIS LOCATION.",
   },
   {
-    id: "streetlights",
-    title: "Streetlight issue",
+    id: "housing",
+    title: "Ondina Arias",
+    category: "HOUSING",
+    addressText: "10800 SW 88th Street, Miami, FL 33176",
+    phone: "305.624.7000",
+    email: "frontdesk@example.com",
+    description:
+      "MEALS ON WHEELS and senior housing assistance request. Resident needs follow-up from District 7 staff.",
+  },
+  {
+    id: "streetlight",
+    title: "Denise Tyre",
     category: "STREETLIGHTS",
     addressText: "3750 S Dixie Highway, Miami, FL 33145",
+    phone: "305.301.3000",
+    email: "frontdesk@example.com",
     description:
-      "Several streetlights near this location are out, making the area much darker after sunset and harder to use safely.",
+      "Streetlights near the office are out and the area is much darker after sunset.",
   },
   {
-    id: "outside",
-    title: "Outside-district example",
-    category: "TRAFFIC",
-    addressText: "100 Washington Ave, Miami Beach, FL 33139",
+    id: "flooding",
+    title: "Carlos Villanueva",
+    category: "FLOODING",
+    addressText: "3599 Douglas Rd, Miami, FL 33133",
+    phone: "786.633.9000",
+    email: "frontdesk@example.com",
     description:
-      "There is a pothole near the curb lane that residents have been avoiding. This example helps show how the app handles reports outside District 7.",
+      "Storm drain backup after rain. Resident reports recurring water pooling near the curb.",
   },
 ] as const;
 
@@ -61,13 +69,16 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
     {
       status: "idle",
       message: demoMode
-        ? "Hosted demo mode: the form is interactive, but new submissions are not retained."
+        ? "Hosted demo mode: the board is interactive, but new submissions are not retained."
         : initialState.message,
     } satisfies SubmitIssueReportState,
   );
   const [category, setCategory] = useState<string>("Other / unsure");
   const [description, setDescription] = useState("");
   const [addressText, setAddressText] = useState("");
+  const [residentName, setResidentName] = useState("");
+  const [residentPhone, setResidentPhone] = useState("");
+  const [residentEmail, setResidentEmail] = useState("");
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [locationState, setLocationState] = useState<{
     latitude: string;
@@ -76,7 +87,7 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
   }>({
     latitude: "",
     longitude: "",
-    message: "Optional. Helps future map and boundary checks if available.",
+    message: "Coordinates optional.",
   });
   const [jurisdictionPreview, setJurisdictionPreview] = useState<{
     status: "idle" | "loading" | "success" | "error";
@@ -89,13 +100,31 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
     countyCommissionerName?: string | null;
   }>({
     status: "idle",
-    message: "Optional. Preview whether the location appears to be inside District 7.",
+    message: "District check has not been run.",
   });
+
+  const todayLabel = useMemo(
+    () =>
+      new Date().toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      }),
+    [],
+  );
+  const groupLabel = useMemo(
+    () => {
+      const date = new Date();
+      return `${date.getFullYear()} ${date.toLocaleDateString(undefined, {
+        month: "long",
+      })}`;
+    },
+    [],
+  );
 
   function resetJurisdictionPreview() {
     setJurisdictionPreview({
       status: "idle",
-      message: "Optional. Preview whether the location appears to be inside District 7.",
+      message: "District check has not been run.",
     });
   }
 
@@ -103,13 +132,16 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
     const example = EXAMPLE_REPORTS.find((item) => item.id === exampleId);
     if (!example) return;
 
+    setResidentName(example.title);
     setCategory(example.category);
     setDescription(example.description);
     setAddressText(example.addressText);
+    setResidentPhone(example.phone);
+    setResidentEmail(example.email);
     setLocationState({
       latitude: "",
       longitude: "",
-      message: "Optional. Helps future map and boundary checks if available.",
+      message: "Coordinates optional.",
     });
     resetJurisdictionPreview();
   }
@@ -164,13 +196,13 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
         setLocationState({
           latitude: position.coords.latitude.toFixed(6),
           longitude: position.coords.longitude.toFixed(6),
-          message: "Location captured for boundary-aware routing.",
+          message: "Location captured.",
         });
       },
       () => {
         setLocationState((current) => ({
           ...current,
-          message: "We couldn’t capture your location. You can still submit with the address field.",
+          message: "Location not captured. The typed address will still be used.",
         }));
       },
       {
@@ -184,14 +216,14 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
     if (!addressText.trim()) {
       setJurisdictionPreview({
         status: "error",
-        message: "Enter a location or address first.",
+        message: "Enter an address first.",
       });
       return;
     }
 
     setJurisdictionPreview({
       status: "loading",
-      message: "Checking whether this location appears to be in District 7...",
+      message: "Checking District 7 coverage...",
     });
 
     try {
@@ -224,7 +256,7 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
           status: "error",
           message:
             ("message" in data && data.message) ||
-            "We couldn’t preview District 7 coverage right now.",
+            "District check could not run right now.",
         });
         return;
       }
@@ -233,10 +265,10 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
         status: "success",
         message:
           data.districtHintStatus === "likely_outside_district"
-            ? "This location appears to be outside Miami-Dade County District 7. You can still submit, and staff will review the jurisdiction."
+            ? "Likely outside District 7."
             : data.districtHintStatus === "likely_in_district"
-              ? "This location appears to be inside Miami-Dade County District 7."
-              : "We couldn’t confidently place this location in or out of District 7 yet, but you can still submit it for review.",
+              ? "Likely in District 7."
+              : "District unclear.",
         districtHintStatus: data.districtHintStatus,
         districtLabel: data.districtLabel,
         municipalityName: data.municipalityName,
@@ -247,405 +279,439 @@ export function ReportForm({ demoMode = false }: { demoMode?: boolean }) {
     } catch {
       setJurisdictionPreview({
         status: "error",
-        message: "We couldn’t preview District 7 coverage right now.",
+        message: "District check could not run right now.",
       });
     }
   }
 
   return (
-    <form
-      action={formAction}
-      onSubmit={handleSubmit}
-      className="rounded-md border border-slate-200 bg-white shadow-sm"
-    >
-      <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              New item
-            </p>
-            <h2 className="mt-1 text-xl font-semibold">Create case</h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <BoardPill label="Status" value="Received" />
-            <BoardPill label="Owner" value="District 7 triage" />
-          </div>
-        </div>
+    <form action={formAction} onSubmit={handleSubmit} className="px-10 py-5 max-md:px-4">
+      <input type="hidden" name="latitude" value={locationState.latitude} />
+      <input type="hidden" name="longitude" value={locationState.longitude} />
+      <input type="hidden" name="preferredLanguage" value="English" />
+      <input type="hidden" name="contactConsent" value="on" />
+      <label className="hidden" aria-hidden="true">
+        <span>Company</span>
+        <input name="company" tabIndex={-1} autoComplete="off" />
+      </label>
+
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="flex h-8 items-center rounded bg-[#0073ea] font-medium text-white shadow-sm disabled:opacity-60"
+        >
+          <span className="px-3">{isPending ? "Creating..." : "New item"}</span>
+          <span className="border-l border-white/30 px-2">v</span>
+        </button>
+        <BoardTool label="Search" />
+        <BoardTool label="Person" />
+        <BoardTool label="Filter" />
+        <BoardTool label="Sort" />
+        <BoardTool label="Hide" />
+        <BoardTool label="Group by" />
+        <button
+          type="button"
+          onClick={previewJurisdiction}
+          disabled={jurisdictionPreview.status === "loading"}
+          className="h-8 rounded border border-[#c9d3e8] bg-white px-3 font-medium text-[#323650] hover:bg-[#f5f7fb] disabled:opacity-60"
+        >
+          {jurisdictionPreview.status === "loading" ? "Checking..." : "Check District 7"}
+        </button>
       </div>
 
-      <div className="space-y-5 p-5">
-        {demoMode ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-            <div className="font-semibold">Hosted demo note</div>
-            <p className="mt-1 leading-6">
-              This shareable demo lets you explore the form and staff workflow, but
-              new public submissions are not retained. Use the curated examples
-              below and the seeded staff inbox to see the full routing experience.
-            </p>
-          </div>
-        ) : null}
+      <div className="mt-5 flex items-center gap-2 pl-3 text-[20px] font-semibold text-[#ff158a]">
+        <span>v</span>
+        <span>{groupLabel}</span>
+      </div>
 
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium text-slate-800">
-                Try an example
-              </div>
-              <p className="mt-1 text-xs text-slate-500">
-                Use a curated example to see what a clear report looks like, then edit it as needed.
-              </p>
-            </div>
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            {EXAMPLE_REPORTS.map((example) => (
-              <button
-                key={example.id}
-                type="button"
-                onClick={() => applyExample(example.id)}
-                className="rounded-md border border-slate-200 bg-white px-4 py-3 text-left hover:border-sky-300 hover:bg-sky-50"
-              >
-                <div className="text-sm font-semibold text-slate-900">
-                  {example.title}
-                </div>
-                <div className="mt-1 text-xs font-medium text-sky-700">
-                  {example.category}
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  {example.addressText}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="overflow-hidden rounded-md border border-slate-200">
-          <div className="grid grid-cols-[150px_1fr] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-            <div>Column</div>
-            <div>Value</div>
+      <div className="mt-3 overflow-x-auto border-l-8 border-[#ff158a]">
+        <div className="min-w-[1760px] border-y border-r border-[#c9d3e8]">
+          <div className="grid grid-cols-[34px_340px_66px_98px_142px_88px_170px_410px_300px_160px_230px_210px_140px] bg-white text-sm text-[#323650]">
+            <HeaderCell />
+            <HeaderCell label="Item" />
+            <HeaderCell />
+            <HeaderCell label="People" />
+            <HeaderCell label="Answered by" />
+            <HeaderCell label="Date" />
+            <HeaderCell label="Status" />
+            <HeaderCell label="Call Summary" />
+            <HeaderCell label="Constituent Address" />
+            <HeaderCell label="Constituent Phone" />
+            <HeaderCell label="Constituent Email" />
+            <HeaderCell label="Category" />
+            <HeaderCell label="Files" />
           </div>
 
-          <BoardRow label="Category" required>
-            <select
-              name="category"
-              required
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-              className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-            >
-              {ISSUE_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </BoardRow>
-
-          <BoardRow label="Description" required>
-            <textarea
-              name="description"
-              required
-              minLength={12}
-              maxLength={4000}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              className="min-h-32 w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-              placeholder="Example: There is a large pothole near the school entrance and cars are swerving around it."
-            />
-          </BoardRow>
-
-          <BoardRow label="Location" required>
-            <input
-              name="addressText"
-              required
-              maxLength={250}
-              value={addressText}
-              onChange={(event) => {
-                setAddressText(event.target.value);
-                resetJurisdictionPreview();
-              }}
-              className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-              placeholder="Street address, intersection, park, or landmark"
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              Cross streets, school names, park names, route numbers, and nearby
-              landmarks help staff determine jurisdiction faster.
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="grid min-h-12 grid-cols-[34px_340px_66px_98px_142px_88px_170px_410px_300px_160px_230px_210px_140px] bg-[#cfe8ff] text-sm text-[#323650]">
+            <Cell center>
+              <input
+                type="checkbox"
+                className="size-4 rounded border-[#b8c2d8]"
+                aria-label="Select new item"
+              />
+            </Cell>
+            <Cell active>
+              <input
+                name="residentName"
+                value={residentName}
+                onChange={(event) => setResidentName(event.target.value)}
+                maxLength={120}
+                placeholder="New item"
+                className="h-full w-full bg-transparent px-3 outline-none placeholder:text-[#4c566f]"
+              />
+            </Cell>
+            <Cell center>
               <button
                 type="button"
                 onClick={previewJurisdiction}
-                disabled={jurisdictionPreview.status === "loading"}
-                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                className="rounded-full border border-[#7c87a3] px-1.5 text-lg leading-5 text-[#4b556f] hover:bg-white"
+                aria-label="Check District 7 coverage"
               >
-                {jurisdictionPreview.status === "loading"
-                  ? "Checking..."
-                  : "Check District 7 Coverage"}
+                +
               </button>
-              <span className="text-xs text-slate-500">
-                Preview only. Staff can still submit and review.
-              </span>
-            </div>
-            <div
-              className={`mt-3 rounded-md px-3 py-2 text-sm ${
-                jurisdictionPreview.status === "error"
-                  ? "bg-rose-50 text-rose-800"
-                  : jurisdictionPreview.districtHintStatus === "likely_outside_district"
-                    ? "bg-amber-50 text-amber-900"
-                    : jurisdictionPreview.districtHintStatus === "likely_in_district"
-                      ? "bg-emerald-50 text-emerald-800"
-                      : "bg-slate-50 text-slate-600"
-              }`}
-            >
-              {jurisdictionPreview.message}
-              {jurisdictionPreview.status === "success" ? (
-                <div className="mt-2 space-y-1 text-xs">
-                  {jurisdictionPreview.districtLabel ? (
-                    <div>{jurisdictionPreview.districtLabel}</div>
-                  ) : null}
-                  {jurisdictionPreview.municipalityName ? (
-                    <div>Municipality: {jurisdictionPreview.municipalityName}</div>
-                  ) : null}
-                  {jurisdictionPreview.countyCommissionDistrictNumber ? (
-                    <div>
-                      Likely county commission district:{" "}
-                      {jurisdictionPreview.countyCommissionDistrictNumber}
-                      {jurisdictionPreview.countyCommissionerName
-                        ? ` (${jurisdictionPreview.countyCommissionerName})`
-                        : ""}
-                    </div>
-                  ) : null}
-                  {jurisdictionPreview.geocodedAddress ? (
-                    <div>Matched address: {jurisdictionPreview.geocodedAddress}</div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </BoardRow>
-        </div>
-
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium text-slate-800">
-                Optional device location
+            </Cell>
+            <Cell center>
+              <Avatar label="D" tone="orange" />
+            </Cell>
+            <Cell center>
+              <Avatar label="FD" tone="navy" />
+            </Cell>
+            <Cell center>{todayLabel}</Cell>
+            <Cell status>
+              <div className="flex h-full w-full items-center justify-center bg-[#a7a7a7] px-3 font-semibold text-white">
+                Received
               </div>
-              <p className="mt-1 text-xs text-slate-500">
-                If you allow it, we’ll attach coordinates for map-based
-                boundary checks. Otherwise, we’ll try to geocode the typed
-                address on the server.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={captureLocation}
-              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              Use My Location
-            </button>
+            </Cell>
+            <Cell>
+              <textarea
+                name="description"
+                required
+                minLength={12}
+                maxLength={4000}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Call summary..."
+                className="h-full min-h-20 w-full resize-none bg-transparent px-3 py-2 outline-none placeholder:text-[#6c758f]"
+              />
+            </Cell>
+            <Cell>
+              <textarea
+                name="addressText"
+                required
+                maxLength={250}
+                value={addressText}
+                onChange={(event) => {
+                  setAddressText(event.target.value);
+                  resetJurisdictionPreview();
+                }}
+                placeholder="Address, intersection, park, or landmark"
+                className="h-full min-h-20 w-full resize-none bg-transparent px-3 py-2 outline-none placeholder:text-[#6c758f]"
+              />
+            </Cell>
+            <Cell>
+              <input
+                name="residentPhone"
+                value={residentPhone}
+                onChange={(event) => setResidentPhone(event.target.value)}
+                maxLength={40}
+                placeholder="305..."
+                className="h-full w-full bg-transparent px-3 outline-none placeholder:text-[#6c758f]"
+              />
+            </Cell>
+            <Cell>
+              <input
+                name="residentEmail"
+                type="email"
+                required
+                value={residentEmail}
+                onChange={(event) => setResidentEmail(event.target.value)}
+                placeholder="email required"
+                className="h-full w-full bg-transparent px-3 outline-none placeholder:text-[#6c758f]"
+              />
+            </Cell>
+            <Cell>
+              <select
+                name="category"
+                required
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className="h-full w-full bg-transparent px-3 outline-none"
+              >
+                {ISSUE_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </Cell>
+            <Cell center>
+              <label className="cursor-pointer rounded border border-[#c9d3e8] bg-white px-2 py-1 text-xs font-medium hover:bg-[#f5f7fb]">
+                Files
+                <input
+                  name="photos"
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  disabled={demoMode}
+                  onChange={(event) =>
+                    setPhotoError(validatePhotos(event.target.files))
+                  }
+                  className="hidden"
+                />
+              </label>
+            </Cell>
           </div>
-          <input type="hidden" name="latitude" value={locationState.latitude} />
-          <input type="hidden" name="longitude" value={locationState.longitude} />
-          <p className="mt-3 text-xs text-slate-500">{locationState.message}</p>
-          {locationState.latitude && locationState.longitude ? (
-            <p className="mt-1 text-xs text-slate-500">
-              {locationState.latitude}, {locationState.longitude}
-            </p>
-          ) : null}
-        </div>
 
-        <label className="block rounded-md border border-slate-200 bg-white p-4">
-          <span className="mb-2 flex items-center justify-between gap-3 text-sm font-medium text-slate-800">
-            <span>Attachments</span>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-              Optional
-            </span>
-          </span>
-          <input
-            name="photos"
-            type="file"
-            multiple
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            disabled={demoMode}
-            onChange={(event) => setPhotoError(validatePhotos(event.target.files))}
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-          />
-          <p className="mt-2 text-xs text-slate-500">
-            {demoMode
-              ? "Disabled in the hosted demo so the site stays lightweight and stable."
-              : "Optional. JPEG, PNG, WebP, or GIF. Up to 4 files, 8 MB each."}
-          </p>
-          {photoError ? (
-            <p className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">
-              {photoError}
-            </p>
-          ) : null}
-        </label>
+          {EXAMPLE_REPORTS.map((example, index) => (
+            <ExampleRow
+              key={example.id}
+              example={example}
+              dateLabel={index < 2 ? todayLabel : index === 2 ? "Jul 17" : "Jul 16"}
+              status={
+                index === 0 || index === 1 || index === 2
+                  ? "Needs follow up"
+                  : "Referred out"
+              }
+            />
+          ))}
+
+          <div className="grid h-9 grid-cols-[34px_340px_66px_98px_142px_88px_170px_410px_300px_160px_230px_210px_140px] bg-white text-sm text-[#6a728c]">
+            <Cell center>
+              <input
+                type="checkbox"
+                className="size-4 rounded border-[#d2daeb]"
+                aria-label="Select add item row"
+              />
+            </Cell>
+            <Cell>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="px-3 text-left text-[#676f8f] hover:text-[#0073ea] disabled:opacity-60"
+              >
+                + Add item
+              </button>
+            </Cell>
+            <Cell />
+            <Cell />
+            <Cell />
+            <Cell />
+            <Cell />
+            <Cell />
+            <Cell />
+            <Cell />
+            <Cell />
+            <Cell />
+            <Cell />
+          </div>
+        </div>
       </div>
 
-      <div className="border-y border-slate-200 bg-slate-50 px-5 py-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Contact columns
-        </p>
-        <h2 className="mt-1 text-lg font-semibold">Follow-up contact</h2>
-      </div>
-
-      <div className="space-y-5 p-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field
-            name="residentName"
-            label="Name"
-            placeholder="Optional"
-            maxLength={120}
-          />
-          <Field
-            name="residentEmail"
-            label="Email"
-            placeholder="you@example.com"
-            type="email"
-            required
-          />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field
-            name="residentPhone"
-            label="Phone"
-            placeholder="Optional"
-            maxLength={40}
-          />
-          <Field
-            name="preferredLanguage"
-            label="Preferred language"
-            defaultValue="English"
-            maxLength={60}
-          />
-        </div>
-
-        <label className="hidden" aria-hidden="true">
-          <span>Company</span>
-          <input
-            name="company"
-            tabIndex={-1}
-            autoComplete="off"
-            className="hidden"
-          />
-        </label>
-
-        <label className="flex gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-          <input
-            name="contactConsent"
-            type="checkbox"
-            required
-            defaultChecked
-            className="mt-1"
-          />
-          <span>I agree to receive email updates about this report.</span>
-        </label>
-
-        <label className="flex gap-3 rounded-md border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
-          <input
-            name="newsletterOptIn"
-            type="checkbox"
-            className="mt-1"
-          />
-          <span>
-            I would also like to receive District 7 newsletter and community
-            updates by email.
-          </span>
-        </label>
-
+      <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_360px]">
         <div
-          className={`rounded-md px-3 py-2 text-sm ${
+          className={`rounded border px-4 py-3 text-sm ${
             state.status === "error"
-              ? "bg-rose-50 text-rose-800"
-              : "bg-slate-50 text-slate-600"
+              ? "border-[#f5b2c3] bg-[#fff0f3] text-[#9f1239]"
+              : "border-[#d9e0ef] bg-white text-[#4d5672]"
           }`}
         >
           {state.message}
+          {photoError ? (
+            <div className="mt-2 font-medium text-[#9f1239]">{photoError}</div>
+          ) : null}
+          <div className="mt-2 text-xs text-[#6a728c]">
+            Required columns: Item/contact name can be blank, but Call Summary,
+            Address, Email, and Category must be filled.
+          </div>
         </div>
 
-        <div className="flex justify-end border-t border-slate-200 pt-5">
+        <div
+          className={`rounded border px-4 py-3 text-sm ${
+            jurisdictionPreview.status === "error"
+              ? "border-[#f5b2c3] bg-[#fff0f3] text-[#9f1239]"
+              : jurisdictionPreview.districtHintStatus === "likely_outside_district"
+                ? "border-[#ffd79a] bg-[#fff8e8] text-[#8a4b00]"
+                : jurisdictionPreview.districtHintStatus === "likely_in_district"
+                  ? "border-[#b9e7cc] bg-[#effbf4] text-[#087f49]"
+                  : "border-[#d9e0ef] bg-white text-[#4d5672]"
+          }`}
+        >
+          <div className="font-semibold">District preview</div>
+          <div className="mt-1">{jurisdictionPreview.message}</div>
+          {jurisdictionPreview.status === "success" ? (
+            <div className="mt-2 space-y-1 text-xs">
+              {jurisdictionPreview.districtLabel ? (
+                <div>{jurisdictionPreview.districtLabel}</div>
+              ) : null}
+              {jurisdictionPreview.municipalityName ? (
+                <div>Municipality: {jurisdictionPreview.municipalityName}</div>
+              ) : null}
+              {jurisdictionPreview.countyCommissionDistrictNumber ? (
+                <div>
+                  County district: {jurisdictionPreview.countyCommissionDistrictNumber}
+                  {jurisdictionPreview.countyCommissionerName
+                    ? ` (${jurisdictionPreview.countyCommissionerName})`
+                    : ""}
+                </div>
+              ) : null}
+              {jurisdictionPreview.geocodedAddress ? (
+                <div>Matched: {jurisdictionPreview.geocodedAddress}</div>
+              ) : null}
+            </div>
+          ) : null}
           <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-md bg-sky-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-60"
+            type="button"
+            onClick={captureLocation}
+            className="mt-3 rounded border border-[#c9d3e8] bg-white px-3 py-1.5 text-xs font-medium text-[#323650] hover:bg-[#f5f7fb]"
           >
-            {isPending
-              ? "Submitting..."
-              : demoMode
-                ? "Continue In Demo"
-                : "Submit Report"}
+            Use device location
           </button>
+          <div className="mt-2 text-xs text-[#6a728c]">{locationState.message}</div>
         </div>
+      </div>
+
+      <div className="fixed bottom-4 right-4 rounded-xl border border-[#c9d3e8] bg-white px-5 py-3 text-sm text-[#4d5672] shadow-lg max-md:hidden">
+        How can I help?
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 text-xs text-[#4d5672]">
+        {EXAMPLE_REPORTS.map((example) => (
+          <button
+            key={example.id}
+            type="button"
+            onClick={() => applyExample(example.id)}
+            className="rounded border border-[#d9e0ef] bg-white px-3 py-2 hover:border-[#0073ea] hover:bg-[#f5faff]"
+          >
+            Fill with {example.title}
+          </button>
+        ))}
       </div>
     </form>
   );
 }
 
-function Field({
-  name,
-  label,
-  placeholder,
-  type = "text",
-  required = false,
-  defaultValue,
-  maxLength,
-}: {
-  name: string;
-  label: string;
-  placeholder?: string;
-  type?: string;
-  required?: boolean;
-  defaultValue?: string;
-  maxLength?: number;
-}) {
+function BoardTool({ label }: { label: string }) {
   return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-medium text-slate-800">
-        {label}
-      </span>
-      <input
-        name={name}
-        type={type}
-        required={required}
-        defaultValue={defaultValue}
-        maxLength={maxLength}
-        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
-        placeholder={placeholder}
-      />
-    </label>
+    <button
+      type="button"
+      className="h-8 rounded px-2 text-[#323650] hover:bg-[#f0f3fb]"
+    >
+      {label}
+    </button>
   );
 }
 
-function BoardPill({ label, value }: { label: string; value: string }) {
+function HeaderCell({ label }: { label?: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-      <span className="text-slate-500">{label}</span>
-      <span>{value}</span>
+    <div className="flex h-9 items-center justify-center border-b border-r border-[#c9d3e8] px-2">
+      {label}
+    </div>
+  );
+}
+
+function Cell({
+  children,
+  center = false,
+  active = false,
+  status = false,
+}: {
+  children?: React.ReactNode;
+  center?: boolean;
+  active?: boolean;
+  status?: boolean;
+}) {
+  return (
+    <div
+      className={`min-h-12 border-b border-r border-[#c9d3e8] ${
+        center ? "flex items-center justify-center" : "flex items-stretch"
+      } ${active ? "outline outline-1 outline-[#323650]" : ""} ${
+        status ? "p-0" : ""
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Avatar({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "orange" | "navy";
+}) {
+  return (
+    <span
+      className={`flex size-7 items-center justify-center rounded-full text-xs font-bold text-white ${
+        tone === "orange" ? "bg-[#ff642e]" : "bg-[#101735]"
+      }`}
+    >
+      {label}
     </span>
   );
 }
 
-function BoardRow({
-  label,
-  required = false,
-  children,
+function ExampleRow({
+  example,
+  dateLabel,
+  status,
 }: {
-  label: string;
-  required?: boolean;
-  children: ReactNode;
+  example: (typeof EXAMPLE_REPORTS)[number];
+  dateLabel: string;
+  status: "Needs follow up" | "Referred out";
 }) {
   return (
-    <div className="grid gap-3 border-b border-slate-200 px-4 py-4 last:border-b-0 md:grid-cols-[150px_1fr]">
-      <div>
-        <div className="text-sm font-semibold text-slate-900">{label}</div>
-        {required ? (
-          <div className="mt-2 inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-800">
-            Required
-          </div>
-        ) : null}
-      </div>
-      <div>{children}</div>
+    <div
+      className="grid min-h-9 grid-cols-[34px_340px_66px_98px_142px_88px_170px_410px_300px_160px_230px_210px_140px] bg-white text-left text-sm text-[#323650] hover:bg-[#eaf5ff]"
+    >
+      <Cell center>
+        <input
+          type="checkbox"
+          className="size-4 rounded border-[#d2daeb]"
+          aria-label={`Select ${example.title}`}
+        />
+      </Cell>
+      <Cell>
+        <div className="flex items-center px-8">{example.title}</div>
+      </Cell>
+      <Cell center>
+        <span className="rounded-full border border-[#7c87a3] px-1.5 text-lg leading-5 text-[#4b556f]">
+          +
+        </span>
+      </Cell>
+      <Cell center>
+        <Avatar label={example.title.startsWith("Ondina") ? "AS" : "D"} tone="orange" />
+      </Cell>
+      <Cell center>
+        <Avatar label="KB" tone="navy" />
+      </Cell>
+      <Cell center>{dateLabel}</Cell>
+      <Cell status>
+        <div
+          className={`flex h-full w-full items-center justify-center px-3 font-semibold text-white ${
+            status === "Needs follow up" ? "bg-[#bb335d]" : "bg-[#a7a7a7]"
+          }`}
+        >
+          {status}
+        </div>
+      </Cell>
+      <Cell>
+        <div className="line-clamp-1 px-3 py-2">{example.description}</div>
+      </Cell>
+      <Cell>
+        <div className="line-clamp-1 px-3 py-2">{example.addressText}</div>
+      </Cell>
+      <Cell>
+        <div className="px-3 py-2">{example.phone}</div>
+      </Cell>
+      <Cell>
+        <div className="line-clamp-1 px-3 py-2">{example.email}</div>
+      </Cell>
+      <Cell>
+        <div className="line-clamp-1 px-3 py-2">{example.category}</div>
+      </Cell>
+      <Cell />
     </div>
   );
 }
