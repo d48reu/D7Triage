@@ -59,6 +59,12 @@ export default async function RoutingGuidePage({
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
+              href="/staff/my"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              My Assignments
+            </Link>
+            <Link
               href="/staff/analytics"
               className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >

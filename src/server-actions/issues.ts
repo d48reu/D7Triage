@@ -19,6 +19,7 @@ import { resolveReportLocationIntelligence } from "@/lib/report-location-intelli
 import { sendStaffAssignmentNotification } from "@/lib/staff-assignment-notifications";
 import {
   addAttachment,
+  acknowledgeAssignment,
   assignIssueReport,
   addIssueAuditEvents,
   addReferral,
@@ -736,6 +737,37 @@ export async function assignIssueReportAction(formData: FormData) {
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
   redirect(`/staff/reports/${reportId}?assignmentSaved=1`);
+}
+
+export async function acknowledgeAssignmentAction(formData: FormData) {
+  const reportId = readRequiredText(formData, "reportId");
+  const staffMemberId = readRequiredText(formData, "staffMemberId");
+  const returnTo = String(formData.get("returnTo") ?? "").trim();
+  const report = getIssueReportById(reportId);
+  const staffMember = getStaffMemberById(staffMemberId);
+
+  if (!report) {
+    throw new Error("Report not found");
+  }
+
+  if (!staffMember || report.assignedStaffId !== staffMember.id) {
+    throw new Error("Only the assigned staff member can acknowledge this case.");
+  }
+
+  const acknowledgment = acknowledgeAssignment({ reportId, staffMemberId });
+  if (acknowledgment) {
+    addStaffNote({
+      reportId,
+      body: `Assignment acknowledged by ${staffMember.name}.`,
+    });
+  }
+
+  revalidatePath("/staff");
+  revalidatePath("/staff/my");
+  revalidatePath(`/staff/reports/${reportId}`);
+
+  const safeReturnTo = returnTo.startsWith("/staff") ? returnTo : `/staff/reports/${reportId}`;
+  redirect(`${safeReturnTo}${safeReturnTo.includes("?") ? "&" : "?"}acknowledged=1`);
 }
 
 export async function refreshLocationIntelligenceAction(formData: FormData) {

@@ -15,6 +15,7 @@ import { findCountyCommissionDistrictForPoint } from "@/lib/location-intelligenc
 import {
   findPotentialDuplicates,
   formatStaffMemberLabel,
+  getCurrentAssignmentAcknowledgment,
   getJurisdictionConfig,
   getLatestAiSuggestion,
   getManagedRoutingRule,
@@ -33,6 +34,7 @@ import {
 import { requireStaffSession } from "@/lib/staff-auth";
 import {
   addReferralAction,
+  acknowledgeAssignmentAction,
   addIssuePhotosAction,
   addStaffNoteAction,
   markDistinctAction,
@@ -67,6 +69,9 @@ export default async function StaffReportPage({
       : query.triageSaved) === "1";
   const photoSaved =
     (Array.isArray(query.photoSaved) ? query.photoSaved[0] : query.photoSaved) ===
+    "1";
+  const acknowledged =
+    (Array.isArray(query.acknowledged) ? query.acknowledged[0] : query.acknowledged) ===
     "1";
   const report = getIssueReportById(id);
 
@@ -105,6 +110,7 @@ export default async function StaffReportPage({
   const assignedStaffMember = report.assignedStaffId
     ? allStaffMembers.find((staffMember) => staffMember.id === report.assignedStaffId) ?? null
     : null;
+  const assignmentAcknowledgment = getCurrentAssignmentAcknowledgment(report);
   const triageItems = buildCaseTriageItems({
     status: report.status,
     assigned: Boolean(report.assignedStaffId),
@@ -139,6 +145,12 @@ export default async function StaffReportPage({
               className="rounded-md bg-sky-700 px-3 py-2 text-sm font-medium text-white hover:bg-sky-800"
             >
               Edit Details
+            </Link>
+            <Link
+              href={assignedStaffMember ? `/staff/my?staffId=${assignedStaffMember.id}` : "/staff/my"}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              My Assignments
             </Link>
             <Link
               href="/staff/notifications"
@@ -189,6 +201,12 @@ export default async function StaffReportPage({
           {triageSaved ? (
             <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
               Quick triage saved.
+            </div>
+          ) : null}
+
+          {acknowledged ? (
+            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+              Assignment acknowledged.
             </div>
           ) : null}
 
@@ -269,6 +287,52 @@ export default async function StaffReportPage({
               </button>
             </div>
           </form>
+
+          {assignedStaffMember ? (
+            <div
+              className={`mt-4 rounded-md border p-4 ${
+                assignmentAcknowledgment
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-amber-200 bg-amber-50"
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Assignment acknowledgment
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-700">
+                    {assignmentAcknowledgment
+                      ? `${assignedStaffMember.name} acknowledged this assignment on ${new Date(
+                          assignmentAcknowledgment.createdAt,
+                        ).toLocaleString()}.`
+                      : `${assignedStaffMember.name} has not acknowledged this assignment yet.`}
+                  </p>
+                </div>
+                {!assignmentAcknowledgment ? (
+                  <form action={acknowledgeAssignmentAction}>
+                    <input type="hidden" name="reportId" value={report.id} />
+                    <input
+                      type="hidden"
+                      name="staffMemberId"
+                      value={assignedStaffMember.id}
+                    />
+                    <input
+                      type="hidden"
+                      name="returnTo"
+                      value={`/staff/reports/${report.id}`}
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                    >
+                      Acknowledge
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-4 rounded-md border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">

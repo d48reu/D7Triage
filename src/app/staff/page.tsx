@@ -10,6 +10,7 @@ import {
 } from "@/lib/jurisdiction";
 import { findCountyCommissionDistrictForPoint } from "@/lib/location-intelligence";
 import {
+  getCurrentAssignmentAcknowledgment,
   getJurisdictionConfig,
   getManagedRoutingRule,
   listAiSuggestions,
@@ -50,6 +51,7 @@ export default async function StaffPage({
     const jurisdiction = analyzeReportJurisdiction(report, jurisdictionConfig);
     const referrals = listReferrals(report.id);
     const latestStaffUpdate = listStaffNotes(report.id)[0] ?? null;
+    const assignmentAcknowledgment = getCurrentAssignmentAcknowledgment(report);
     const aiSuggestions = listAiSuggestions(report.id);
     const ownerLabel =
       getManagedRoutingRule(report.category, report.municipalityName)?.ownerLabel ??
@@ -63,6 +65,7 @@ export default async function StaffPage({
       jurisdiction,
       referrals,
       aiSuggestions,
+      assignmentAcknowledged: Boolean(assignmentAcknowledgment),
     });
     const followUpDate =
       referrals.find((referral) => referral.followUpDate)?.followUpDate ?? null;
@@ -83,6 +86,7 @@ export default async function StaffPage({
       assignedStaffName,
       flags,
       latestStaffUpdate,
+      assignmentAcknowledgment,
       followUpDate,
       nextAction,
       searchableText: buildStaffInboxSearchText({
@@ -132,6 +136,12 @@ export default async function StaffPage({
               className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
             >
               New Report
+            </Link>
+            <Link
+              href="/staff/my"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              My Assignments
             </Link>
             <Link
               href="/staff/routing"

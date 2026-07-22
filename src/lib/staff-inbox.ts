@@ -7,6 +7,7 @@ export type StaffInboxFilter =
   | "all"
   | "received"
   | "unassigned"
+  | "needs_acknowledgment"
   | "needs_review"
   | "routed"
   | "awaiting_agency"
@@ -24,13 +25,13 @@ export type StaffInboxRow = {
   searchableText: string;
 };
 
-const CLOSED_STATUSES = new Set<IssueStatus>([
+export const CLOSED_STATUSES = new Set<IssueStatus>([
   "resolved",
   "closed_outside_jurisdiction",
   "closed_duplicate",
 ]);
 
-const ACTIVE_STATUSES = new Set<IssueStatus>([
+export const ACTIVE_STATUSES = new Set<IssueStatus>([
   "received",
   "needs_review",
   "routed",
@@ -61,6 +62,11 @@ export function getStaffInboxFilterOptions(rows: StaffInboxRow[]) {
         (row) =>
           !row.report.assignedStaffId && !CLOSED_STATUSES.has(row.report.status),
       ),
+    },
+    {
+      key: "needs_acknowledgment" as const,
+      label: "Needs acknowledgment",
+      count: count((row) => row.flags.includes("Needs acknowledgment")),
     },
     {
       key: "needs_review" as const,
@@ -115,6 +121,7 @@ export function normalizeStaffInboxFilter(value: string | undefined): StaffInbox
     case "all":
     case "received":
     case "unassigned":
+    case "needs_acknowledgment":
     case "needs_review":
     case "routed":
     case "awaiting_agency":
@@ -133,6 +140,7 @@ export function buildStaffInboxFlags(input: {
   jurisdiction: JurisdictionAssessment;
   referrals: Referral[];
   aiSuggestions: AiSuggestion[];
+  assignmentAcknowledged?: boolean;
   now?: Date;
 }) {
   const flags: string[] = [];
@@ -149,6 +157,14 @@ export function buildStaffInboxFlags(input: {
 
   if (!input.report.assignedStaffId && !CLOSED_STATUSES.has(input.report.status)) {
     flags.push("Unassigned");
+  }
+
+  if (
+    input.report.assignedStaffId &&
+    ACTIVE_STATUSES.has(input.report.status) &&
+    !input.assignmentAcknowledged
+  ) {
+    flags.push("Needs acknowledgment");
   }
 
   if (
@@ -226,6 +242,8 @@ export function filterStaffInboxRows<T extends StaffInboxRow>(input: {
       (input.filter === "unassigned" &&
         !row.report.assignedStaffId &&
         !CLOSED_STATUSES.has(row.report.status)) ||
+      (input.filter === "needs_acknowledgment" &&
+        row.flags.includes("Needs acknowledgment")) ||
       (input.filter === "recently_updated" && recentlyUpdated) ||
       row.report.status === input.filter;
 

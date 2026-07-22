@@ -33,6 +33,7 @@ export type IssueReport = {
   publicTrackingToken: string;
   status: IssueStatus;
   assignedStaffId: string | null;
+  assignedAt: string | null;
   category: string;
   description: string;
   addressText: string;
@@ -136,6 +137,13 @@ export type IssueAuditEvent = {
   oldValue: string | null;
   newValue: string | null;
   actorLabel: string;
+  createdAt: string;
+};
+
+export type AssignmentAcknowledgment = {
+  id: string;
+  reportId: string;
+  staffMemberId: string;
   createdAt: string;
 };
 
@@ -252,6 +260,7 @@ type IssueReportRow = {
   public_tracking_token: string;
   status: IssueStatus;
   assigned_staff_id: string | null;
+  assigned_at: string | null;
   category: string;
   description: string;
   address_text: string;
@@ -328,6 +337,13 @@ type StaffMemberRow = {
   is_active: number;
   created_at: string;
   updated_at: string;
+};
+
+type AssignmentAcknowledgmentRow = {
+  id: string;
+  report_id: string;
+  staff_member_id: string;
+  created_at: string;
 };
 
 type ReferralRow = {
@@ -652,6 +668,15 @@ function ensureSchemaMigrations(database: Database.Database) {
     database.exec("alter table issue_reports add column assigned_staff_id text references staff_members(id) on delete set null;");
   }
 
+  if (!hasColumn(database, "issue_reports", "assigned_at")) {
+    database.exec("alter table issue_reports add column assigned_at text;");
+    database.exec(`
+      update issue_reports
+      set assigned_at = updated_at
+      where assigned_staff_id is not null and assigned_at is null;
+    `);
+  }
+
   if (!hasColumn(database, "issue_reports", "newsletter_opt_in_at")) {
     database.exec("alter table issue_reports add column newsletter_opt_in_at text;");
   }
@@ -820,6 +845,18 @@ function ensureSchemaMigrations(database: Database.Database) {
   if (!hasColumn(database, "notification_events", "template_updated_at")) {
     database.exec("alter table notification_events add column template_updated_at text;");
   }
+
+  database.exec(`
+    create table if not exists assignment_acknowledgments (
+      id text primary key,
+      report_id text not null references issue_reports(id) on delete cascade,
+      staff_member_id text not null references staff_members(id) on delete cascade,
+      created_at text not null
+    );
+
+    create index if not exists idx_assignment_ack_lookup
+      on assignment_acknowledgments(report_id, staff_member_id, created_at);
+  `);
 
   if (!hasColumn(database, "jurisdiction_settings", "state_keywords")) {
     database.exec("alter table jurisdiction_settings add column state_keywords text;");
@@ -1211,6 +1248,7 @@ function getDb() {
       public_tracking_token text not null unique,
       status text not null,
       assigned_staff_id text references staff_members(id) on delete set null,
+      assigned_at text,
       category text not null,
       description text not null,
       address_text text not null,
@@ -1272,6 +1310,13 @@ function getDb() {
       id text primary key,
       report_id text not null references issue_reports(id) on delete cascade,
       body text not null,
+      created_at text not null
+    );
+
+    create table if not exists assignment_acknowledgments (
+      id text primary key,
+      report_id text not null references issue_reports(id) on delete cascade,
+      staff_member_id text not null references staff_members(id) on delete cascade,
       created_at text not null
     );
 
@@ -1427,6 +1472,8 @@ function getDb() {
     create index if not exists idx_issue_reports_assigned_staff on issue_reports(assigned_staff_id);
     create index if not exists idx_status_events_report on issue_status_events(report_id);
     create index if not exists idx_staff_notes_report on staff_notes(report_id);
+    create index if not exists idx_assignment_ack_lookup
+      on assignment_acknowledgments(report_id, staff_member_id, created_at);
     create index if not exists idx_audit_events_report on issue_audit_events(report_id, created_at);
     create index if not exists idx_referrals_report on referrals(report_id);
     create index if not exists idx_attachments_report on issue_attachments(report_id);
@@ -1455,6 +1502,7 @@ function mapReport(row: IssueReportRow): IssueReport {
     publicTrackingToken: row.public_tracking_token,
     status: row.status,
     assignedStaffId: row.assigned_staff_id,
+    assignedAt: row.assigned_at,
     category: row.category,
     description: row.description,
     addressText: row.address_text,
@@ -1551,6 +1599,17 @@ function mapStaffMember(row: StaffMemberRow): StaffMember {
     isActive: row.is_active === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapAssignmentAcknowledgment(
+  row: AssignmentAcknowledgmentRow,
+): AssignmentAcknowledgment {
+  return {
+    id: row.id,
+    reportId: row.report_id,
+    staffMemberId: row.staff_member_id,
+    createdAt: row.created_at,
   };
 }
 
@@ -1707,7 +1766,7 @@ export function createIssueReport(input: CreateIssueReportInput) {
 
   const insertReport = database.prepare(`
     insert into issue_reports (
-    id, public_tracking_token, status, assigned_staff_id, category, description, address_text,
+    id, public_tracking_token, status, assigned_staff_id, assigned_at, category, description, address_text,
       latitude, longitude, location_source, geocoding_status, geocoded_address,
       geocoding_provider, geocoded_at, municipality_name, municipality_code,
       municipality_lookup_status, municipality_source, municipality_matched_at,
@@ -1718,7 +1777,7 @@ export function createIssueReport(input: CreateIssueReportInput) {
       duplicate_of_report_id, duplicate_review_decision, duplicate_reviewed_at,
       duplicate_review_note, created_at, updated_at
     ) values (
-      @id, @publicTrackingToken, @status, null, @category, @description, @addressText,
+      @id, @publicTrackingToken, @status, null, null, @category, @description, @addressText,
       @latitude, @longitude, @locationSource, @geocodingStatus, @geocodedAddress,
       @geocodingProvider, @geocodedAt, @municipalityName, @municipalityCode,
       @municipalityLookupStatus, @municipalitySource, @municipalityMatchedAt,
@@ -2490,13 +2549,15 @@ export function assignIssueReport(input: {
   reportId: string;
   staffMemberId?: string | null;
 }) {
+  const staffMemberId = input.staffMemberId?.trim() || null;
+  const now = nowIso();
   getDb()
     .prepare(
       `update issue_reports
-       set assigned_staff_id = ?, updated_at = ?
+       set assigned_staff_id = ?, assigned_at = ?, updated_at = ?
        where id = ?`,
     )
-    .run(input.staffMemberId?.trim() || null, nowIso(), input.reportId);
+    .run(staffMemberId, staffMemberId ? now : null, now, input.reportId);
 
   return getIssueReportById(input.reportId);
 }
@@ -2561,6 +2622,41 @@ export function listIssueAuditEvents(reportId: string) {
     .all(reportId) as IssueAuditEventRow[];
 
   return rows.map(mapIssueAuditEvent);
+}
+
+export function listAssignmentAcknowledgments(reportId: string) {
+  const rows = getDb()
+    .prepare(
+      `select *
+       from assignment_acknowledgments
+       where report_id = ?
+       order by datetime(created_at) desc, id desc`,
+    )
+    .all(reportId) as AssignmentAcknowledgmentRow[];
+
+  return rows.map(mapAssignmentAcknowledgment);
+}
+
+export function getCurrentAssignmentAcknowledgment(report: IssueReport) {
+  if (!report.assignedStaffId || !report.assignedAt) return null;
+
+  const row = getDb()
+    .prepare(
+      `select *
+       from assignment_acknowledgments
+       where report_id = ?
+         and staff_member_id = ?
+         and datetime(created_at) >= datetime(?)
+       order by datetime(created_at) desc, id desc
+       limit 1`,
+    )
+    .get(
+      report.id,
+      report.assignedStaffId,
+      report.assignedAt,
+    ) as AssignmentAcknowledgmentRow | undefined;
+
+  return row ? mapAssignmentAcknowledgment(row) : null;
 }
 
 export function listReferrals(reportId: string) {
@@ -3183,6 +3279,31 @@ export function addStaffNote(input: { reportId: string; body: string }) {
       "insert into staff_notes (id, report_id, body, created_at) values (?, ?, ?, ?)",
     )
     .run(makeId(), input.reportId, input.body, nowIso());
+}
+
+export function acknowledgeAssignment(input: {
+  reportId: string;
+  staffMemberId: string;
+}) {
+  const report = getIssueReportById(input.reportId);
+  if (!report || report.assignedStaffId !== input.staffMemberId) {
+    return null;
+  }
+
+  const existing = getCurrentAssignmentAcknowledgment(report);
+  if (existing) return existing;
+
+  const id = makeId();
+  const createdAt = nowIso();
+  getDb()
+    .prepare(
+      `insert into assignment_acknowledgments (
+        id, report_id, staff_member_id, created_at
+      ) values (?, ?, ?, ?)`,
+    )
+    .run(id, input.reportId, input.staffMemberId, createdAt);
+
+  return getCurrentAssignmentAcknowledgment(report);
 }
 
 export function addIssueAuditEvents(input: {

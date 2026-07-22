@@ -135,6 +135,16 @@ Resend can still be used later, but only after its sending domain is DNS-verifie
 
 Assignment emails are only for internal staff. They do not turn on constituent email.
 
+## Assignment Acknowledgment Workflow
+
+Use this workflow when email reminders are unavailable or unreliable:
+
+1. Staff lead assigns a case owner from the case detail page.
+2. The assigned coworker opens **My assignments** at `/staff/my`.
+3. The coworker selects their name and clicks **Acknowledge** on new assignments.
+4. The staff lead uses the **Needs acknowledgment** filter in **Staff inbox** to see assigned cases that have not been acknowledged.
+5. Acknowledgment records are included in pilot backups.
+
 ## Before Expanding Beyond Staff
 
 Do not open the app to constituents until these are green:
