@@ -52,13 +52,20 @@ These must be set for a usable staff pilot:
 These are optional:
 
 - `OPENAI_API_KEY`
-- `RESEND_API_KEY`
+- `STAFF_ASSIGNMENT_EMAIL_PROVIDER`
 - `ISSUE_REPORT_FROM_EMAIL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `RESEND_API_KEY`
 
 ## Notes
 
 - `STAFF_SESSION_SECRET` and `RATE_LIMIT_SECRET` are generated automatically by the blueprint.
 - AI routing is **off by default** in the blueprint and should stay off for the first baseline pilot pass.
-- Email delivery is still optional and can stay disabled.
+- Email delivery is still optional and can stay disabled. For a no-County-IT
+  pilot, use SMTP/Gmail instead of Resend domain verification.
 - The Render `starter` plan is used because persistent disks require a paid service tier.
 - See `docs/render-pilot-checklist.md` for the staff-only pilot workflow.

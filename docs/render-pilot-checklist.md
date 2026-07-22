@@ -80,9 +80,17 @@ Recommended defaults:
 Optional for launch:
 
 - `OPENAI_API_KEY`
-- `RESEND_API_KEY`
-- `ISSUE_REPORT_FROM_EMAIL`
 - `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`
+- `STAFF_ASSIGNMENT_EMAIL_PROVIDER=smtp`
+- `ISSUE_REPORT_FROM_EMAIL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+
+Use SMTP/Gmail for the no-County-IT pilot path. Use `RESEND_API_KEY` only after
+the sending domain is verified in Resend.
 
 ## Custom Domain Steps
 

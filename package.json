@@ -13,7 +13,8 @@
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "better-sqlite3": "^12.9.0",
-    "next": "^16.2.7",
+    "next": "^16.2.11",
+    "nodemailer": "^9.0.3",
     "openai": "^6.34.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -23,6 +24,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
@@ -33,6 +35,7 @@
     "typescript": "^5"
   },
   "overrides": {
+    "sharp": "0.35.3",
     "next": {
       "postcss": "8.5.15"
     }

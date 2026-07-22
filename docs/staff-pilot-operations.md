@@ -99,21 +99,37 @@ When a case owner changes, the app sends an internal assignment email to the ass
 
 Required Render environment variables:
 
-- `RESEND_API_KEY`
-- `ISSUE_REPORT_FROM_EMAIL`
 - `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`
+- `STAFF_ASSIGNMENT_EMAIL_PROVIDER=smtp`
+- `ISSUE_REPORT_FROM_EMAIL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
 
 Before relying on this workflow:
 
-1. In Render, set `RESEND_API_KEY`.
-2. In Render, set `ISSUE_REPORT_FROM_EMAIL` to a verified sender address.
-3. In Render, confirm `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`.
-4. Redeploy the service after changing environment variables.
-5. Open **Staff routing** and check **Assignment email readiness**.
-6. Confirm each active staff member has the correct email address in **Staff routing**.
-7. Assign one low-risk real case to yourself or another staff member.
-8. Confirm the assignment email arrives.
-9. Confirm the case timeline includes an internal update showing whether the assignment notification was sent, skipped, or failed.
+1. Create or choose a dedicated Gmail account for the pilot.
+2. Turn on 2-Step Verification for that Gmail account.
+3. Create a Google app password for mail access.
+4. In Render, set `STAFF_ASSIGNMENT_EMAIL_PROVIDER=smtp`.
+5. In Render, set `SMTP_HOST=smtp.gmail.com`.
+6. In Render, set `SMTP_PORT=465`.
+7. In Render, set `SMTP_SECURE=true`.
+8. In Render, set `SMTP_USER` to the Gmail address.
+9. In Render, set `SMTP_PASSWORD` to the 16-character Google app password.
+10. In Render, set `ISSUE_REPORT_FROM_EMAIL` to `District 7 Issue Reporter <gmail-address>`.
+11. In Render, confirm `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`.
+12. Redeploy the service after changing environment variables.
+13. Open **Staff routing** and check **Assignment email readiness**.
+14. Use **Send a test assignment email** in **Staff routing**.
+15. Confirm each active staff member has the correct email address in **Staff routing**.
+16. Assign one low-risk real case to yourself or another staff member.
+17. Confirm the assignment email arrives.
+18. Confirm the case timeline includes an internal update showing whether the assignment notification was sent, skipped, or failed.
+
+Resend can still be used later, but only after its sending domain is DNS-verified.
 
 Assignment emails are only for internal staff. They do not turn on constituent email.
 

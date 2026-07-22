@@ -273,9 +273,18 @@ export default async function RoutingGuidePage({
               ready={assignmentEmailReadiness.enabled}
             />
             <ReadinessItem
-              label="Resend API key"
-              value={assignmentEmailReadiness.hasResendApiKey ? "Configured" : "Missing"}
-              ready={assignmentEmailReadiness.hasResendApiKey}
+              label="Email provider"
+              value={assignmentEmailReadiness.provider === "smtp" ? "SMTP / Gmail" : "Resend"}
+              ready={assignmentEmailReadiness.enabled}
+            />
+            <ReadinessItem
+              label="Provider credentials"
+              value={
+                assignmentEmailReadiness.hasProviderCredentials
+                  ? "Configured"
+                  : "Missing"
+              }
+              ready={assignmentEmailReadiness.hasProviderCredentials}
             />
             <ReadinessItem
               label="From email"
@@ -296,7 +305,8 @@ export default async function RoutingGuidePage({
             </p>
           ) : (
             <p className="mt-4 text-sm leading-6 text-slate-700">
-              To enable assignment emails, set `RESEND_API_KEY`,
+              To enable assignment emails without County DNS, set
+              `STAFF_ASSIGNMENT_EMAIL_PROVIDER=smtp`, the Gmail SMTP variables,
               `ISSUE_REPORT_FROM_EMAIL`, and `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`
               in Render, then redeploy.
             </p>

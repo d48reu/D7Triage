@@ -54,9 +54,21 @@ services:
         value: 2
       - key: OPENAI_API_KEY
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: ISSUE_REPORT_FROM_EMAIL
-        sync: false
       - key: STAFF_ASSIGNMENT_EMAIL_ENABLED
         value: true
+      - key: STAFF_ASSIGNMENT_EMAIL_PROVIDER
+        value: smtp
+      - key: ISSUE_REPORT_FROM_EMAIL
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 465
+      - key: SMTP_SECURE
+        value: true
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false

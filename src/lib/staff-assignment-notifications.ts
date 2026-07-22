@@ -1,4 +1,6 @@
 import { Resend } from "resend";
+import nodemailer from "nodemailer";
+import type { Transporter } from "nodemailer";
 import { formatStatus } from "@/lib/issue-types";
 import {
   formatStaffMemberLabel,
@@ -21,7 +23,11 @@ type AssignmentNotificationResult =
       reason: string;
     };
 
+type AssignmentEmailProvider = "resend" | "smtp";
+
 let resendClient: Resend | null = null;
+let smtpTransporter: Transporter | null = null;
+let smtpTransporterCacheKey: string | null = null;
 
 function getResendClient(apiKey: string) {
   if (!resendClient) {
@@ -37,23 +43,110 @@ function isEnvDisabled(value: string | undefined) {
   );
 }
 
+function parseEmailProvider(): AssignmentEmailProvider {
+  const configuredProvider = process.env.STAFF_ASSIGNMENT_EMAIL_PROVIDER?.trim().toLowerCase();
+  if (configuredProvider === "smtp" || configuredProvider === "resend") {
+    return configuredProvider;
+  }
+
+  if (
+    process.env.SMTP_HOST?.trim() ||
+    process.env.SMTP_USER?.trim() ||
+    process.env.SMTP_PASSWORD?.trim()
+  ) {
+    return "smtp";
+  }
+
+  return "resend";
+}
+
+function parseSmtpSecure(port: number) {
+  const configuredValue = process.env.SMTP_SECURE?.trim().toLowerCase();
+  if (configuredValue) {
+    return ["1", "true", "yes", "on"].includes(configuredValue);
+  }
+
+  return port === 465;
+}
+
 function getAssignmentEmailConfig() {
+  const provider = parseEmailProvider();
+
   if (isEnvDisabled(process.env.STAFF_ASSIGNMENT_EMAIL_ENABLED)) {
     return {
       enabled: false,
-      apiKey: null,
+      provider,
+      apiKey: null as string | null,
+      smtpHost: null as string | null,
+      smtpPort: null as number | null,
+      smtpSecure: null as boolean | null,
+      smtpUser: null as string | null,
+      smtpPassword: null as string | null,
       fromEmail: null,
       reason: "staff assignment email is disabled",
     };
   }
 
-  const apiKey = process.env.RESEND_API_KEY?.trim() || null;
-  const fromEmail = process.env.ISSUE_REPORT_FROM_EMAIL?.trim() || null;
+  const fromEmail =
+    process.env.ISSUE_REPORT_FROM_EMAIL?.trim() ||
+    process.env.SMTP_FROM_EMAIL?.trim() ||
+    null;
 
+  if (provider === "smtp") {
+    const smtpHost = process.env.SMTP_HOST?.trim() || null;
+    const smtpPort = Number(process.env.SMTP_PORT?.trim() || "465");
+    const smtpUser = process.env.SMTP_USER?.trim() || null;
+    const smtpPassword = process.env.SMTP_PASSWORD?.trim() || null;
+    const smtpSecure = parseSmtpSecure(smtpPort);
+
+    const missing = [
+      !smtpHost ? "SMTP_HOST" : null,
+      !smtpPort || !Number.isFinite(smtpPort) ? "SMTP_PORT" : null,
+      !smtpUser ? "SMTP_USER" : null,
+      !smtpPassword ? "SMTP_PASSWORD" : null,
+      !fromEmail ? "ISSUE_REPORT_FROM_EMAIL" : null,
+    ].filter(Boolean);
+
+    if (missing.length > 0) {
+      return {
+        enabled: true,
+        provider,
+        apiKey: null,
+        smtpHost,
+        smtpPort: Number.isFinite(smtpPort) ? smtpPort : null,
+        smtpSecure,
+        smtpUser,
+        smtpPassword,
+        fromEmail,
+        reason: `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} required`,
+      };
+    }
+
+    return {
+      enabled: true,
+      provider,
+      apiKey: null,
+      smtpHost,
+      smtpPort,
+      smtpSecure,
+      smtpUser,
+      smtpPassword,
+      fromEmail,
+      reason: null,
+    };
+  }
+
+  const apiKey = process.env.RESEND_API_KEY?.trim() || null;
   if (!apiKey || !fromEmail) {
     return {
       enabled: true,
+      provider,
       apiKey,
+      smtpHost: null,
+      smtpPort: null,
+      smtpSecure: null,
+      smtpUser: null,
+      smtpPassword: null,
       fromEmail,
       reason: "RESEND_API_KEY and ISSUE_REPORT_FROM_EMAIL are required",
     };
@@ -61,7 +154,13 @@ function getAssignmentEmailConfig() {
 
   return {
     enabled: true,
+    provider,
     apiKey,
+    smtpHost: null,
+    smtpPort: null,
+    smtpSecure: null,
+    smtpUser: null,
+    smtpPassword: null,
     fromEmail,
     reason: null,
   };
@@ -69,15 +168,55 @@ function getAssignmentEmailConfig() {
 
 export function getStaffAssignmentEmailReadiness() {
   const config = getAssignmentEmailConfig();
+  const hasProviderCredentials =
+    config.provider === "smtp"
+      ? Boolean(config.smtpHost && config.smtpPort && config.smtpUser && config.smtpPassword)
+      : Boolean(config.apiKey);
 
   return {
     enabled: config.enabled,
+    provider: config.provider,
     hasResendApiKey: Boolean(config.apiKey),
+    hasSmtpCredentials: Boolean(
+      config.smtpHost && config.smtpPort && config.smtpUser && config.smtpPassword,
+    ),
+    hasProviderCredentials,
     hasFromEmail: Boolean(config.fromEmail),
     fromEmail: config.fromEmail,
-    ready: Boolean(config.enabled && config.apiKey && config.fromEmail),
+    ready: Boolean(config.enabled && hasProviderCredentials && config.fromEmail),
     reason: config.reason,
   };
+}
+
+function getSmtpTransporter(config: {
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string;
+  smtpPassword: string;
+}) {
+  const cacheKey = [
+    config.smtpHost,
+    config.smtpPort,
+    config.smtpSecure,
+    config.smtpUser,
+    config.smtpPassword,
+  ].join("|");
+
+  if (!smtpTransporter || smtpTransporterCacheKey !== cacheKey) {
+    smtpTransporter = nodemailer.createTransport({
+      host: config.smtpHost,
+      port: config.smtpPort,
+      secure: config.smtpSecure,
+      auth: {
+        user: config.smtpUser,
+        pass: config.smtpPassword,
+      },
+    });
+    smtpTransporterCacheKey = cacheKey;
+  }
+
+  return smtpTransporter;
 }
 
 function getAppUrl() {
@@ -181,10 +320,63 @@ async function sendStaffEmail(input: {
   }
 
   const config = getAssignmentEmailConfig();
-  if (!config.enabled || !config.apiKey || !config.fromEmail) {
+  if (!config.enabled || !config.fromEmail) {
     return {
       status: "skipped",
       reason: config.reason || "assignment email is not configured",
+    };
+  }
+
+  if (config.provider === "smtp") {
+    if (
+      !config.smtpHost ||
+      !config.smtpPort ||
+      !config.smtpUser ||
+      !config.smtpPassword ||
+      config.smtpSecure === null
+    ) {
+      return {
+        status: "skipped",
+        reason: config.reason || "SMTP assignment email is not configured",
+      };
+    }
+
+    try {
+      const transporter = getSmtpTransporter({
+        smtpHost: config.smtpHost,
+        smtpPort: config.smtpPort,
+        smtpSecure: config.smtpSecure,
+        smtpUser: config.smtpUser,
+        smtpPassword: config.smtpPassword,
+      });
+      const result = await transporter.sendMail({
+        from: config.fromEmail,
+        to: recipient,
+        subject: input.subject,
+        text: input.text,
+        html: input.html,
+      });
+
+      return {
+        status: "sent",
+        recipient,
+        messageId: result.messageId ?? null,
+      };
+    } catch (error) {
+      return {
+        status: "failed",
+        reason:
+          error instanceof Error
+            ? error.message
+            : "SMTP server rejected the assignment email",
+      };
+    }
+  }
+
+  if (!config.apiKey) {
+    return {
+      status: "skipped",
+      reason: config.reason || "Resend assignment email is not configured",
     };
   }
 
