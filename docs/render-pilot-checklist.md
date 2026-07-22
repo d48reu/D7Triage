@@ -88,6 +88,7 @@ Optional for launch:
 - `SMTP_SECURE`
 - `SMTP_USER`
 - `SMTP_PASSWORD`
+- `STAFF_ASSIGNMENT_EMAIL_BCC` (optional, useful during testing)
 
 Use SMTP/Gmail for the no-County-IT pilot path. Use `RESEND_API_KEY` only after
 the sending domain is verified in Resend.

@@ -70,5 +70,7 @@ services:
         sync: false
       - key: SMTP_PASSWORD
         sync: false
+      - key: STAFF_ASSIGNMENT_EMAIL_BCC
+        sync: false
       - key: RESEND_API_KEY
         sync: false

@@ -107,6 +107,7 @@ Required Render environment variables:
 - `SMTP_SECURE`
 - `SMTP_USER`
 - `SMTP_PASSWORD`
+- `STAFF_ASSIGNMENT_EMAIL_BCC` (optional, useful during testing)
 
 Before relying on this workflow:
 
@@ -120,14 +121,15 @@ Before relying on this workflow:
 8. In Render, set `SMTP_USER` to the Gmail address.
 9. In Render, set `SMTP_PASSWORD` to the 16-character Google app password.
 10. In Render, set `ISSUE_REPORT_FROM_EMAIL` to `District 7 Issue Reporter <gmail-address>`.
-11. In Render, confirm `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`.
-12. Redeploy the service after changing environment variables.
-13. Open **Staff routing** and check **Assignment email readiness**.
-14. Use **Send a test assignment email** in **Staff routing**.
-15. Confirm each active staff member has the correct email address in **Staff routing**.
-16. Assign one low-risk real case to yourself or another staff member.
-17. Confirm the assignment email arrives.
-18. Confirm the case timeline includes an internal update showing whether the assignment notification was sent, skipped, or failed.
+11. During testing, set `STAFF_ASSIGNMENT_EMAIL_BCC` to the Gmail sender address.
+12. In Render, confirm `STAFF_ASSIGNMENT_EMAIL_ENABLED=true`.
+13. Redeploy the service after changing environment variables.
+14. Open **Staff routing** and check **Assignment email readiness**.
+15. Use **Send a test assignment email** in **Staff routing**.
+16. Confirm each active staff member has the correct email address in **Staff routing**.
+17. Assign one low-risk real case to yourself or another staff member.
+18. Confirm the assignment email arrives.
+19. Confirm the case timeline includes an internal update showing whether the assignment notification was sent, skipped, or failed.
 
 Resend can still be used later, but only after its sending domain is DNS-verified.
 

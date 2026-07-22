@@ -13,6 +13,7 @@ type AssignmentNotificationResult =
       status: "sent";
       recipient: string;
       messageId: string | null;
+      detail?: string;
     }
   | {
       status: "skipped";
@@ -82,6 +83,7 @@ function getAssignmentEmailConfig() {
       smtpSecure: null as boolean | null,
       smtpUser: null as string | null,
       smtpPassword: null as string | null,
+      bccEmail: null as string | null,
       fromEmail: null,
       reason: "staff assignment email is disabled",
     };
@@ -90,6 +92,10 @@ function getAssignmentEmailConfig() {
   const fromEmail =
     process.env.ISSUE_REPORT_FROM_EMAIL?.trim() ||
     process.env.SMTP_FROM_EMAIL?.trim() ||
+    null;
+  const bccEmail =
+    process.env.STAFF_ASSIGNMENT_EMAIL_BCC?.trim() ||
+    process.env.ISSUE_REPORT_BCC_EMAIL?.trim() ||
     null;
 
   if (provider === "smtp") {
@@ -117,6 +123,7 @@ function getAssignmentEmailConfig() {
         smtpSecure,
         smtpUser,
         smtpPassword,
+        bccEmail,
         fromEmail,
         reason: `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} required`,
       };
@@ -131,6 +138,7 @@ function getAssignmentEmailConfig() {
       smtpSecure,
       smtpUser,
       smtpPassword,
+      bccEmail,
       fromEmail,
       reason: null,
     };
@@ -147,6 +155,7 @@ function getAssignmentEmailConfig() {
       smtpSecure: null,
       smtpUser: null,
       smtpPassword: null,
+      bccEmail,
       fromEmail,
       reason: "RESEND_API_KEY and ISSUE_REPORT_FROM_EMAIL are required",
     };
@@ -161,6 +170,7 @@ function getAssignmentEmailConfig() {
     smtpSecure: null,
     smtpUser: null,
     smtpPassword: null,
+    bccEmail,
     fromEmail,
     reason: null,
   };
@@ -182,6 +192,8 @@ export function getStaffAssignmentEmailReadiness() {
     ),
     hasProviderCredentials,
     hasFromEmail: Boolean(config.fromEmail),
+    hasBccEmail: Boolean(config.bccEmail),
+    bccEmail: config.bccEmail,
     fromEmail: config.fromEmail,
     ready: Boolean(config.enabled && hasProviderCredentials && config.fromEmail),
     reason: config.reason,
@@ -352,15 +364,25 @@ async function sendStaffEmail(input: {
       const result = await transporter.sendMail({
         from: config.fromEmail,
         to: recipient,
+        bcc: config.bccEmail ?? undefined,
         subject: input.subject,
         text: input.text,
         html: input.html,
       });
+      const accepted = result.accepted?.map(String).join(", ");
+      const rejected = result.rejected?.map(String).join(", ");
+      const responseDetails = [
+        result.response ? `SMTP response: ${result.response}` : null,
+        accepted ? `Accepted: ${accepted}` : null,
+        rejected ? `Rejected: ${rejected}` : null,
+        config.bccEmail ? `BCC: ${config.bccEmail}` : null,
+      ].filter(Boolean);
 
       return {
         status: "sent",
         recipient,
         messageId: result.messageId ?? null,
+        detail: responseDetails.join(" "),
       };
     } catch (error) {
       return {
@@ -385,6 +407,7 @@ async function sendStaffEmail(input: {
     {
       from: config.fromEmail,
       to: recipient,
+      bcc: config.bccEmail ?? undefined,
       subject: input.subject,
       text: input.text,
       html: input.html,
@@ -407,6 +430,7 @@ async function sendStaffEmail(input: {
     status: "sent",
     recipient,
     messageId: data?.id ?? null,
+    detail: config.bccEmail ? `BCC: ${config.bccEmail}` : undefined,
   };
 }
 

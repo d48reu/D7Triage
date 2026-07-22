@@ -70,7 +70,9 @@ export async function sendAssignmentTestEmailAction(formData: FormData) {
   const result = await sendStaffAssignmentTestEmail(staffMember);
   const message =
     result.status === "sent"
-      ? `Test email sent to ${result.recipient}.`
+      ? `Test email sent to ${result.recipient}.${
+          result.messageId ? ` Message ID: ${result.messageId}.` : ""
+        }${result.detail ? ` ${result.detail}` : ""}`
       : `Test email ${result.status}: ${result.reason}.`;
   const query = new URLSearchParams({
     assignmentEmailTest: result.status,
