@@ -1149,7 +1149,7 @@ function seedDemoData(database: Database.Database) {
 
   const insertReport = database.prepare(`
     insert into issue_reports (
-      id, public_tracking_token, status, assigned_staff_id, category, description, address_text,
+      id, public_tracking_token, status, assigned_staff_id, assigned_at, category, description, address_text,
       latitude, longitude, location_source, geocoding_status, geocoded_address,
       geocoding_provider, geocoded_at, municipality_name, municipality_code,
       municipality_lookup_status, municipality_source, municipality_matched_at,
@@ -1159,7 +1159,7 @@ function seedDemoData(database: Database.Database) {
       notification_review_note, notification_reviewed_at, duplicate_of_report_id,
       duplicate_review_decision, duplicate_reviewed_at, duplicate_review_note, created_at, updated_at
     ) values (
-      @id, @publicTrackingToken, @status, @assignedStaffId, @category, @description, @addressText,
+      @id, @publicTrackingToken, @status, @assignedStaffId, @assignedAt, @category, @description, @addressText,
       @latitude, @longitude, @locationSource, @geocodingStatus, @geocodedAddress,
       @geocodingProvider, @geocodedAt, @municipalityName, @municipalityCode,
       @municipalityLookupStatus, @municipalitySource, @municipalityMatchedAt,

@@ -14,6 +14,7 @@ const baseReport: IssueReport = {
   publicTrackingToken: "token",
   status: "received",
   assignedStaffId: null,
+  assignedAt: null,
   category: "Roads and potholes",
   description: "Render persistence test",
   addressText: "3636 SW 16th Terrace, Miami, FL 33145",
@@ -150,4 +151,43 @@ test("filterStaffInboxRows defaults unknown filters to active and searches text"
     1,
   );
   assert.equal(normalizeStaffInboxFilter("follow_up_due"), "follow_up_due");
+});
+
+test("flags and filters assigned cases that need acknowledgment", () => {
+  const assignedReport = {
+    ...baseReport,
+    assignedStaffId: "staff-1",
+    assignedAt: "2026-07-21T10:00:00.000Z",
+    description: "Streetlight assigned case",
+  };
+  const flags = buildStaffInboxFlags({
+    report: assignedReport,
+    jurisdiction: { ...baseJurisdiction, districtHintStatus: "likely_in_district" },
+    referrals: [],
+    aiSuggestions: [],
+    assignmentAcknowledged: false,
+    now: new Date("2026-07-21T12:00:00.000Z"),
+  });
+
+  assert.ok(flags.includes("Needs acknowledgment"));
+
+  const rows: StaffInboxRow[] = [
+    {
+      report: assignedReport,
+      jurisdiction: baseJurisdiction,
+      referrals: [],
+      aiSuggestions: [],
+      flags,
+      searchableText: "streetlight",
+    },
+  ];
+
+  assert.equal(
+    filterStaffInboxRows({
+      rows,
+      filter: "needs_acknowledgment",
+      query: "",
+    }).length,
+    1,
+  );
 });

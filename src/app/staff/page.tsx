@@ -23,6 +23,7 @@ import { requireStaffSession } from "@/lib/staff-auth";
 import {
   buildStaffInboxFlags,
   buildStaffInboxSearchText,
+  ACTIVE_STATUSES,
   filterStaffInboxRows,
   getStaffInboxFilterOptions,
   normalizeStaffInboxFilter,
@@ -109,16 +110,46 @@ export default async function StaffPage({
     query: searchQuery,
   });
   const filterOptions = getStaffInboxFilterOptions(reportRows);
-  const receivedCount = reports.filter((report) => report.status === "received").length;
-  const activeCount = reportRows.filter((row) =>
-    ["received", "needs_review", "routed", "awaiting_agency", "needs_more_info", "follow_up_due"].includes(
-      row.report.status,
-    ),
+  const activeRows = reportRows.filter((row) => ACTIVE_STATUSES.has(row.report.status));
+  const needsAcknowledgmentRows = reportRows.filter((row) =>
+    row.flags.includes("Needs acknowledgment"),
+  );
+  const activeCount = activeRows.length;
+  const followUpDueCount = reports.filter(
+    (report) => report.status === "follow_up_due",
   ).length;
   const unassignedCount = reports.filter((report) =>
     !report.assignedStaffId &&
     !["resolved", "closed_outside_jurisdiction", "closed_duplicate"].includes(report.status),
   );
+  const staffAssignmentRows = staffMembers
+    .filter((staffMember) => staffMember.isActive)
+    .map((staffMember) => {
+      const assignedRows = activeRows.filter(
+        (row) => row.report.assignedStaffId === staffMember.id,
+      );
+      const needsAcknowledgment = assignedRows.filter((row) =>
+        row.flags.includes("Needs acknowledgment"),
+      );
+      const latestAssignedAt = assignedRows
+        .map((row) => row.report.assignedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1);
+
+      return {
+        staffMember,
+        assignedCount: assignedRows.length,
+        needsAcknowledgmentCount: needsAcknowledgment.length,
+        latestAssignedAt,
+      };
+    })
+    .filter((row) => row.assignedCount > 0 || row.needsAcknowledgmentCount > 0)
+    .sort((a, b) =>
+      b.needsAcknowledgmentCount - a.needsAcknowledgmentCount ||
+      b.assignedCount - a.assignedCount ||
+      a.staffMember.name.localeCompare(b.staffMember.name),
+    );
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -180,11 +211,73 @@ export default async function StaffPage({
           </div>
         ) : null}
 
-        <section className="grid gap-3 sm:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-5">
           <Metric label="All reports" value={reports.length} />
-          <Metric label="Received" value={receivedCount} />
           <Metric label="Active" value={activeCount} />
-          <Metric label="Unassigned" value={unassignedCount.length} />
+          <Metric label="Unassigned" value={unassignedCount.length} tone="amber" />
+          <Metric label="Needs ack" value={needsAcknowledgmentRows.length} tone="amber" />
+          <Metric label="Follow-up due" value={followUpDueCount} tone="rose" />
+        </section>
+
+        <section className="mt-6 rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Assignment accountability</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Active assigned cases by coworker.
+              </p>
+            </div>
+            <Link
+              href="/staff?filter=needs_acknowledgment"
+              className={`rounded-md px-4 py-2 text-sm font-semibold ${
+                needsAcknowledgmentRows.length > 0
+                  ? "bg-amber-600 text-white hover:bg-amber-700"
+                  : "border border-slate-300 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Needs acknowledgment: {needsAcknowledgmentRows.length}
+            </Link>
+          </div>
+
+          {staffAssignmentRows.length > 0 ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {staffAssignmentRows.map((row) => (
+                <Link
+                  key={row.staffMember.id}
+                  href={`/staff/my?staffId=${row.staffMember.id}`}
+                  className="rounded-md border border-slate-200 bg-slate-50 p-4 hover:bg-white"
+                >
+                  <div className="font-semibold text-slate-950">
+                    {row.staffMember.name}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                    <span className="rounded bg-white px-2 py-1 text-slate-700">
+                      Active {row.assignedCount}
+                    </span>
+                    <span
+                      className={`rounded px-2 py-1 ${
+                        row.needsAcknowledgmentCount > 0
+                          ? "bg-amber-100 text-amber-900"
+                          : "bg-emerald-100 text-emerald-900"
+                      }`}
+                    >
+                      Ack needed {row.needsAcknowledgmentCount}
+                    </span>
+                  </div>
+                  {row.latestAssignedAt ? (
+                    <div className="mt-3 text-xs text-slate-500">
+                      Latest assignment{" "}
+                      {new Date(row.latestAssignedAt).toLocaleString()}
+                    </div>
+                  ) : null}
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              No active assigned cases.
+            </div>
+          )}
         </section>
 
         <section className="mt-6 rounded-md border border-slate-200 bg-white p-4 shadow-sm">
@@ -402,6 +495,8 @@ function FlagBadge({ label }: { label: string }) {
   const style =
     label === "Needs first triage"
       ? "border-rose-200 bg-rose-50 text-rose-800"
+      : label === "Needs acknowledgment"
+        ? "border-amber-200 bg-amber-50 text-amber-900"
       : label === "Check location"
         ? "border-amber-200 bg-amber-50 text-amber-900"
         : label === "AI feedback pending"
@@ -443,6 +538,10 @@ function getNextAction(input: {
 }) {
   if (input.flags.includes("Unassigned")) {
     return "Assign owner";
+  }
+
+  if (input.flags.includes("Needs acknowledgment")) {
+    return "Acknowledge assignment";
   }
 
   if (input.flags.includes("Check location")) {
@@ -497,11 +596,26 @@ function formatDateOnly(value: string) {
   });
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "neutral" | "amber" | "rose";
+}) {
+  const style =
+    tone === "rose" && value > 0
+      ? "border-rose-200 bg-rose-50 text-rose-950"
+      : tone === "amber" && value > 0
+        ? "border-amber-200 bg-amber-50 text-amber-950"
+        : "border-slate-200 bg-white text-slate-950";
+
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <div className={`rounded-md border px-4 py-3 shadow-sm ${style}`}>
       <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      <div className="mt-1 text-xs font-medium uppercase tracking-[0.08em] text-slate-500">
+      <div className="mt-1 text-xs font-medium uppercase tracking-[0.08em] opacity-70">
         {label}
       </div>
     </div>
