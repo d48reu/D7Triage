@@ -20,7 +20,7 @@ export default function Home() {
               href="/report"
               className="rounded-md bg-sky-700 px-4 py-2 text-white hover:bg-sky-800"
             >
-              Report Issue
+              Intake Board
             </Link>
             <Link
               href="/staff"
@@ -45,20 +45,19 @@ export default function Home() {
               {demoMode ? "Shareable demo" : "Local-first prototype"}
             </p>
             <h2 className="mt-3 max-w-3xl text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
-              Help residents report the problem, then help staff route it
-              correctly.
+              Log constituent calls quickly, then route every case with accountability.
             </h2>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
               {demoMode
-                ? "This hosted demo shows the resident intake flow, seeded staff inbox, jurisdiction intelligence, and live AI routing suggestions without requiring county integrations yet."
-                : "The current build saves reports locally, gives residents a private status link, and gives staff a working inbox for triage, notes, and status updates."}
+                ? "This hosted demo shows the staff intake board, seeded staff inbox, jurisdiction intelligence, and live AI routing suggestions without requiring county integrations yet."
+                : "This staff pilot combines a familiar call-log board with persistent case intake, routing, notes, status updates, and assignment accountability."}
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
                 href="/report"
                 className="rounded-md bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-800"
               >
-                Start a Report
+                Open Intake Board
               </Link>
               <Link
                 href="/staff"
@@ -75,7 +74,7 @@ export default function Home() {
             </h3>
             <div className="mt-4 divide-y divide-slate-200 text-sm">
               {[
-                ["Resident intake", "Description, location, contact, category"],
+                ["Front desk intake", "Fast editable rows grouped by month"],
                 ["Private tracking", "Status page through an unguessable link"],
                 ["Staff command center", "Triage, assignments, notes, status updates"],
                 ["Local storage", "SQLite now, Supabase later if needed"],

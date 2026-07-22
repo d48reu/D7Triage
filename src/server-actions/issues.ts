@@ -3,9 +3,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo-mode";
+import { hasStaffSession } from "@/lib/staff-auth";
 import {
   ISSUE_STATUSES,
   inferIssueCategoryFromText,
@@ -25,7 +25,6 @@ import {
   addReferral,
   addStaffNote,
   createIssueReport,
-  enforceReportSubmissionRateLimit,
   getAgencyById,
   getAiSuggestionById,
   getIssueReportById,
@@ -42,9 +41,12 @@ import {
   updateIssueStatus,
 } from "@/lib/issues-repository";
 
-export type SubmitIssueReportState = {
-  status: "idle" | "error";
+export type CreateIntakeCaseState = {
+  status: "idle" | "error" | "success";
   message: string;
+  reportId?: string;
+  publicTrackingToken?: string;
+  createdAt?: string;
 };
 
 export type GenerateAiSuggestionState = {
@@ -99,27 +101,8 @@ function parsePositiveIntegerEnv(value: string | undefined, fallback: number) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function isRateLimitingEnabled() {
-  const value = (process.env.REPORT_RATE_LIMIT_ENABLED || "true")
-    .trim()
-    .toLowerCase();
-  return ["1", "true", "yes", "on"].includes(value);
-}
-
 function getMaxPhotoCount() {
   return parsePositiveIntegerEnv(process.env.REPORT_MAX_PHOTOS, 4);
-}
-
-function getRateLimitWindowMinutes() {
-  return parsePositiveIntegerEnv(process.env.REPORT_RATE_LIMIT_WINDOW_MINUTES, 60);
-}
-
-function getRateLimitMaxPerIp() {
-  return parsePositiveIntegerEnv(process.env.REPORT_RATE_LIMIT_MAX_PER_IP, 12);
-}
-
-function getRateLimitMaxPerEmail() {
-  return parsePositiveIntegerEnv(process.env.REPORT_RATE_LIMIT_MAX_PER_EMAIL, 4);
 }
 
 function readRequiredText(formData: FormData, key: string) {
@@ -144,16 +127,6 @@ function readOptionalNumber(formData: FormData, key: string) {
   if (!raw) return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-async function getClientIpAddress() {
-  const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
-  if (forwardedFor) {
-    return forwardedFor.split(",")[0]?.trim() || null;
-  }
-
-  return headerStore.get("x-real-ip")?.trim() || null;
 }
 
 function serializeSuggestion(
@@ -318,10 +291,17 @@ async function savePhotoAttachments(reportId: string, photos: File[]) {
   }
 }
 
-export async function submitIssueReportAction(
-  _previousState: SubmitIssueReportState,
+export async function createStaffIntakeCaseAction(
+  _previousState: CreateIntakeCaseState,
   formData: FormData,
-): Promise<SubmitIssueReportState> {
+): Promise<CreateIntakeCaseState> {
+  if (!(await hasStaffSession())) {
+    return {
+      status: "error",
+      message: "Your staff session expired. Sign in again before creating the case.",
+    };
+  }
+
   const description = String(formData.get("description") ?? "").trim();
   const addressText = String(formData.get("addressText") ?? "").trim();
   const residentEmail = String(formData.get("residentEmail") ?? "").trim();
@@ -433,25 +413,11 @@ export async function submitIssueReportAction(
     };
   }
 
-  if (isRateLimitingEnabled()) {
-    const rateLimitResult = enforceReportSubmissionRateLimit({
-      ipAddress: await getClientIpAddress(),
-      residentEmail,
-      windowMinutes: getRateLimitWindowMinutes(),
-      maxPerIp: getRateLimitMaxPerIp(),
-      maxPerEmail: getRateLimitMaxPerEmail(),
-    });
-
-    if (!rateLimitResult.allowed) {
-      return {
-        status: "error",
-        message: rateLimitResult.message || "Report could not be submitted right now.",
-      };
-    }
-  }
-
   if (isDemoMode()) {
-    redirect("/report/demo-submission");
+    return {
+      status: "error",
+      message: "Case creation is disabled in the hosted demo.",
+    };
   }
 
   const locationIntelligence = await resolveReportLocationIntelligence({
@@ -479,8 +445,13 @@ export async function submitIssueReportAction(
 
   await savePhotoAttachments(report.id, photos);
 
-  revalidatePath("/staff");
-  redirect(`/report/${report.publicTrackingToken}`);
+  return {
+    status: "success",
+    message: "Case created in the staff queue.",
+    reportId: report.id,
+    publicTrackingToken: report.publicTrackingToken,
+    createdAt: report.createdAt,
+  };
 }
 
 export async function updateIssueStatusAction(formData: FormData) {
