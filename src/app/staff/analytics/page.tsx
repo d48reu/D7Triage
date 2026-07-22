@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { StaffHeader } from "@/components/staff-header";
 import { saveAnalyticsViewAction } from "@/server-actions/analytics";
-import { logoutStaffAction } from "@/server-actions/auth";
 import { formatStatus } from "@/lib/issue-types";
 import {
   analyzeReportJurisdiction,
@@ -157,44 +157,11 @@ export default async function StaffAnalyticsPage({
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
-          <div>
-            <Link href="/" className="text-sm font-medium text-sky-700">
-              District 7 Issue Reporter
-            </Link>
-            <h1 className="mt-1 text-xl font-semibold">Staff analytics</h1>
-          </div>
-          <nav className="flex flex-wrap gap-2">
-            <Link
-              href="/staff"
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Staff Inbox
-            </Link>
-            <Link
-              href="/staff/routing"
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Routing Guide
-            </Link>
-            <Link
-              href="/staff/notifications"
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Notifications
-            </Link>
-            <form action={logoutStaffAction}>
-              <button
-                type="submit"
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Sign Out
-              </button>
-            </form>
-          </nav>
-        </div>
-      </header>
+      <StaffHeader
+        current="analytics"
+        title="Analytics"
+        subtitle="Pilot review, exports, and trend checks."
+      />
 
       <div className="mx-auto max-w-7xl space-y-6 px-5 py-6">
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">

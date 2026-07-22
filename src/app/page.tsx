@@ -26,7 +26,7 @@ export default function Home() {
               href="/staff"
               className="rounded-md border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50"
             >
-              Staff Inbox
+              Command Center
             </Link>
           </nav>
         </div>
@@ -64,7 +64,7 @@ export default function Home() {
                 href="/staff"
                 className="rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Open Staff Inbox
+                Open Command Center
               </Link>
             </div>
           </div>
@@ -77,7 +77,7 @@ export default function Home() {
               {[
                 ["Resident intake", "Description, location, contact, category"],
                 ["Private tracking", "Status page through an unguessable link"],
-                ["Staff review", "Inbox, case detail, notes, status updates"],
+                ["Staff command center", "Triage, assignments, notes, status updates"],
                 ["Local storage", "SQLite now, Supabase later if needed"],
               ].map(([label, value]) => (
                 <div key={label} className="grid grid-cols-[130px_1fr] gap-4 py-3">

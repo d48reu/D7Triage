@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
+import { StaffHeader } from "@/components/staff-header";
 import { parseGeoJsonFeatures } from "@/lib/geojson-utils";
 import { getStaffAssignmentEmailReadiness } from "@/lib/staff-assignment-notifications";
 import {
@@ -49,42 +49,11 @@ export default async function RoutingGuidePage({
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
-          <div>
-            <Link href="/staff" className="text-sm font-medium text-sky-700">
-              Staff inbox
-            </Link>
-            <h1 className="mt-1 text-xl font-semibold">Routing guide</h1>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/staff/my"
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              My Assignments
-            </Link>
-            <Link
-              href="/staff/analytics"
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Analytics
-            </Link>
-            <Link
-              href="/staff/notifications"
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Notifications
-            </Link>
-            <Link
-              href="/report"
-              className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
-            >
-              New Report
-            </Link>
-          </div>
-        </div>
-      </header>
+      <StaffHeader
+        current="routing"
+        title="Routing + staff setup"
+        subtitle="Manage staff, assignment email settings, routing rules, and jurisdiction hints."
+      />
 
       <div className="mx-auto max-w-7xl space-y-6 px-5 py-6">
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
