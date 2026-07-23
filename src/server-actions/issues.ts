@@ -313,6 +313,8 @@ export async function createStaffIntakeCaseAction(
   });
   const residentName = String(formData.get("residentName") ?? "").trim();
   const residentPhone = String(formData.get("residentPhone") ?? "").trim();
+  const createdDate = String(formData.get("createdDate") ?? "").trim();
+  const submittedStatus = String(formData.get("status") ?? "").trim();
   const preferredLanguage =
     String(formData.get("preferredLanguage") ?? "").trim() || "English";
   const latitude = readOptionalNumber(formData, "latitude");
@@ -328,6 +330,21 @@ export async function createStaffIntakeCaseAction(
     return {
       status: "error",
       message: "Category, description, location, and email are required.",
+    };
+  }
+
+  const createdAt = parseStaffCreatedDate(createdDate);
+  if (!createdAt) {
+    return {
+      status: "error",
+      message: "Choose a valid case date.",
+    };
+  }
+
+  if (!ISSUE_STATUSES.includes(submittedStatus as IssueStatus)) {
+    return {
+      status: "error",
+      message: "Choose a valid case status.",
     };
   }
 
@@ -437,6 +454,8 @@ export async function createStaffIntakeCaseAction(
     residentPhone,
     preferredLanguage,
     newsletterOptIn,
+    createdAt,
+    initialStatus: submittedStatus as IssueStatus,
   });
 
   if (!report) {
@@ -452,6 +471,20 @@ export async function createStaffIntakeCaseAction(
     publicTrackingToken: report.publicTrackingToken,
     createdAt: report.createdAt,
   };
+}
+
+function parseStaffCreatedDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const createdAt = new Date(`${value}T12:00:00.000Z`);
+  if (
+    !Number.isFinite(createdAt.getTime()) ||
+    createdAt.toISOString().slice(0, 10) !== value
+  ) {
+    return null;
+  }
+
+  return createdAt.toISOString();
 }
 
 export async function updateIssueStatusAction(formData: FormData) {

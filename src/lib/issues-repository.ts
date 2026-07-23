@@ -13,6 +13,7 @@ import {
 import { isDemoMode } from "@/lib/demo-mode";
 import {
   ISSUE_CATEGORIES,
+  formatStatus,
   normalizeIssueCategory,
   type IssueStatus,
 } from "@/lib/issue-types";
@@ -519,6 +520,8 @@ export type CreateIssueReportInput = {
   preferredLanguage?: string;
   contactConsent: boolean;
   newsletterOptIn?: boolean;
+  createdAt?: string;
+  initialStatus?: IssueStatus;
 };
 
 function nowIso() {
@@ -1761,8 +1764,13 @@ function mapManagedRoutingRule(row: ManagedRoutingRuleRow): ManagedRoutingRule {
 export function createIssueReport(input: CreateIssueReportInput) {
   const database = getDb();
   const id = makeId();
-  const createdAt = nowIso();
+  const createdAt = input.createdAt ?? nowIso();
+  const initialStatus = input.initialStatus ?? "received";
   const token = makeTrackingToken();
+  const initialPublicNote =
+    initialStatus === "received"
+      ? "Your report was received and is waiting for staff review."
+      : `Your report status is ${formatStatus(initialStatus)}.`;
 
   const insertReport = database.prepare(`
     insert into issue_reports (
@@ -1800,7 +1808,7 @@ export function createIssueReport(input: CreateIssueReportInput) {
     insertReport.run({
       id,
       publicTrackingToken: token,
-      status: "received",
+      status: initialStatus,
       category: input.category,
       description: input.description,
       addressText: input.addressText,
@@ -1836,8 +1844,8 @@ export function createIssueReport(input: CreateIssueReportInput) {
     insertStatusEvent.run({
       id: makeId(),
       reportId: id,
-      status: "received",
-      publicNote: "Your report was received and is waiting for staff review.",
+      status: initialStatus,
+      publicNote: initialPublicNote,
       createdAt,
     });
 
@@ -1847,7 +1855,7 @@ export function createIssueReport(input: CreateIssueReportInput) {
       templateKey: "confirmation",
       recipient: input.residentEmail,
       subject: "District 7 received your report",
-      body: `Your report was received and is waiting for staff review. Tracking token: ${token}`,
+      body: `${initialPublicNote} Tracking token: ${token}`,
       deliveryStatus: "local_stub",
       createdAt,
     });

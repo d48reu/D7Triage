@@ -14,7 +14,9 @@ import {
 } from "react";
 import {
   ISSUE_CATEGORIES,
+  ISSUE_STATUSES,
   formatStatus,
+  type IssueStatus,
 } from "@/lib/issue-types";
 import {
   compareIntakeMonthLabelsDescending,
@@ -33,7 +35,7 @@ const LEGACY_STORAGE_KEY = "district7.intake-board.v1";
 const MAX_PHOTO_COUNT = 4;
 const MAX_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
 const BOARD_GRID =
-  "grid-cols-[44px_250px_96px_132px_340px_280px_155px_220px_190px_155px_170px]";
+  "grid-cols-[44px_250px_130px_160px_340px_280px_155px_220px_190px_155px_170px]";
 const ALLOWED_PHOTO_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -52,7 +54,8 @@ const GROUP_COLORS = [
 type DraftRow = {
   id: string;
   residentName: string;
-  dateLabel: string;
+  dateValue: string;
+  status: IssueStatus;
   description: string;
   addressText: string;
   residentPhone: string;
@@ -79,15 +82,15 @@ export function ReportForm({
   demoMode = false,
   existingCases,
   currentGroupLabel,
-  todayLabel,
+  todayDateValue,
 }: {
   demoMode?: boolean;
   existingCases: IntakeBoardCase[];
   currentGroupLabel: string;
-  todayLabel: string;
+  todayDateValue: string;
 }) {
   const [groups, setGroups] = useState<DraftGroup[]>(() =>
-    makeInitialGroups(currentGroupLabel, existingCases, todayLabel),
+    makeInitialGroups(currentGroupLabel, existingCases, todayDateValue),
   );
   const [draftsLoaded, setDraftsLoaded] = useState(false);
   const [savedCases, setSavedCases] = useState(existingCases);
@@ -97,12 +100,14 @@ export function ReportForm({
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {
-      setGroups(loadStoredGroups(currentGroupLabel, existingCases, todayLabel));
+      setGroups(
+        loadStoredGroups(currentGroupLabel, existingCases, todayDateValue),
+      );
       setDraftsLoaded(true);
     }, 0);
 
     return () => window.clearTimeout(loadTimer);
-  }, [currentGroupLabel, existingCases, todayLabel]);
+  }, [currentGroupLabel, existingCases, todayDateValue]);
 
   useEffect(() => {
     if (!draftsLoaded) return;
@@ -161,7 +166,7 @@ export function ReportForm({
           ? {
               ...group,
               collapsed: false,
-              rows: [...group.rows, makeBlankRow(todayLabel)],
+              rows: [...group.rows, makeBlankRow(todayDateValue)],
             }
           : group,
       ),
@@ -192,7 +197,7 @@ export function ReportForm({
           caseMonthLabel: label,
           color: GROUP_COLORS[current.length % GROUP_COLORS.length].value,
           collapsed: false,
-          rows: [makeBlankRow(todayLabel)],
+          rows: [makeBlankRow(todayDateValue)],
         },
       ].sort((a, b) => compareIntakeMonthLabelsDescending(a.label, b.label));
     });
@@ -216,7 +221,7 @@ export function ReportForm({
     const savedCase: IntakeBoardCase = {
       id: createdCase.reportId,
       publicTrackingToken: createdCase.publicTrackingToken,
-      status: "received",
+      status: row.status,
       category: row.category,
       description: row.description,
       addressText: row.addressText,
@@ -229,8 +234,8 @@ export function ReportForm({
     };
 
     setSavedCases((current) => [savedCase, ...current]);
-    setGroups((current) =>
-      current.map((group) => {
+    setGroups((current) => {
+      const nextGroups = current.map((group) => {
         if (group.id !== groupId) return group;
         const remainingRows = group.rows.filter((item) => item.id !== row.id);
         return {
@@ -238,10 +243,34 @@ export function ReportForm({
           rows:
             remainingRows.length > 0
               ? remainingRows
-              : [makeBlankRow(todayLabel)],
+              : [makeBlankRow(todayDateValue)],
         };
-      }),
-    );
+      });
+      const createdGroupLabel = formatIntakeMonthGroup(createdCase.createdAt);
+      const hasCreatedGroup = nextGroups.some(
+        (group) =>
+          group.label === createdGroupLabel ||
+          group.caseMonthLabel === createdGroupLabel,
+      );
+
+      if (!hasCreatedGroup) {
+        nextGroups.push({
+          id: stableId("group", createdGroupLabel),
+          label: createdGroupLabel,
+          caseMonthLabel: createdGroupLabel,
+          color: GROUP_COLORS[nextGroups.length % GROUP_COLORS.length].value,
+          collapsed: false,
+          rows: [],
+        });
+      }
+
+      return nextGroups.sort((a, b) =>
+        compareIntakeMonthLabelsDescending(
+          a.caseMonthLabel ?? a.label,
+          b.caseMonthLabel ?? b.label,
+        ),
+      );
+    });
     setLastCreatedCase(createdCase);
   }
 
@@ -284,7 +313,7 @@ export function ReportForm({
         </div>
         <div className="text-xs text-[#68728f]">
           {savedCases.length} saved case{savedCases.length === 1 ? "" : "s"} ·
-          Click any blue draft cell to edit.
+          Click any blue draft cell, including date and status, to edit.
         </div>
       </div>
 
@@ -362,7 +391,7 @@ export function ReportForm({
                   className="mt-3 overflow-x-auto border-l-8"
                   style={{ borderLeftColor: group.color }}
                 >
-                  <div className="min-w-[2032px] border-y border-r border-[#c9d3e8]">
+                  <div className="min-w-[2094px] border-y border-r border-[#c9d3e8]">
                     <BoardHeader />
                     {groupCases.map((intakeCase) => (
                       <SavedCaseRow key={intakeCase.id} intakeCase={intakeCase} />
@@ -736,21 +765,34 @@ function DraftCaseRow({
           onChange={(value) => onChange({ residentName: value })}
         />
       </Cell>
-      <Cell center>
-        <span
-          className="text-xs text-[#59627b]"
-          title="The case creation date is set automatically."
-        >
-          {row.dateLabel}
-        </span>
+      <Cell>
+        <input
+          name="createdDate"
+          type="date"
+          required
+          value={row.dateValue}
+          onChange={(event) => onChange({ dateValue: event.target.value })}
+          className="h-full w-full cursor-pointer bg-transparent px-2 text-xs text-[#323650] outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          aria-label="Case date"
+        />
       </Cell>
-      <Cell center>
-        <span
-          className="rounded bg-[#fff0b8] px-2 py-1 text-xs font-semibold text-[#7a5600]"
-          title="The case enters the staff queue as Received."
+      <Cell>
+        <select
+          name="status"
+          required
+          value={row.status}
+          onChange={(event) =>
+            onChange({ status: event.target.value as IssueStatus })
+          }
+          className={`h-full w-full cursor-pointer px-2 text-xs font-semibold text-white outline-none hover:brightness-95 focus:shadow-[inset_0_0_0_2px_#181b34] ${statusTone(row.status)}`}
+          aria-label="Case status"
         >
-          Not created
-        </span>
+          {ISSUE_STATUSES.map((status) => (
+            <option key={status} value={status} className="bg-white text-[#323650]">
+              {formatStatus(status)}
+            </option>
+          ))}
+        </select>
       </Cell>
       <Cell>
         <BoardTextarea
@@ -1013,27 +1055,29 @@ function ReadOnlyText({ value }: { value: string }) {
 }
 
 function StatusPill({ status }: { status: string }) {
-  const tone =
-    status === "received"
-      ? "bg-[#a7a7a7]"
-      : status === "resolved" || status.startsWith("closed_")
-        ? "bg-[#00854d]"
-        : status === "follow_up_due" || status === "needs_more_info"
-          ? "bg-[#bb335d]"
-          : "bg-[#0073ea]";
-
   return (
-    <span className={`rounded px-2 py-1 text-center text-xs font-semibold text-white ${tone}`}>
+    <span className={`rounded px-2 py-1 text-center text-xs font-semibold text-white ${statusTone(status)}`}>
       {formatStatus(status)}
     </span>
   );
 }
 
-function makeBlankRow(todayLabel: string, id = makeId("row")): DraftRow {
+function statusTone(status: string) {
+  return status === "received"
+    ? "bg-[#a7a7a7]"
+    : status === "resolved" || status.startsWith("closed_")
+      ? "bg-[#00854d]"
+      : status === "follow_up_due" || status === "needs_more_info"
+        ? "bg-[#bb335d]"
+        : "bg-[#0073ea]";
+}
+
+function makeBlankRow(todayDateValue: string, id = makeId("row")): DraftRow {
   return {
     id,
     residentName: "",
-    dateLabel: todayLabel,
+    dateValue: todayDateValue,
+    status: "received",
     description: "",
     addressText: "",
     residentPhone: "",
@@ -1045,27 +1089,31 @@ function makeBlankRow(todayLabel: string, id = makeId("row")): DraftRow {
 function makeInitialGroups(
   currentGroupLabel: string,
   existingCases: IntakeBoardCase[],
-  todayLabel: string,
+  todayDateValue: string,
 ) {
   return mergeDraftGroups(
     currentGroupLabel,
     existingCases,
     [],
-    todayLabel,
+    todayDateValue,
   );
 }
 
 function loadStoredGroups(
   currentGroupLabel: string,
   existingCases: IntakeBoardCase[],
-  todayLabel: string,
+  todayDateValue: string,
 ) {
   let storedGroups: DraftGroup[] = [];
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as DraftGroup[];
-      if (Array.isArray(parsed)) storedGroups = parsed.filter(isDraftGroup);
+      if (Array.isArray(parsed)) {
+        storedGroups = parsed
+          .filter(isDraftGroup)
+          .map((group) => normalizeStoredGroup(group, todayDateValue));
+      }
     }
   } catch {
     // Ignore corrupt local drafts and start from the saved case months.
@@ -1075,7 +1123,7 @@ function loadStoredGroups(
     currentGroupLabel,
     existingCases,
     storedGroups,
-    todayLabel,
+    todayDateValue,
   );
 }
 
@@ -1083,7 +1131,7 @@ function mergeDraftGroups(
   currentGroupLabel: string,
   existingCases: IntakeBoardCase[],
   storedGroups: DraftGroup[],
-  todayLabel: string,
+  todayDateValue: string,
 ) {
   const caseLabels = Array.from(
     new Set(existingCases.map((intakeCase) => formatIntakeMonthGroup(intakeCase.createdAt))),
@@ -1119,7 +1167,7 @@ function mergeDraftGroups(
     existingCurrentGroup.rows.length === 0
   ) {
     existingCurrentGroup.rows = [
-      makeBlankRow(todayLabel, stableId("row", currentGroupLabel)),
+      makeBlankRow(todayDateValue, stableId("row", currentGroupLabel)),
     ];
   }
 
@@ -1131,7 +1179,7 @@ function mergeDraftGroups(
       color: GROUP_COLORS[merged.length % GROUP_COLORS.length].value,
       collapsed: false,
       rows: [
-        makeBlankRow(todayLabel, stableId("row", currentGroupLabel)),
+        makeBlankRow(todayDateValue, stableId("row", currentGroupLabel)),
       ],
     });
   }
@@ -1153,6 +1201,26 @@ function isDraftGroup(value: DraftGroup) {
     typeof value.color === "string" &&
     Array.isArray(value.rows)
   );
+}
+
+function normalizeStoredGroup(
+  group: DraftGroup,
+  todayDateValue: string,
+): DraftGroup {
+  return {
+    ...group,
+    rows: group.rows.map((row) => ({
+      ...row,
+      dateValue: isDateInputValue(row.dateValue)
+        ? row.dateValue
+        : todayDateValue,
+      status: ISSUE_STATUSES.includes(row.status) ? row.status : "received",
+    })),
+  };
+}
+
+function isDateInputValue(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function formatBoardDate(value: string) {
