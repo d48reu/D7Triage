@@ -764,6 +764,7 @@ function BoardScrollArea({
   const boardScrollerRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef(0);
   const desiredEdgeRef = useRef<"start" | "end" | null>("start");
+  const scrollTrackPointerRef = useRef<number | null>(null);
   const [scrollMetrics, setScrollMetrics] = useState({
     left: 0,
     max: 0,
@@ -870,10 +871,47 @@ function BoardScrollArea({
     element.focus({ preventScroll: true });
   }
 
+  function setScrollFromPointer(element: HTMLDivElement, clientX: number) {
+    const bounds = element.getBoundingClientRect();
+    if (bounds.width <= 0) return;
+
+    const rawProgress = Math.min(
+      1,
+      Math.max(0, (clientX - bounds.left) / bounds.width),
+    );
+    const progress =
+      rawProgress <= 0.01 ? 0 : rawProgress >= 0.99 ? 1 : rawProgress;
+    setBoardScrollLeft(progress * scrollMetrics.max);
+  }
+
+  function handleScrollTrackKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      setBoardScrollLeft(scrollMetrics.left - 48);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      setBoardScrollLeft(scrollMetrics.left + 48);
+    } else if (event.key === "PageUp") {
+      event.preventDefault();
+      setBoardScrollLeft(scrollMetrics.left - 360);
+    } else if (event.key === "PageDown") {
+      event.preventDefault();
+      setBoardScrollLeft(scrollMetrics.left + 360);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      scrollBoardToEdge("start");
+    } else if (event.key === "End") {
+      event.preventDefault();
+      scrollBoardToEdge("end");
+    }
+  }
+
   const atStart = scrollMetrics.left <= 2;
   const atEnd =
     scrollMetrics.max <= 0 ||
     scrollMetrics.left >= scrollMetrics.max - 2;
+  const scrollProgress =
+    scrollMetrics.max > 0 ? scrollMetrics.left / scrollMetrics.max : 0;
 
   return (
     <div className="mt-3">
@@ -891,19 +929,62 @@ function BoardScrollArea({
         >
           ← Left
         </button>
-        <input
-          type="range"
-          min={0}
-          max={Math.max(1, scrollMetrics.max)}
-          step={1}
-          value={Math.min(scrollMetrics.left, scrollMetrics.max)}
-          disabled={scrollMetrics.max <= 0}
-          onPointerDown={(event) => focusScrollControl(event.currentTarget)}
-          onChange={(event) => setBoardScrollLeft(Number(event.target.value))}
-          className="h-5 min-w-24 flex-1 cursor-ew-resize accent-[#0073ea] disabled:cursor-not-allowed"
-          aria-label={`Horizontal position for ${groupLabel} cases`}
+        <div
+          role="slider"
+          aria-label={`Horizontal scrollbar for ${groupLabel} cases`}
+          aria-orientation="horizontal"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(scrollMetrics.max)}
+          aria-valuenow={Math.round(scrollMetrics.left)}
+          aria-valuetext={`${Math.round(scrollProgress * 100)}% across the table`}
+          aria-disabled={scrollMetrics.max <= 0}
+          tabIndex={scrollMetrics.max > 0 ? 0 : -1}
+          data-horizontal-scroll-track
           title="Drag to move left or right"
-        />
+          className="relative h-5 min-w-24 flex-1 touch-none cursor-ew-resize rounded border border-[#c9d3e8] bg-[#f7f8fc] outline-none focus-visible:ring-2 focus-visible:ring-[#0073ea]"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            focusScrollControl(event.currentTarget);
+            scrollTrackPointerRef.current = event.pointerId;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setScrollFromPointer(event.currentTarget, event.clientX);
+          }}
+          onPointerMove={(event) => {
+            if (scrollTrackPointerRef.current !== event.pointerId) return;
+            setScrollFromPointer(event.currentTarget, event.clientX);
+          }}
+          onPointerUp={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+            scrollTrackPointerRef.current = null;
+          }}
+          onPointerCancel={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+            scrollTrackPointerRef.current = null;
+          }}
+          onKeyDown={handleScrollTrackKeyDown}
+        >
+          <span
+            aria-hidden="true"
+            className="absolute inset-x-1 top-1/2 h-1 -translate-y-1/2 rounded bg-[#d7deec]"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute left-1 top-1/2 h-1 -translate-y-1/2 rounded bg-[#0073ea]"
+            style={{ width: `${scrollProgress * 100}%` }}
+          />
+          <span
+            aria-hidden="true"
+            className="absolute top-0.5 h-4 w-11 rounded border border-[#005fae] bg-[#0073ea] shadow-sm"
+            style={{
+              left: `${scrollProgress * 100}%`,
+              transform: `translateX(-${scrollProgress * 100}%)`,
+            }}
+          />
+        </div>
         <button
           type="button"
           onPointerDown={(event) => focusScrollControl(event.currentTarget)}
@@ -927,7 +1008,7 @@ function BoardScrollArea({
         tabIndex={0}
         className="mt-2 overflow-x-auto overscroll-x-contain border-l-8 outline-none focus-visible:ring-2 focus-visible:ring-[#0073ea]"
         style={{ borderLeftColor: accentColor }}
-        aria-label={`${groupLabel} cases table, ${boardWidth} pixels wide. Use the slider or arrow keys to move left and right.`}
+        aria-label={`${groupLabel} cases table, ${boardWidth} pixels wide. Use the horizontal scrollbar or arrow keys to move left and right.`}
       >
         {children}
       </div>
