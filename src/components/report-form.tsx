@@ -7,7 +7,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useTransition,
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
@@ -37,6 +36,7 @@ const STORAGE_KEY = "district7.intake-board.v2";
 const LEGACY_STORAGE_KEY = "district7.intake-board.v1";
 const MAX_PHOTO_COUNT = 4;
 const MAX_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
+const AUTOSAVE_DELAY_MS = 900;
 const BOARD_GRID =
   "grid-cols-[44px_250px_130px_160px_340px_280px_155px_220px_190px_155px_170px]";
 const ALLOWED_PHOTO_TYPES = new Set([
@@ -79,6 +79,16 @@ type CreatedCaseMetadata = {
   reportId: string;
   publicTrackingToken: string;
   createdAt: string;
+};
+
+type AutosaveIndicator = {
+  status: "saved" | "saving" | "error";
+  message: string;
+};
+
+const AUTOSAVE_ACTION_STATE: UpdateIntakeCaseState = {
+  status: "idle",
+  message: "",
 };
 
 export function ReportForm({
@@ -255,13 +265,16 @@ export function ReportForm({
   }
 
   function handleUpdatedCase(updatedCase: IntakeBoardCase) {
-    setSavedCases((current) =>
-      current.map((intakeCase) =>
-        intakeCase.id === updatedCase.id ? updatedCase : intakeCase,
-      ),
+    const nextSavedCases = savedCases.map((intakeCase) =>
+      intakeCase.id === updatedCase.id ? updatedCase : intakeCase,
     );
+    setSavedCases(nextSavedCases);
     setGroups((current) =>
-      ensureCaseMonthGroup(current, updatedCase.createdAt),
+      reconcileCaseMonthGroups(
+        current,
+        nextSavedCases,
+        currentGroupLabel,
+      ),
     );
   }
 
@@ -304,7 +317,7 @@ export function ReportForm({
         </div>
         <div className="text-xs text-[#68728f]">
           {savedCases.length} saved case{savedCases.length === 1 ? "" : "s"} ·
-          Edit any case cell. Saved rows use the Save changes button.
+          Saved rows autosave. New drafts stay local until created.
         </div>
       </div>
 
@@ -514,47 +527,152 @@ function SavedCaseRow({
   onUpdated: (updatedCase: IntakeBoardCase) => void;
 }) {
   const [draft, setDraft] = useState(intakeCase);
-  const [state, setState] = useState<UpdateIntakeCaseState>({
-    status: "idle",
-    message: "",
+  const [saveIndicator, setSaveIndicator] = useState<AutosaveIndicator>({
+    status: "saved",
+    message: "Saved",
   });
-  const [isPending, startTransition] = useTransition();
+  const latestDraftRef = useRef(intakeCase);
+  const lastSavedSnapshotRef = useRef(savedCaseSnapshot(intakeCase));
+  const queuedSnapshotsRef = useRef(new Set<string>());
+  const saveQueueRef = useRef(Promise.resolve());
+  const requestVersionRef = useRef(0);
+  const autosaveTimerRef = useRef<number | null>(null);
 
-  function updateDraft(patch: Partial<IntakeBoardCase>) {
-    setDraft((current) => ({ ...current, ...patch }));
+  useEffect(
+    () => () => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  function clearAutosaveTimer() {
+    if (autosaveTimerRef.current === null) return;
+    window.clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = null;
   }
 
-  function submitWithShortcut(event: KeyboardEvent<HTMLTextAreaElement>) {
+  function queueAutosave(nextDraft: IntakeBoardCase) {
+    clearAutosaveTimer();
+
+    if (demoMode) {
+      setSaveIndicator({
+        status: "error",
+        message: "Autosave is disabled in demo mode.",
+      });
+      return;
+    }
+
+    const snapshot = savedCaseSnapshot(nextDraft);
+    const isAlreadySaved =
+      snapshot === lastSavedSnapshotRef.current &&
+      queuedSnapshotsRef.current.size === 0;
     if (
-      (event.ctrlKey || event.metaKey) &&
-      (event.key === "Enter" || event.key === "NumpadEnter")
+      isAlreadySaved ||
+      queuedSnapshotsRef.current.has(snapshot)
     ) {
-      event.preventDefault();
-      event.currentTarget.form?.requestSubmit();
+      if (isAlreadySaved) {
+        setSaveIndicator({ status: "saved", message: "Saved" });
+      }
+      return;
+    }
+
+    queuedSnapshotsRef.current.add(snapshot);
+    const requestVersion = ++requestVersionRef.current;
+    setSaveIndicator({ status: "saving", message: "Saving…" });
+
+    async function save() {
+      try {
+        const result = await updateStaffIntakeCaseAction(
+          AUTOSAVE_ACTION_STATE,
+          buildSavedCaseFormData(nextDraft),
+        );
+
+        if (result.status !== "success" || !result.updatedCase) {
+          if (requestVersion === requestVersionRef.current) {
+            setSaveIndicator({
+              status: "error",
+              message: result.message || "Save failed.",
+            });
+          }
+          return;
+        }
+
+        const savedCase = result.updatedCase;
+        lastSavedSnapshotRef.current = savedCaseSnapshot(savedCase);
+        onUpdated(savedCase);
+
+        if (savedCaseSnapshot(latestDraftRef.current) === snapshot) {
+          latestDraftRef.current = savedCase;
+          setDraft(savedCase);
+        }
+
+        if (
+          requestVersion === requestVersionRef.current &&
+          savedCaseSnapshot(latestDraftRef.current) ===
+            lastSavedSnapshotRef.current
+        ) {
+          setSaveIndicator({ status: "saved", message: "Saved" });
+        }
+      } catch {
+        if (requestVersion === requestVersionRef.current) {
+          setSaveIndicator({
+            status: "error",
+            message: "Save failed. Retry when ready.",
+          });
+        }
+      } finally {
+        queuedSnapshotsRef.current.delete(snapshot);
+      }
+    }
+
+    saveQueueRef.current = saveQueueRef.current.then(save, save);
+  }
+
+  function scheduleAutosave(nextDraft: IntakeBoardCase) {
+    clearAutosaveTimer();
+    const snapshot = savedCaseSnapshot(nextDraft);
+
+    if (
+      snapshot === lastSavedSnapshotRef.current &&
+      queuedSnapshotsRef.current.size === 0
+    ) {
+      setSaveIndicator({ status: "saved", message: "Saved" });
+      return;
+    }
+
+    setSaveIndicator({ status: "saving", message: "Saving soon…" });
+    autosaveTimerRef.current = window.setTimeout(
+      () => queueAutosave(latestDraftRef.current),
+      AUTOSAVE_DELAY_MS,
+    );
+  }
+
+  function updateDraft(
+    patch: Partial<IntakeBoardCase>,
+    saveImmediately = false,
+  ) {
+    const nextDraft = { ...latestDraftRef.current, ...patch };
+    latestDraftRef.current = nextDraft;
+    setDraft(nextDraft);
+
+    if (saveImmediately) {
+      queueAutosave(nextDraft);
+    } else {
+      scheduleAutosave(nextDraft);
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-
-    startTransition(async () => {
-      const result = await updateStaffIntakeCaseAction(state, formData);
-      setState(result);
-      if (result.status === "success" && result.updatedCase) {
-        setDraft(result.updatedCase);
-        onUpdated(result.updatedCase);
-      }
-    });
+  function flushAutosave() {
+    queueAutosave(latestDraftRef.current);
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
+    <div
       className={`grid min-h-24 ${BOARD_GRID} bg-[#f7fbff] text-sm text-[#323650] hover:bg-[#eef7ff]`}
       aria-label={`Saved case for ${draft.residentName || "unnamed constituent"}`}
     >
-      <input type="hidden" name="reportId" value={draft.id} />
       <Cell center>
         <span className="size-2.5 rounded-full bg-[#00a25b]" title="Saved case" />
       </Cell>
@@ -565,6 +683,7 @@ function SavedCaseRow({
           placeholder="Constituent name"
           maxLength={120}
           onChange={(value) => updateDraft({ residentName: value })}
+          onBlur={flushAutosave}
         />
       </Cell>
       <Cell>
@@ -573,7 +692,9 @@ function SavedCaseRow({
           type="date"
           required
           value={dateInputValue(draft.createdAt)}
-          onChange={(event) => updateDraft({ createdAt: event.target.value })}
+          onChange={(event) =>
+            updateDraft({ createdAt: event.target.value }, true)
+          }
           className="h-full w-full cursor-pointer bg-transparent px-2 text-xs text-[#323650] outline-none hover:bg-[#eaf5ff] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
           aria-label="Case date"
         />
@@ -583,7 +704,9 @@ function SavedCaseRow({
           name="status"
           required
           value={draft.status}
-          onChange={(event) => updateDraft({ status: event.target.value })}
+          onChange={(event) =>
+            updateDraft({ status: event.target.value }, true)
+          }
           className={`h-full w-full cursor-pointer px-2 text-xs font-semibold text-white outline-none hover:brightness-95 focus:shadow-[inset_0_0_0_2px_#181b34] ${statusTone(draft.status)}`}
           aria-label="Case status"
         >
@@ -603,7 +726,7 @@ function SavedCaseRow({
           maxLength={4000}
           placeholder="What did the constituent call about?"
           onChange={(value) => updateDraft({ description: value })}
-          onKeyDown={submitWithShortcut}
+          onBlur={flushAutosave}
         />
       </Cell>
       <Cell>
@@ -614,7 +737,7 @@ function SavedCaseRow({
           maxLength={250}
           placeholder="Address, intersection, park, or landmark"
           onChange={(value) => updateDraft({ addressText: value })}
-          onKeyDown={submitWithShortcut}
+          onBlur={flushAutosave}
         />
       </Cell>
       <Cell>
@@ -624,6 +747,7 @@ function SavedCaseRow({
           maxLength={40}
           placeholder="305…"
           onChange={(value) => updateDraft({ residentPhone: value })}
+          onBlur={flushAutosave}
         />
       </Cell>
       <Cell>
@@ -634,6 +758,7 @@ function SavedCaseRow({
           required
           placeholder="name@example.com"
           onChange={(value) => updateDraft({ residentEmail: value })}
+          onBlur={flushAutosave}
         />
       </Cell>
       <Cell>
@@ -641,7 +766,9 @@ function SavedCaseRow({
           name="category"
           required
           value={draft.category}
-          onChange={(event) => updateDraft({ category: event.target.value })}
+          onChange={(event) =>
+            updateDraft({ category: event.target.value }, true)
+          }
           className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-[#eaf5ff] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
           aria-label="Category"
         >
@@ -662,13 +789,6 @@ function SavedCaseRow({
         className="sticky right-0 z-10 bg-[#f7fbff] shadow-[-8px_0_12px_-12px_#5b6680]"
       >
         <div className="flex flex-col items-center gap-1.5 px-2 py-2">
-          <button
-            type="submit"
-            disabled={isPending || demoMode}
-            className="w-full rounded bg-[#0073ea] px-2 py-1.5 text-xs font-semibold text-white hover:bg-[#0060b9] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPending ? "Saving…" : demoMode ? "Demo only" : "Save changes"}
-          </button>
           <Link
             href={`/staff/reports/${draft.id}`}
             className="text-xs font-semibold text-[#0060b9] hover:underline"
@@ -679,20 +799,30 @@ function SavedCaseRow({
             {draft.attachmentCount} file{draft.attachmentCount === 1 ? "" : "s"}
           </span>
           <span
+            role="status"
             aria-live="polite"
             className={`max-w-36 text-center text-[10px] ${
-              state.status === "error"
+              saveIndicator.status === "error"
                 ? "font-semibold text-[#9f1239]"
-                : state.status === "success"
+                : saveIndicator.status === "saved"
                   ? "font-semibold text-[#087f49]"
-                  : "text-[#4d5672]"
+                  : "font-semibold text-[#175da8]"
             }`}
           >
-            {state.message || "Ctrl + Enter to save"}
+            {saveIndicator.message}
           </span>
+          {saveIndicator.status === "error" ? (
+            <button
+              type="button"
+              onClick={flushAutosave}
+              className="rounded border border-[#9f1239] bg-white px-2 py-1 text-[10px] font-semibold text-[#9f1239] hover:bg-[#fff1f4]"
+            >
+              Retry
+            </button>
+          ) : null}
         </div>
       </Cell>
-    </form>
+    </div>
   );
 }
 
@@ -1087,7 +1217,7 @@ function BoardHeader() {
       <HeaderCell label="Category *" />
       <HeaderCell label="District" />
       <HeaderCell
-        label="Files / Save"
+        label="Files / Case"
         className="sticky right-0 z-20 shadow-[-8px_0_12px_-12px_#5b6680]"
       />
     </div>
@@ -1131,6 +1261,7 @@ function Cell({
 function BoardInput({
   value,
   onChange,
+  onBlur,
   name,
   type = "text",
   required = false,
@@ -1139,6 +1270,7 @@ function BoardInput({
 }: {
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   name?: string;
   type?: string;
   required?: boolean;
@@ -1153,6 +1285,7 @@ function BoardInput({
       maxLength={maxLength}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      onBlur={onBlur}
       placeholder={placeholder}
       className="h-full min-h-16 w-full cursor-text bg-transparent px-3 outline-none placeholder:text-[#6c758f] hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
     />
@@ -1163,6 +1296,7 @@ function BoardTextarea({
   value,
   onChange,
   onKeyDown,
+  onBlur,
   name,
   required = false,
   minLength,
@@ -1171,7 +1305,8 @@ function BoardTextarea({
 }: {
   value: string;
   onChange: (value: string) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onBlur?: () => void;
   name: string;
   required?: boolean;
   minLength?: number;
@@ -1187,6 +1322,7 @@ function BoardTextarea({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={onKeyDown}
+      onBlur={onBlur}
       placeholder={placeholder}
       className="h-full min-h-24 w-full cursor-text resize-none bg-transparent px-3 py-2 outline-none placeholder:text-[#6c758f] hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
     />
@@ -1206,6 +1342,34 @@ function statusTone(status: string) {
 function dateInputValue(value: string) {
   const datePart = value.slice(0, 10);
   return isDateInputValue(datePart) ? datePart : "";
+}
+
+function savedCaseSnapshot(intakeCase: IntakeBoardCase) {
+  return JSON.stringify([
+    intakeCase.id,
+    intakeCase.residentName,
+    dateInputValue(intakeCase.createdAt),
+    intakeCase.status,
+    intakeCase.description,
+    intakeCase.addressText,
+    intakeCase.residentPhone,
+    intakeCase.residentEmail,
+    intakeCase.category,
+  ]);
+}
+
+function buildSavedCaseFormData(intakeCase: IntakeBoardCase) {
+  const formData = new FormData();
+  formData.set("reportId", intakeCase.id);
+  formData.set("residentName", intakeCase.residentName);
+  formData.set("createdDate", dateInputValue(intakeCase.createdAt));
+  formData.set("status", intakeCase.status);
+  formData.set("description", intakeCase.description);
+  formData.set("addressText", intakeCase.addressText);
+  formData.set("residentPhone", intakeCase.residentPhone);
+  formData.set("residentEmail", intakeCase.residentEmail);
+  formData.set("category", intakeCase.category);
+  return formData;
 }
 
 function makeBlankRow(todayDateValue: string, id = makeId("row")): DraftRow {
@@ -1348,6 +1512,55 @@ function ensureCaseMonthGroup(
           rows: [],
         },
       ];
+
+  return nextGroups.sort((a, b) =>
+    compareIntakeMonthLabelsDescending(
+      a.caseMonthLabel ?? a.label,
+      b.caseMonthLabel ?? b.label,
+    ),
+  );
+}
+
+function reconcileCaseMonthGroups(
+  groups: DraftGroup[],
+  savedCases: IntakeBoardCase[],
+  currentGroupLabel: string,
+) {
+  const savedMonthLabels = new Set(
+    savedCases.map((intakeCase) =>
+      formatIntakeMonthGroup(intakeCase.createdAt),
+    ),
+  );
+  const retainedGroups = groups.filter((group) => {
+    const caseMonthLabel = group.caseMonthLabel ?? group.label;
+    return (
+      group.rows.length > 0 ||
+      savedMonthLabels.has(caseMonthLabel) ||
+      caseMonthLabel === currentGroupLabel
+    );
+  });
+  const missingMonthLabels = Array.from(savedMonthLabels).filter(
+    (monthLabel) =>
+      !retainedGroups.some(
+        (group) =>
+          group.label === monthLabel ||
+          group.caseMonthLabel === monthLabel,
+      ),
+  );
+  const nextGroups = [
+    ...retainedGroups,
+    ...missingMonthLabels.map((monthLabel, index) => ({
+      id: stableId("group", monthLabel),
+      label: monthLabel,
+      caseMonthLabel: monthLabel,
+      color:
+        GROUP_COLORS[
+          (retainedGroups.length + index) % GROUP_COLORS.length
+        ].value,
+      collapsed: false,
+      rows: [],
+    })),
+  ];
 
   return nextGroups.sort((a, b) =>
     compareIntakeMonthLabelsDescending(
