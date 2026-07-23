@@ -26,6 +26,7 @@ import {
   type IntakeBoardCase,
 } from "@/lib/intake-board";
 import {
+  addStaffIntakeCaseAttachmentsAction,
   createStaffIntakeCaseAction,
   updateStaffIntakeCaseAction,
   type CreateIntakeCaseState,
@@ -79,6 +80,7 @@ type CreatedCaseMetadata = {
   reportId: string;
   publicTrackingToken: string;
   createdAt: string;
+  attachmentCount: number;
 };
 
 type AutosaveIndicator = {
@@ -243,7 +245,7 @@ export function ReportForm({
       residentPhone: row.residentPhone,
       createdAt: createdCase.createdAt,
       districtLabel: "Pending review",
-      attachmentCount: 0,
+      attachmentCount: createdCase.attachmentCount,
     };
 
     setSavedCases((current) => [savedCase, ...current]);
@@ -537,6 +539,11 @@ function SavedCaseRow({
   const saveQueueRef = useRef(Promise.resolve());
   const requestVersionRef = useRef(0);
   const autosaveTimerRef = useRef<number | null>(null);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+  const [attachmentMessage, setAttachmentMessage] = useState<{
+    status: "idle" | "success" | "error";
+    message: string;
+  }>({ status: "idle", message: "" });
 
   useEffect(
     () => () => {
@@ -668,6 +675,67 @@ function SavedCaseRow({
     queueAutosave(latestDraftRef.current);
   }
 
+  async function uploadAttachments(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const photos = Array.from(input.files ?? []).filter((file) => file.size > 0);
+    input.value = "";
+
+    if (photos.length === 0) return;
+
+    const validationError = validatePhotos(
+      photos,
+      latestDraftRef.current.attachmentCount,
+    );
+    if (validationError) {
+      setAttachmentMessage({ status: "error", message: validationError });
+      return;
+    }
+
+    if (demoMode) {
+      setAttachmentMessage({
+        status: "error",
+        message: "File uploads are disabled in demo mode.",
+      });
+      return;
+    }
+
+    setIsUploadingAttachments(true);
+    setAttachmentMessage({ status: "idle", message: "Uploading…" });
+
+    const formData = new FormData();
+    formData.set("reportId", latestDraftRef.current.id);
+    for (const photo of photos) {
+      formData.append("photos", photo);
+    }
+
+    try {
+      const result = await addStaffIntakeCaseAttachmentsAction(formData);
+      if (result.status !== "success" || result.attachmentCount === undefined) {
+        setAttachmentMessage({
+          status: "error",
+          message: result.message || "Upload failed.",
+        });
+        return;
+      }
+
+      const updatedCase = {
+        ...latestDraftRef.current,
+        attachmentCount: result.attachmentCount,
+      };
+      latestDraftRef.current = updatedCase;
+      setDraft(updatedCase);
+      onUpdated(updatedCase);
+      setAttachmentMessage({ status: "success", message: result.message });
+    } catch {
+      setAttachmentMessage({
+        status: "error",
+        message: "Upload failed. Try again.",
+      });
+    } finally {
+      setIsUploadingAttachments(false);
+    }
+  }
+
   return (
     <div
       className={`grid min-h-24 ${BOARD_GRID} bg-[#f7fbff] text-sm text-[#323650] hover:bg-[#eef7ff]`}
@@ -789,6 +857,37 @@ function SavedCaseRow({
         className="sticky right-0 z-10 bg-[#f7fbff] shadow-[-8px_0_12px_-12px_#5b6680]"
       >
         <div className="flex flex-col items-center gap-1.5 px-2 py-2">
+          <label
+            className={`w-full rounded border border-[#9aa8c4] bg-white px-2 py-1.5 text-center text-xs font-semibold ${
+              demoMode ||
+              isUploadingAttachments ||
+              draft.attachmentCount >= MAX_PHOTO_COUNT
+                ? "cursor-not-allowed opacity-60"
+                : "cursor-pointer hover:bg-[#f5f7fb]"
+            }`}
+            title="Add JPEG, PNG, WebP, or GIF files up to 8 MB each"
+          >
+            {isUploadingAttachments
+              ? "Uploading…"
+              : draft.attachmentCount >= MAX_PHOTO_COUNT
+                ? "File limit reached"
+                : "Add files"}
+            <input
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              disabled={
+                demoMode ||
+                isUploadingAttachments ||
+                draft.attachmentCount >= MAX_PHOTO_COUNT
+              }
+              onChange={uploadAttachments}
+              className="sr-only"
+              aria-label={`Add files to case for ${
+                draft.residentName || "unnamed constituent"
+              }`}
+            />
+          </label>
           <Link
             href={`/staff/reports/${draft.id}`}
             className="text-xs font-semibold text-[#0060b9] hover:underline"
@@ -798,6 +897,21 @@ function SavedCaseRow({
           <span className="text-[11px] text-[#68728f]">
             {draft.attachmentCount} file{draft.attachmentCount === 1 ? "" : "s"}
           </span>
+          {attachmentMessage.message ? (
+            <span
+              role="status"
+              aria-live="polite"
+              className={`max-w-36 text-center text-[10px] font-semibold ${
+                attachmentMessage.status === "error"
+                  ? "text-[#9f1239]"
+                  : attachmentMessage.status === "success"
+                    ? "text-[#087f49]"
+                    : "text-[#175da8]"
+              }`}
+            >
+              {attachmentMessage.message}
+            </span>
+          ) : null}
           <span
             role="status"
             aria-live="polite"
@@ -875,28 +989,9 @@ function DraftCaseRow({
       reportId: state.reportId,
       publicTrackingToken: state.publicTrackingToken,
       createdAt: state.createdAt,
+      attachmentCount: state.attachmentCount ?? 0,
     });
   }, [onCreated, state]);
-
-  function validatePhotos(files: FileList | null) {
-    const photos = Array.from(files ?? []).filter((file) => file.size > 0);
-
-    if (photos.length > MAX_PHOTO_COUNT) {
-      return `Choose no more than ${MAX_PHOTO_COUNT} photos.`;
-    }
-
-    const invalidPhoto = photos.find(
-      (photo) =>
-        !ALLOWED_PHOTO_TYPES.has(photo.type) ||
-        photo.size > MAX_PHOTO_SIZE_BYTES,
-    );
-
-    if (invalidPhoto) {
-      return "Use JPEG, PNG, WebP, or GIF files up to 8 MB each.";
-    }
-
-    return null;
-  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const input = event.currentTarget.elements.namedItem("photos");
@@ -1342,6 +1437,29 @@ function statusTone(status: string) {
 function dateInputValue(value: string) {
   const datePart = value.slice(0, 10);
   return isDateInputValue(datePart) ? datePart : "";
+}
+
+function validatePhotos(
+  files: FileList | File[] | null,
+  existingPhotoCount = 0,
+) {
+  const photos = Array.from(files ?? []).filter((file) => file.size > 0);
+
+  if (existingPhotoCount + photos.length > MAX_PHOTO_COUNT) {
+    return `Each case can have up to ${MAX_PHOTO_COUNT} files.`;
+  }
+
+  const invalidPhoto = photos.find(
+    (photo) =>
+      !ALLOWED_PHOTO_TYPES.has(photo.type) ||
+      photo.size > MAX_PHOTO_SIZE_BYTES,
+  );
+
+  if (invalidPhoto) {
+    return "Use JPEG, PNG, WebP, or GIF files up to 8 MB each.";
+  }
+
+  return null;
 }
 
 function savedCaseSnapshot(intakeCase: IntakeBoardCase) {

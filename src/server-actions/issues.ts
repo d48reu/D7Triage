@@ -54,12 +54,19 @@ export type CreateIntakeCaseState = {
   reportId?: string;
   publicTrackingToken?: string;
   createdAt?: string;
+  attachmentCount?: number;
 };
 
 export type UpdateIntakeCaseState = {
   status: "idle" | "error" | "success";
   message: string;
   updatedCase?: IntakeBoardCase;
+};
+
+export type AddIntakeCaseAttachmentsState = {
+  status: "error" | "success";
+  message: string;
+  attachmentCount?: number;
 };
 
 export type GenerateAiSuggestionState = {
@@ -483,6 +490,7 @@ export async function createStaffIntakeCaseAction(
     reportId: report.id,
     publicTrackingToken: report.publicTrackingToken,
     createdAt: report.createdAt,
+    attachmentCount: listAttachments(report.id).length,
   };
 }
 
@@ -746,6 +754,10 @@ export async function saveQuickTriageAction(formData: FormData) {
 }
 
 export async function addIssuePhotosAction(formData: FormData) {
+  if (!(await hasStaffSession())) {
+    throw new Error("Your staff session expired. Sign in again before uploading.");
+  }
+
   const reportId = readRequiredText(formData, "reportId");
   const photos = formData
     .getAll("photos")
@@ -786,6 +798,82 @@ export async function addIssuePhotosAction(formData: FormData) {
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
   redirect(`/staff/reports/${reportId}?photoSaved=1`);
+}
+
+export async function addStaffIntakeCaseAttachmentsAction(
+  formData: FormData,
+): Promise<AddIntakeCaseAttachmentsState> {
+  if (!(await hasStaffSession())) {
+    return {
+      status: "error",
+      message: "Your staff session expired. Sign in again before uploading.",
+    };
+  }
+
+  if (isDemoMode()) {
+    return {
+      status: "error",
+      message: "File uploads are disabled in demo mode.",
+    };
+  }
+
+  const reportId = String(formData.get("reportId") ?? "").trim();
+  if (!reportId) {
+    return { status: "error", message: "Case could not be identified." };
+  }
+
+  const report = getIssueReportById(reportId);
+  if (!report) {
+    return { status: "error", message: "Case could not be found." };
+  }
+
+  const photos = formData
+    .getAll("photos")
+    .filter((value): value is File => value instanceof File && value.size > 0);
+
+  if (photos.length === 0) {
+    return { status: "error", message: "Choose at least one file to upload." };
+  }
+
+  const currentAttachmentCount = listAttachments(reportId).length;
+  if (currentAttachmentCount + photos.length > getMaxPhotoCount()) {
+    return {
+      status: "error",
+      message: `Each case can have up to ${getMaxPhotoCount()} files.`,
+    };
+  }
+
+  const invalidPhoto = photos.find(
+    (photo) =>
+      !ALLOWED_PHOTO_TYPES.has(photo.type) ||
+      !ALLOWED_PHOTO_EXTENSIONS.has(getFileExtension(photo.name)) ||
+      photo.size > MAX_PHOTO_SIZE_BYTES,
+  );
+
+  if (invalidPhoto) {
+    return {
+      status: "error",
+      message:
+        "Files must be JPEG, PNG, WebP, or GIF images and each must be 8 MB or smaller.",
+    };
+  }
+
+  await savePhotoAttachments(reportId, photos);
+  addStaffNote({
+    reportId,
+    body: `${photos.length} staff photo${photos.length === 1 ? "" : "s"} attached from the intake board.`,
+  });
+
+  const attachmentCount = listAttachments(reportId).length;
+  revalidatePath("/report");
+  revalidatePath("/staff");
+  revalidatePath(`/staff/reports/${reportId}`);
+
+  return {
+    status: "success",
+    message: `${photos.length} file${photos.length === 1 ? "" : "s"} added.`,
+    attachmentCount,
+  };
 }
 
 export async function updateIssueDetailsAction(formData: FormData) {
