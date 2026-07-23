@@ -7,6 +7,11 @@ import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo-mode";
 import { hasStaffSession } from "@/lib/staff-auth";
 import {
+  analyzeReportJurisdiction,
+  formatDistrictHintStatus,
+} from "@/lib/jurisdiction";
+import type { IntakeBoardCase } from "@/lib/intake-board";
+import {
   ISSUE_STATUSES,
   inferIssueCategoryFromText,
   isKnownIssueCategoryInput,
@@ -28,6 +33,7 @@ import {
   getAgencyById,
   getAiSuggestionById,
   getIssueReportById,
+  getJurisdictionConfig,
   getLatestAiSuggestion,
   getStaffMemberById,
   listAttachments,
@@ -35,6 +41,7 @@ import {
   markIssueAsDistinct,
   markIssueAsDuplicate,
   updateIssueLocationIntelligence,
+  updateIssueCreatedAt,
   updateIssueDetails,
   updateAiSuggestionFeedback,
   updateReferralOutcome,
@@ -47,6 +54,12 @@ export type CreateIntakeCaseState = {
   reportId?: string;
   publicTrackingToken?: string;
   createdAt?: string;
+};
+
+export type UpdateIntakeCaseState = {
+  status: "idle" | "error" | "success";
+  message: string;
+  updatedCase?: IntakeBoardCase;
 };
 
 export type GenerateAiSuggestionState = {
@@ -485,6 +498,192 @@ function parseStaffCreatedDate(value: string) {
   }
 
   return createdAt.toISOString();
+}
+
+export async function updateStaffIntakeCaseAction(
+  _previousState: UpdateIntakeCaseState,
+  formData: FormData,
+): Promise<UpdateIntakeCaseState> {
+  if (!(await hasStaffSession())) {
+    return {
+      status: "error",
+      message: "Your staff session expired. Sign in again before saving.",
+    };
+  }
+
+  if (isDemoMode()) {
+    return {
+      status: "error",
+      message: "Case editing is disabled in the hosted demo.",
+    };
+  }
+
+  const reportId = String(formData.get("reportId") ?? "").trim();
+  const report = reportId ? getIssueReportById(reportId) : null;
+  if (!report) {
+    return { status: "error", message: "Case not found." };
+  }
+
+  const submittedCategory = String(formData.get("category") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const addressText = String(formData.get("addressText") ?? "").trim();
+  const residentEmail = String(formData.get("residentEmail") ?? "").trim();
+  const residentName = String(formData.get("residentName") ?? "").trim();
+  const residentPhone = String(formData.get("residentPhone") ?? "").trim();
+  const submittedStatus = String(formData.get("status") ?? "").trim();
+  const createdDate = String(formData.get("createdDate") ?? "").trim();
+  const createdAt = parseStaffCreatedDate(createdDate);
+
+  if (!submittedCategory || !description || !addressText || !residentEmail) {
+    return {
+      status: "error",
+      message: "Category, summary, address, and email are required.",
+    };
+  }
+
+  if (!isKnownIssueCategoryInput(submittedCategory)) {
+    return { status: "error", message: "Choose a valid category." };
+  }
+
+  if (!ISSUE_STATUSES.includes(submittedStatus as IssueStatus)) {
+    return { status: "error", message: "Choose a valid status." };
+  }
+
+  if (!createdAt) {
+    return { status: "error", message: "Choose a valid case date." };
+  }
+
+  if (!residentEmail.includes("@")) {
+    return { status: "error", message: "Enter a valid email address." };
+  }
+
+  if (description.length > MAX_DESCRIPTION_LENGTH) {
+    return {
+      status: "error",
+      message: `Summary must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (addressText.length > MAX_ADDRESS_LENGTH) {
+    return {
+      status: "error",
+      message: `Address must be ${MAX_ADDRESS_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (residentName.length > MAX_NAME_LENGTH) {
+    return {
+      status: "error",
+      message: `Name must be ${MAX_NAME_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (residentPhone.length > MAX_PHONE_LENGTH) {
+    return {
+      status: "error",
+      message: `Phone must be ${MAX_PHONE_LENGTH} characters or fewer.`,
+    };
+  }
+
+  const category = resolveSubmittedCategory({
+    category: submittedCategory,
+    description,
+    addressText,
+  });
+  const nextStatus = submittedStatus as IssueStatus;
+  const addressChanged = report.addressText !== addressText;
+  const detailChanges = [
+    buildTextAuditChange("createdAt", "Case date", report.createdAt.slice(0, 10), createdDate),
+    buildTextAuditChange("status", "Status", report.status, nextStatus),
+    buildTextAuditChange("category", "Category", report.category, category),
+    buildTextAuditChange("description", "Summary", report.description, description),
+    buildTextAuditChange("addressText", "Address", report.addressText, addressText),
+    buildTextAuditChange("residentName", "Constituent", report.residentName, residentName),
+    buildTextAuditChange("residentEmail", "Email", report.residentEmail, residentEmail),
+    buildTextAuditChange("residentPhone", "Phone", report.residentPhone, residentPhone),
+  ].filter((change): change is CaseDetailAuditChange => Boolean(change));
+
+  updateIssueDetails({
+    reportId,
+    category,
+    description,
+    addressText,
+    residentName,
+    residentEmail,
+    residentPhone,
+    preferredLanguage: report.preferredLanguage,
+    contactConsent: report.contactConsent,
+    newsletterOptIn: report.newsletterOptIn,
+  });
+
+  if (report.createdAt.slice(0, 10) !== createdDate) {
+    updateIssueCreatedAt({ reportId, createdAt });
+  }
+
+  if (addressChanged) {
+    const locationIntelligence = await resolveReportLocationIntelligence({
+      addressText,
+      latitude: null,
+      longitude: null,
+    });
+    updateIssueLocationIntelligence({
+      reportId,
+      ...locationIntelligence,
+    });
+  }
+
+  if (report.status !== nextStatus) {
+    updateIssueStatus({ reportId, status: nextStatus });
+  }
+
+  if (detailChanges.length > 0) {
+    addIssueAuditEvents({
+      reportId,
+      actorLabel: "Staff intake board",
+      changes: detailChanges,
+    });
+    addStaffNote({
+      reportId,
+      body: `Case updated from the intake board. Updated fields: ${detailChanges
+        .map((change) => change.fieldLabel.toLowerCase())
+        .join(", ")}.`,
+    });
+  }
+
+  const updatedReport = getIssueReportById(reportId);
+  if (!updatedReport) {
+    return { status: "error", message: "Case could not be reloaded after saving." };
+  }
+
+  revalidatePath("/staff");
+  revalidatePath("/staff/analytics");
+  revalidatePath(`/staff/reports/${reportId}`);
+  revalidatePath(`/report/${updatedReport.publicTrackingToken}`);
+
+  return {
+    status: "success",
+    message:
+      detailChanges.length > 0 ? "Changes saved." : "No changes to save.",
+    updatedCase: {
+      id: updatedReport.id,
+      publicTrackingToken: updatedReport.publicTrackingToken,
+      status: updatedReport.status,
+      category: updatedReport.category,
+      description: updatedReport.description,
+      addressText: updatedReport.addressText,
+      residentName: updatedReport.residentName ?? "",
+      residentEmail: updatedReport.residentEmail,
+      residentPhone: updatedReport.residentPhone ?? "",
+      createdAt: updatedReport.createdAt,
+      districtLabel: formatDistrictHintStatus(
+        analyzeReportJurisdiction(
+          updatedReport,
+          getJurisdictionConfig(),
+        ).districtHintStatus,
+      ),
+      attachmentCount: listAttachments(reportId).length,
+    },
+  };
 }
 
 export async function updateIssueStatusAction(formData: FormData) {

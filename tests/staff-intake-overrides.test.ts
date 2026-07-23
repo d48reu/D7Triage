@@ -26,4 +26,10 @@ test("staff intake can set the initial case date and status", async () => {
   assert.equal(statusEvents.length, 1);
   assert.equal(statusEvents[0].status, "needs_review");
   assert.equal(statusEvents[0].createdAt, "2026-07-10T12:00:00.000Z");
+
+  const movedReport = repository.updateIssueCreatedAt({
+    reportId: report.id,
+    createdAt: "2026-06-15T12:00:00.000Z",
+  });
+  assert.equal(movedReport?.createdAt, "2026-06-15T12:00:00.000Z");
 });

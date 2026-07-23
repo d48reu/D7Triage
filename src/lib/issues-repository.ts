@@ -2553,6 +2553,21 @@ export function updateIssueDetails(input: {
   return getIssueReportById(input.reportId);
 }
 
+export function updateIssueCreatedAt(input: {
+  reportId: string;
+  createdAt: string;
+}) {
+  getDb()
+    .prepare(
+      `update issue_reports
+       set created_at = ?, updated_at = ?
+       where id = ?`,
+    )
+    .run(input.createdAt, nowIso(), input.reportId);
+
+  return getIssueReportById(input.reportId);
+}
+
 export function assignIssueReport(input: {
   reportId: string;
   staffMemberId?: string | null;

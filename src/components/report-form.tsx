@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useTransition,
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
@@ -27,7 +28,9 @@ import {
 } from "@/lib/intake-board";
 import {
   createStaffIntakeCaseAction,
+  updateStaffIntakeCaseAction,
   type CreateIntakeCaseState,
+  type UpdateIntakeCaseState,
 } from "@/server-actions/issues";
 
 const STORAGE_KEY = "district7.intake-board.v2";
@@ -166,7 +169,7 @@ export function ReportForm({
           ? {
               ...group,
               collapsed: false,
-              rows: [...group.rows, makeBlankRow(todayDateValue)],
+              rows: [makeBlankRow(todayDateValue), ...group.rows],
             }
           : group,
       ),
@@ -246,32 +249,20 @@ export function ReportForm({
               : [makeBlankRow(todayDateValue)],
         };
       });
-      const createdGroupLabel = formatIntakeMonthGroup(createdCase.createdAt);
-      const hasCreatedGroup = nextGroups.some(
-        (group) =>
-          group.label === createdGroupLabel ||
-          group.caseMonthLabel === createdGroupLabel,
-      );
-
-      if (!hasCreatedGroup) {
-        nextGroups.push({
-          id: stableId("group", createdGroupLabel),
-          label: createdGroupLabel,
-          caseMonthLabel: createdGroupLabel,
-          color: GROUP_COLORS[nextGroups.length % GROUP_COLORS.length].value,
-          collapsed: false,
-          rows: [],
-        });
-      }
-
-      return nextGroups.sort((a, b) =>
-        compareIntakeMonthLabelsDescending(
-          a.caseMonthLabel ?? a.label,
-          b.caseMonthLabel ?? b.label,
-        ),
-      );
+      return ensureCaseMonthGroup(nextGroups, createdCase.createdAt);
     });
     setLastCreatedCase(createdCase);
+  }
+
+  function handleUpdatedCase(updatedCase: IntakeBoardCase) {
+    setSavedCases((current) =>
+      current.map((intakeCase) =>
+        intakeCase.id === updatedCase.id ? updatedCase : intakeCase,
+      ),
+    );
+    setGroups((current) =>
+      ensureCaseMonthGroup(current, updatedCase.createdAt),
+    );
   }
 
   return (
@@ -313,7 +304,7 @@ export function ReportForm({
         </div>
         <div className="text-xs text-[#68728f]">
           {savedCases.length} saved case{savedCases.length === 1 ? "" : "s"} ·
-          Click any blue draft cell, including date and status, to edit.
+          Edit any case cell. Saved rows use the Save changes button.
         </div>
       </div>
 
@@ -393,9 +384,6 @@ export function ReportForm({
                 >
                   <div className="min-w-[2094px] border-y border-r border-[#c9d3e8]">
                     <BoardHeader />
-                    {groupCases.map((intakeCase) => (
-                      <SavedCaseRow key={intakeCase.id} intakeCase={intakeCase} />
-                    ))}
                     {group.rows.map((row) => (
                       <DraftCaseRow
                         key={row.id}
@@ -406,6 +394,14 @@ export function ReportForm({
                         onCreated={(createdCase) =>
                           handleCreatedCase(group.id, row, createdCase)
                         }
+                      />
+                    ))}
+                    {groupCases.map((intakeCase) => (
+                      <SavedCaseRow
+                        key={intakeCase.id}
+                        intakeCase={intakeCase}
+                        demoMode={demoMode}
+                        onUpdated={handleUpdatedCase}
                       />
                     ))}
                     <div className={`grid h-10 ${BOARD_GRID} bg-white text-sm text-[#6a728c]`}>
@@ -508,58 +504,195 @@ function GroupTitleMenu({
   );
 }
 
-function SavedCaseRow({ intakeCase }: { intakeCase: IntakeBoardCase }) {
+function SavedCaseRow({
+  intakeCase,
+  demoMode,
+  onUpdated,
+}: {
+  intakeCase: IntakeBoardCase;
+  demoMode: boolean;
+  onUpdated: (updatedCase: IntakeBoardCase) => void;
+}) {
+  const [draft, setDraft] = useState(intakeCase);
+  const [state, setState] = useState<UpdateIntakeCaseState>({
+    status: "idle",
+    message: "",
+  });
+  const [isPending, startTransition] = useTransition();
+
+  function updateDraft(patch: Partial<IntakeBoardCase>) {
+    setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function submitWithShortcut(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (
+      (event.ctrlKey || event.metaKey) &&
+      (event.key === "Enter" || event.key === "NumpadEnter")
+    ) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    startTransition(async () => {
+      const result = await updateStaffIntakeCaseAction(state, formData);
+      setState(result);
+      if (result.status === "success" && result.updatedCase) {
+        setDraft(result.updatedCase);
+        onUpdated(result.updatedCase);
+      }
+    });
+  }
+
   return (
-    <div className={`grid min-h-16 ${BOARD_GRID} bg-white text-sm text-[#323650] hover:bg-[#f4f9ff]`}>
+    <form
+      onSubmit={handleSubmit}
+      className={`grid min-h-24 ${BOARD_GRID} bg-[#f7fbff] text-sm text-[#323650] hover:bg-[#eef7ff]`}
+      aria-label={`Saved case for ${draft.residentName || "unnamed constituent"}`}
+    >
+      <input type="hidden" name="reportId" value={draft.id} />
       <Cell center>
         <span className="size-2.5 rounded-full bg-[#00a25b]" title="Saved case" />
       </Cell>
       <Cell>
-        <Link
-          href={`/staff/reports/${intakeCase.id}`}
-          className="flex w-full items-center px-3 font-medium text-[#175da8] hover:underline"
+        <BoardInput
+          name="residentName"
+          value={draft.residentName}
+          placeholder="Constituent name"
+          maxLength={120}
+          onChange={(value) => updateDraft({ residentName: value })}
+        />
+      </Cell>
+      <Cell>
+        <input
+          name="createdDate"
+          type="date"
+          required
+          value={dateInputValue(draft.createdAt)}
+          onChange={(event) => updateDraft({ createdAt: event.target.value })}
+          className="h-full w-full cursor-pointer bg-transparent px-2 text-xs text-[#323650] outline-none hover:bg-[#eaf5ff] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          aria-label="Case date"
+        />
+      </Cell>
+      <Cell>
+        <select
+          name="status"
+          required
+          value={draft.status}
+          onChange={(event) => updateDraft({ status: event.target.value })}
+          className={`h-full w-full cursor-pointer px-2 text-xs font-semibold text-white outline-none hover:brightness-95 focus:shadow-[inset_0_0_0_2px_#181b34] ${statusTone(draft.status)}`}
+          aria-label="Case status"
         >
-          {intakeCase.residentName || "No constituent name"}
-        </Link>
-      </Cell>
-      <Cell center>{formatBoardDate(intakeCase.createdAt)}</Cell>
-      <Cell center>
-        <StatusPill status={intakeCase.status} />
-      </Cell>
-      <Cell>
-        <ReadOnlyText value={intakeCase.description} />
+          {ISSUE_STATUSES.map((status) => (
+            <option key={status} value={status} className="bg-white text-[#323650]">
+              {formatStatus(status)}
+            </option>
+          ))}
+        </select>
       </Cell>
       <Cell>
-        <ReadOnlyText value={intakeCase.addressText} />
+        <BoardTextarea
+          name="description"
+          value={draft.description}
+          required
+          minLength={12}
+          maxLength={4000}
+          placeholder="What did the constituent call about?"
+          onChange={(value) => updateDraft({ description: value })}
+          onKeyDown={submitWithShortcut}
+        />
       </Cell>
       <Cell>
-        <ReadOnlyText value={intakeCase.residentPhone || "—"} />
+        <BoardTextarea
+          name="addressText"
+          value={draft.addressText}
+          required
+          maxLength={250}
+          placeholder="Address, intersection, park, or landmark"
+          onChange={(value) => updateDraft({ addressText: value })}
+          onKeyDown={submitWithShortcut}
+        />
       </Cell>
       <Cell>
-        <ReadOnlyText value={intakeCase.residentEmail} />
+        <BoardInput
+          name="residentPhone"
+          value={draft.residentPhone}
+          maxLength={40}
+          placeholder="305…"
+          onChange={(value) => updateDraft({ residentPhone: value })}
+        />
       </Cell>
       <Cell>
-        <ReadOnlyText value={intakeCase.category} />
+        <BoardInput
+          name="residentEmail"
+          value={draft.residentEmail}
+          type="email"
+          required
+          placeholder="name@example.com"
+          onChange={(value) => updateDraft({ residentEmail: value })}
+        />
+      </Cell>
+      <Cell>
+        <select
+          name="category"
+          required
+          value={draft.category}
+          onChange={(event) => updateDraft({ category: event.target.value })}
+          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-[#eaf5ff] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          aria-label="Category"
+        >
+          {ISSUE_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
       </Cell>
       <Cell center>
         <span className="px-2 text-center text-xs text-[#4d5672]">
-          {intakeCase.districtLabel}
+          {draft.districtLabel}
         </span>
       </Cell>
-      <Cell center>
+      <Cell
+        center
+        className="sticky right-0 z-10 bg-[#f7fbff] shadow-[-8px_0_12px_-12px_#5b6680]"
+      >
         <div className="flex flex-col items-center gap-1.5 px-2 py-2">
+          <button
+            type="submit"
+            disabled={isPending || demoMode}
+            className="w-full rounded bg-[#0073ea] px-2 py-1.5 text-xs font-semibold text-white hover:bg-[#0060b9] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPending ? "Saving…" : demoMode ? "Demo only" : "Save changes"}
+          </button>
           <Link
-            href={`/staff/reports/${intakeCase.id}`}
-            className="rounded border border-[#0073ea] bg-white px-3 py-1.5 text-xs font-semibold text-[#0060b9] hover:bg-[#eaf3ff]"
+            href={`/staff/reports/${draft.id}`}
+            className="text-xs font-semibold text-[#0060b9] hover:underline"
           >
             Open case
           </Link>
           <span className="text-[11px] text-[#68728f]">
-            {intakeCase.attachmentCount} file{intakeCase.attachmentCount === 1 ? "" : "s"}
+            {draft.attachmentCount} file{draft.attachmentCount === 1 ? "" : "s"}
+          </span>
+          <span
+            aria-live="polite"
+            className={`max-w-36 text-center text-[10px] ${
+              state.status === "error"
+                ? "font-semibold text-[#9f1239]"
+                : state.status === "success"
+                  ? "font-semibold text-[#087f49]"
+                  : "text-[#4d5672]"
+            }`}
+          >
+            {state.message || "Ctrl + Enter to save"}
           </span>
         </div>
       </Cell>
-    </div>
+    </form>
   );
 }
 
@@ -882,7 +1015,10 @@ function DraftCaseRow({
           </span>
         </div>
       </Cell>
-      <Cell center>
+      <Cell
+        center
+        className="sticky right-0 z-10 bg-[#eaf5ff] shadow-[-8px_0_12px_-12px_#5b6680]"
+      >
         <div className="flex w-full flex-col items-center gap-1.5 px-2 py-2">
           <label className="w-full cursor-pointer rounded border border-[#9aa8c4] bg-white px-2 py-1.5 text-center text-xs font-semibold hover:bg-[#f5f7fb]">
             {selectedPhotoNames.length > 0
@@ -950,14 +1086,23 @@ function BoardHeader() {
       <HeaderCell label="Email *" />
       <HeaderCell label="Category *" />
       <HeaderCell label="District" />
-      <HeaderCell label="Files / Save" />
+      <HeaderCell
+        label="Files / Save"
+        className="sticky right-0 z-20 shadow-[-8px_0_12px_-12px_#5b6680]"
+      />
     </div>
   );
 }
 
-function HeaderCell({ label }: { label: string }) {
+function HeaderCell({
+  label,
+  className = "",
+}: {
+  label: string;
+  className?: string;
+}) {
   return (
-    <div className="flex h-10 items-center justify-center border-b border-r border-[#c9d3e8] bg-[#f8f9fc] px-2 text-center text-xs font-semibold">
+    <div className={`flex h-10 items-center justify-center border-b border-r border-[#c9d3e8] bg-[#f8f9fc] px-2 text-center text-xs font-semibold ${className}`}>
       {label}
     </div>
   );
@@ -966,15 +1111,17 @@ function HeaderCell({ label }: { label: string }) {
 function Cell({
   children,
   center = false,
+  className = "",
 }: {
   children?: ReactNode;
   center?: boolean;
+  className?: string;
 }) {
   return (
     <div
       className={`min-h-10 border-b border-r border-[#c9d3e8] ${
         center ? "flex items-center justify-center" : "flex items-stretch"
-      }`}
+      } ${className}`}
     >
       {children}
     </div>
@@ -1046,22 +1193,6 @@ function BoardTextarea({
   );
 }
 
-function ReadOnlyText({ value }: { value: string }) {
-  return (
-    <span className="line-clamp-3 w-full self-center px-3 py-2 text-xs leading-5" title={value}>
-      {value}
-    </span>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  return (
-    <span className={`rounded px-2 py-1 text-center text-xs font-semibold text-white ${statusTone(status)}`}>
-      {formatStatus(status)}
-    </span>
-  );
-}
-
 function statusTone(status: string) {
   return status === "received"
     ? "bg-[#a7a7a7]"
@@ -1070,6 +1201,11 @@ function statusTone(status: string) {
       : status === "follow_up_due" || status === "needs_more_info"
         ? "bg-[#bb335d]"
         : "bg-[#0073ea]";
+}
+
+function dateInputValue(value: string) {
+  const datePart = value.slice(0, 10);
+  return isDateInputValue(datePart) ? datePart : "";
 }
 
 function makeBlankRow(todayDateValue: string, id = makeId("row")): DraftRow {
@@ -1189,6 +1325,38 @@ function mergeDraftGroups(
   );
 }
 
+function ensureCaseMonthGroup(
+  groups: DraftGroup[],
+  createdAt: string,
+) {
+  const caseMonthLabel = formatIntakeMonthGroup(createdAt);
+  const hasCaseMonthGroup = groups.some(
+    (group) =>
+      group.label === caseMonthLabel ||
+      group.caseMonthLabel === caseMonthLabel,
+  );
+  const nextGroups = hasCaseMonthGroup
+    ? [...groups]
+    : [
+        ...groups,
+        {
+          id: stableId("group", caseMonthLabel),
+          label: caseMonthLabel,
+          caseMonthLabel,
+          color: GROUP_COLORS[groups.length % GROUP_COLORS.length].value,
+          collapsed: false,
+          rows: [],
+        },
+      ];
+
+  return nextGroups.sort((a, b) =>
+    compareIntakeMonthLabelsDescending(
+      a.caseMonthLabel ?? a.label,
+      b.caseMonthLabel ?? b.label,
+    ),
+  );
+}
+
 function stableId(prefix: string, value: string) {
   return `${prefix}-${value.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
@@ -1221,12 +1389,6 @@ function normalizeStoredGroup(
 
 function isDateInputValue(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function formatBoardDate(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "—";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function makeId(prefix: string) {
