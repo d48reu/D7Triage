@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   useActionState,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -96,6 +97,11 @@ type AutosaveIndicator = {
   message: string;
 };
 
+type CaseSaveController = {
+  hasUnsavedChanges: () => boolean;
+  flush: () => Promise<boolean>;
+};
+
 const AUTOSAVE_ACTION_STATE: UpdateIntakeCaseState = {
   status: "idle",
   message: "",
@@ -117,17 +123,31 @@ export function ReportForm({
   const [groups, setGroups] = useState<DraftGroup[]>(() =>
     makeInitialGroups(currentGroupLabel, existingCases, todayDateValue),
   );
+  const groupsRef = useRef(groups);
+  const draftsLoadedRef = useRef(false);
+  const caseSaveControllersRef = useRef(
+    new Map<string, CaseSaveController>(),
+  );
+  const navigationInProgressRef = useRef(false);
   const [draftsLoaded, setDraftsLoaded] = useState(false);
   const [savedCases, setSavedCases] = useState(existingCases);
   const [searchQuery, setSearchQuery] = useState("");
+  const [navigationSaveMessage, setNavigationSaveMessage] = useState<
+    string | null
+  >(null);
   const [lastCreatedCase, setLastCreatedCase] =
     useState<CreatedCaseMetadata | null>(null);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {
-      setGroups(
-        loadStoredGroups(currentGroupLabel, existingCases, todayDateValue),
+      const loadedGroups = loadStoredGroups(
+        currentGroupLabel,
+        existingCases,
+        todayDateValue,
       );
+      groupsRef.current = loadedGroups;
+      draftsLoadedRef.current = true;
+      setGroups(loadedGroups);
       setDraftsLoaded(true);
     }, 0);
 
@@ -135,15 +155,117 @@ export function ReportForm({
   }, [currentGroupLabel, existingCases, todayDateValue]);
 
   useEffect(() => {
+    groupsRef.current = groups;
+    draftsLoadedRef.current = draftsLoaded;
     if (!draftsLoaded) return;
-
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
-      window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-    } catch {
-      // Draft persistence is best-effort and never blocks intake.
-    }
+    storeDraftGroups(groups);
   }, [draftsLoaded, groups]);
+
+  const registerCaseSaveController = useCallback(
+    (caseId: string, controller: CaseSaveController | null) => {
+      if (controller) {
+        caseSaveControllersRef.current.set(caseId, controller);
+      } else {
+        caseSaveControllersRef.current.delete(caseId);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    function pendingSaveControllers() {
+      return Array.from(caseSaveControllersRef.current.values()).filter(
+        (controller) => controller.hasUnsavedChanges(),
+      );
+    }
+
+    async function handleNavigationClick(event: MouseEvent) {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      const target = event.target;
+      const anchor =
+        target instanceof Element ? target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (
+        !anchor ||
+        anchor.target === "_blank" ||
+        anchor.hasAttribute("download")
+      ) {
+        return;
+      }
+
+      const destination = new URL(anchor.href, window.location.href);
+      if (
+        destination.origin !== window.location.origin ||
+        destination.href === window.location.href
+      ) {
+        return;
+      }
+
+      const controllers = pendingSaveControllers();
+      if (controllers.length === 0) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (navigationInProgressRef.current) return;
+
+      navigationInProgressRef.current = true;
+      setNavigationSaveMessage("Saving changes before leaving…");
+      const results = await Promise.all(
+        controllers.map((controller) => controller.flush()),
+      );
+
+      if (results.every(Boolean)) {
+        window.location.assign(destination.href);
+        return;
+      }
+
+      navigationInProgressRef.current = false;
+      setNavigationSaveMessage(
+        "A change could not be saved. You are still on this page so you can retry.",
+      );
+    }
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      if (
+        !Array.from(caseSaveControllersRef.current.values()).some(
+          (controller) => controller.hasUnsavedChanges(),
+        )
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    document.addEventListener("click", handleNavigationClick, true);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      document.removeEventListener("click", handleNavigationClick, true);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
+
+  function updateGroups(
+    updater: (current: DraftGroup[]) => DraftGroup[],
+  ) {
+    const nextGroups = updater(groupsRef.current);
+    groupsRef.current = nextGroups;
+    setGroups(nextGroups);
+    if (draftsLoadedRef.current) {
+      storeDraftGroups(nextGroups);
+    }
+    return nextGroups;
+  }
 
   const visibleCases = useMemo(
     () =>
@@ -162,7 +284,7 @@ export function ReportForm({
   }, [visibleCases]);
 
   function updateGroup(groupId: string, patch: Partial<DraftGroup>) {
-    setGroups((current) =>
+    updateGroups((current) =>
       current.map((group) =>
         group.id === groupId ? { ...group, ...patch } : group,
       ),
@@ -170,7 +292,7 @@ export function ReportForm({
   }
 
   function updateRow(groupId: string, rowId: string, patch: Partial<DraftRow>) {
-    setGroups((current) =>
+    updateGroups((current) =>
       current.map((group) =>
         group.id === groupId
           ? {
@@ -185,7 +307,7 @@ export function ReportForm({
   }
 
   function addRow(groupId: string) {
-    setGroups((current) =>
+    updateGroups((current) =>
       current.map((group) =>
         group.id === groupId
           ? {
@@ -199,7 +321,7 @@ export function ReportForm({
   }
 
   function removeRow(groupId: string, rowId: string) {
-    setGroups((current) =>
+    updateGroups((current) =>
       current.map((group) =>
         group.id === groupId
           ? { ...group, rows: group.rows.filter((row) => row.id !== rowId) }
@@ -209,7 +331,7 @@ export function ReportForm({
   }
 
   function addGroup() {
-    setGroups((current) => {
+    updateGroups((current) => {
       const label = nextIntakeMonthLabel(
         current.map((group) => group.label),
         currentGroupLabel,
@@ -230,11 +352,11 @@ export function ReportForm({
 
   function addCurrentItem() {
     const currentGroup =
-      groups.find(
+      groupsRef.current.find(
         (group) =>
           group.label === currentGroupLabel ||
           group.caseMonthLabel === currentGroupLabel,
-      ) ?? groups[0];
+      ) ?? groupsRef.current[0];
     if (currentGroup) addRow(currentGroup.id);
   }
 
@@ -260,7 +382,7 @@ export function ReportForm({
     };
 
     const nextGroups = ensureCaseMonthGroup(
-      groups.map((group) => {
+      groupsRef.current.map((group) => {
         if (group.id !== groupId) return group;
         const remainingRows = group.rows.filter((item) => item.id !== row.id);
         return {
@@ -275,12 +397,9 @@ export function ReportForm({
     );
 
     setSavedCases((current) => [savedCase, ...current]);
+    groupsRef.current = nextGroups;
     setGroups(nextGroups);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextGroups));
-    } catch {
-      // Draft persistence is best-effort and never blocks a successful save.
-    }
+    storeDraftGroups(nextGroups);
     setLastCreatedCase(createdCase);
   }
 
@@ -289,7 +408,7 @@ export function ReportForm({
       intakeCase.id === updatedCase.id ? updatedCase : intakeCase,
     );
     setSavedCases(nextSavedCases);
-    setGroups((current) =>
+    updateGroups((current) =>
       reconcileCaseMonthGroups(
         current,
         nextSavedCases,
@@ -340,6 +459,15 @@ export function ReportForm({
           Saved rows autosave. New drafts stay local until saved.
         </div>
       </div>
+
+      {navigationSaveMessage ? (
+        <div
+          role="status"
+          className="mt-4 rounded border border-[#b9d8ff] bg-[#eef6ff] px-4 py-3 text-sm font-semibold text-[#185a9d]"
+        >
+          {navigationSaveMessage}
+        </div>
+      ) : null}
 
       {lastCreatedCase ? (
         <div
@@ -437,6 +565,7 @@ export function ReportForm({
                         demoMode={demoMode}
                         staffMembers={staffMembers}
                         onUpdated={handleUpdatedCase}
+                        onSaveController={registerCaseSaveController}
                       />
                     ))}
                     <div className={`grid h-10 ${BOARD_GRID} bg-white text-sm text-[#6a728c]`}>
@@ -475,7 +604,9 @@ function BoardScrollArea({
   children: ReactNode;
 }) {
   const topScrollerRef = useRef<HTMLDivElement>(null);
+  const topTrackRef = useRef<HTMLDivElement>(null);
   const boardScrollerRef = useRef<HTMLDivElement>(null);
+  const scrollProgressRef = useRef(0);
   const [scrollEdges, setScrollEdges] = useState({
     atStart: true,
     atEnd: false,
@@ -499,9 +630,47 @@ function BoardScrollArea({
   }
 
   useEffect(() => {
-    updateScrollEdges();
-    window.addEventListener("resize", updateScrollEdges);
-    return () => window.removeEventListener("resize", updateScrollEdges);
+    const initialTopScroller = topScrollerRef.current;
+    const initialTopTrack = topTrackRef.current;
+    const initialBoardScroller = boardScrollerRef.current;
+    if (!initialTopScroller || !initialTopTrack || !initialBoardScroller) return;
+
+    let active = true;
+    function remeasureScrollers() {
+      if (!active) return;
+
+      const topScroller = topScrollerRef.current;
+      const topTrack = topTrackRef.current;
+      const boardScroller = boardScrollerRef.current;
+      if (!topScroller || !topTrack || !boardScroller) return;
+
+      const boardMax = Math.max(
+        0,
+        boardScroller.scrollWidth - boardScroller.clientWidth,
+      );
+      topTrack.style.width = `${Math.ceil(topScroller.clientWidth + boardMax)}px`;
+
+      const nextScrollLeft = scrollProgressRef.current * boardMax;
+      boardScroller.scrollLeft = nextScrollLeft;
+      topScroller.scrollLeft = nextScrollLeft;
+      updateScrollEdges();
+    }
+
+    const resizeObserver = new ResizeObserver(remeasureScrollers);
+    resizeObserver.observe(initialTopScroller);
+    resizeObserver.observe(initialBoardScroller);
+    const boardContent = initialBoardScroller.firstElementChild;
+    if (boardContent) resizeObserver.observe(boardContent);
+
+    const initialFrame = window.requestAnimationFrame(remeasureScrollers);
+    void document.fonts?.ready.then(remeasureScrollers);
+    window.addEventListener("resize", remeasureScrollers);
+    return () => {
+      active = false;
+      window.cancelAnimationFrame(initialFrame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", remeasureScrollers);
+    };
   }, []);
 
   function syncHorizontalScroll(
@@ -511,9 +680,9 @@ function BoardScrollArea({
     if (!target) return;
 
     const sourceMax = Math.max(0, source.scrollWidth - source.clientWidth);
-    const targetMax = Math.max(0, target.scrollWidth - target.clientWidth);
-    const ratio = sourceMax > 0 ? source.scrollLeft / sourceMax : 0;
-    const nextScrollLeft = ratio * targetMax;
+    const nextScrollLeft = Math.min(source.scrollLeft, sourceMax);
+    scrollProgressRef.current =
+      sourceMax > 0 ? nextScrollLeft / sourceMax : 0;
 
     if (Math.abs(target.scrollLeft - nextScrollLeft) > 1) {
       target.scrollLeft = nextScrollLeft;
@@ -524,7 +693,17 @@ function BoardScrollArea({
   function scrollBoard(left: number) {
     boardScrollerRef.current?.scrollBy({
       left,
-      behavior: "smooth",
+      behavior: "auto",
+    });
+  }
+
+  function scrollBoardToEdge(edge: "start" | "end") {
+    const board = boardScrollerRef.current;
+    if (!board) return;
+
+    board.scrollTo({
+      left: edge === "start" ? 0 : board.scrollWidth - board.clientWidth,
+      behavior: "auto",
     });
   }
 
@@ -539,13 +718,10 @@ function BoardScrollArea({
       scrollBoard(360);
     } else if (event.key === "Home") {
       event.preventDefault();
-      boardScrollerRef.current?.scrollTo({ left: 0, behavior: "smooth" });
+      scrollBoardToEdge("start");
     } else if (event.key === "End") {
       event.preventDefault();
-      boardScrollerRef.current?.scrollTo({
-        left: boardScrollerRef.current.scrollWidth,
-        behavior: "smooth",
-      });
+      scrollBoardToEdge("end");
     }
   }
 
@@ -557,7 +733,7 @@ function BoardScrollArea({
         </span>
         <button
           type="button"
-          onClick={() => scrollBoard(-640)}
+          onClick={() => scrollBoardToEdge("start")}
           disabled={scrollEdges.atStart}
           className="shrink-0 rounded border border-[#9aa8c4] bg-white px-2 py-1 text-xs font-semibold text-[#323650] hover:bg-[#f5f7fb] disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={`Scroll ${groupLabel} cases left`}
@@ -573,11 +749,15 @@ function BoardScrollArea({
           aria-label={`Horizontal scrollbar for ${groupLabel} cases`}
           tabIndex={0}
         >
-          <div className="h-px min-w-[2284px]" />
+          <div
+            ref={topTrackRef}
+            className="h-px min-w-full"
+            style={{ width: 2284 }}
+          />
         </div>
         <button
           type="button"
-          onClick={() => scrollBoard(640)}
+          onClick={() => scrollBoardToEdge("end")}
           disabled={scrollEdges.atEnd}
           className="shrink-0 rounded border border-[#9aa8c4] bg-white px-2 py-1 text-xs font-semibold text-[#323650] hover:bg-[#f5f7fb] disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={`Scroll ${groupLabel} cases right`}
@@ -681,11 +861,16 @@ function SavedCaseRow({
   demoMode,
   staffMembers,
   onUpdated,
+  onSaveController,
 }: {
   intakeCase: IntakeBoardCase;
   demoMode: boolean;
   staffMembers: AssignmentOption[];
   onUpdated: (updatedCase: IntakeBoardCase) => void;
+  onSaveController: (
+    caseId: string,
+    controller: CaseSaveController | null,
+  ) => void;
 }) {
   const [draft, setDraft] = useState(intakeCase);
   const [saveIndicator, setSaveIndicator] = useState<AutosaveIndicator>({
@@ -695,7 +880,10 @@ function SavedCaseRow({
   const latestDraftRef = useRef(intakeCase);
   const lastSavedSnapshotRef = useRef(savedCaseSnapshot(intakeCase));
   const queuedSnapshotsRef = useRef(new Set<string>());
-  const saveQueueRef = useRef(Promise.resolve());
+  const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const queueAutosaveRef = useRef<
+    (nextDraft: IntakeBoardCase) => Promise<boolean>
+  >(() => Promise.resolve(true));
   const requestVersionRef = useRef(0);
   const autosaveTimerRef = useRef<number | null>(null);
   const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
@@ -713,13 +901,26 @@ function SavedCaseRow({
     [],
   );
 
+  useEffect(() => {
+    const controller: CaseSaveController = {
+      hasUnsavedChanges: () =>
+        autosaveTimerRef.current !== null ||
+        queuedSnapshotsRef.current.size > 0 ||
+        savedCaseSnapshot(latestDraftRef.current) !==
+          lastSavedSnapshotRef.current,
+      flush: () => queueAutosaveRef.current(latestDraftRef.current),
+    };
+    onSaveController(intakeCase.id, controller);
+    return () => onSaveController(intakeCase.id, null);
+  }, [intakeCase.id, onSaveController]);
+
   function clearAutosaveTimer() {
     if (autosaveTimerRef.current === null) return;
     window.clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = null;
   }
 
-  function queueAutosave(nextDraft: IntakeBoardCase) {
+  function queueAutosave(nextDraft: IntakeBoardCase): Promise<boolean> {
     clearAutosaveTimer();
 
     if (demoMode) {
@@ -727,7 +928,7 @@ function SavedCaseRow({
         status: "error",
         message: "Autosave is disabled in demo mode.",
       });
-      return;
+      return Promise.resolve(false);
     }
 
     const snapshot = savedCaseSnapshot(nextDraft);
@@ -741,14 +942,19 @@ function SavedCaseRow({
       if (isAlreadySaved) {
         setSaveIndicator({ status: "saved", message: "Saved" });
       }
-      return;
+      return saveQueueRef.current.then(
+        () =>
+          savedCaseSnapshot(latestDraftRef.current) ===
+          lastSavedSnapshotRef.current,
+        () => false,
+      );
     }
 
     queuedSnapshotsRef.current.add(snapshot);
     const requestVersion = ++requestVersionRef.current;
     setSaveIndicator({ status: "saving", message: "Saving…" });
 
-    async function save() {
+    async function save(): Promise<boolean> {
       try {
         const result = await updateStaffIntakeCaseAction(
           AUTOSAVE_ACTION_STATE,
@@ -762,7 +968,7 @@ function SavedCaseRow({
               message: result.message || "Save failed.",
             });
           }
-          return;
+          return false;
         }
 
         const savedCase = result.updatedCase;
@@ -781,6 +987,7 @@ function SavedCaseRow({
         ) {
           setSaveIndicator({ status: "saved", message: "Saved" });
         }
+        return true;
       } catch {
         if (requestVersion === requestVersionRef.current) {
           setSaveIndicator({
@@ -788,13 +995,19 @@ function SavedCaseRow({
             message: "Save failed. Retry when ready.",
           });
         }
+        return false;
       } finally {
         queuedSnapshotsRef.current.delete(snapshot);
       }
     }
 
     saveQueueRef.current = saveQueueRef.current.then(save, save);
+    return saveQueueRef.current;
   }
+
+  useEffect(() => {
+    queueAutosaveRef.current = queueAutosave;
+  });
 
   function scheduleAutosave(nextDraft: IntakeBoardCase) {
     clearAutosaveTimer();
@@ -810,7 +1023,7 @@ function SavedCaseRow({
 
     setSaveIndicator({ status: "saving", message: "Saving soon…" });
     autosaveTimerRef.current = window.setTimeout(
-      () => queueAutosave(latestDraftRef.current),
+      () => void queueAutosave(latestDraftRef.current),
       AUTOSAVE_DELAY_MS,
     );
   }
@@ -824,14 +1037,14 @@ function SavedCaseRow({
     setDraft(nextDraft);
 
     if (saveImmediately) {
-      queueAutosave(nextDraft);
+      void queueAutosave(nextDraft);
     } else {
       scheduleAutosave(nextDraft);
     }
   }
 
-  function flushAutosave() {
-    queueAutosave(latestDraftRef.current);
+  function flushAutosave(): Promise<boolean> {
+    return queueAutosave(latestDraftRef.current);
   }
 
   async function uploadAttachments(event: ChangeEvent<HTMLInputElement>) {
@@ -1732,6 +1945,15 @@ function makeInitialGroups(
     [],
     todayDateValue,
   );
+}
+
+function storeDraftGroups(groups: DraftGroup[]) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // Draft persistence is best-effort and never blocks intake.
+  }
 }
 
 function loadStoredGroups(
