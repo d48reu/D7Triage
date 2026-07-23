@@ -318,7 +318,7 @@ export async function createStaffIntakeCaseAction(
   if (!(await hasStaffSession())) {
     return {
       status: "error",
-      message: "Your staff session expired. Sign in again before creating the case.",
+      message: "Your staff session expired. Sign in again before saving the case.",
     };
   }
 
@@ -335,6 +335,11 @@ export async function createStaffIntakeCaseAction(
   const residentPhone = String(formData.get("residentPhone") ?? "").trim();
   const createdDate = String(formData.get("createdDate") ?? "").trim();
   const submittedStatus = String(formData.get("status") ?? "").trim();
+  const assignedStaffId =
+    String(formData.get("assignedStaffId") ?? "").trim() || null;
+  const assignedStaffMember = assignedStaffId
+    ? getStaffMemberById(assignedStaffId)
+    : null;
   const preferredLanguage =
     String(formData.get("preferredLanguage") ?? "").trim() || "English";
   const latitude = readOptionalNumber(formData, "latitude");
@@ -365,6 +370,16 @@ export async function createStaffIntakeCaseAction(
     return {
       status: "error",
       message: "Choose a valid case status.",
+    };
+  }
+
+  if (
+    assignedStaffId &&
+    (!assignedStaffMember || !assignedStaffMember.isActive)
+  ) {
+    return {
+      status: "error",
+      message: "Choose an active staff member for the assignment.",
     };
   }
 
@@ -453,7 +468,7 @@ export async function createStaffIntakeCaseAction(
   if (isDemoMode()) {
     return {
       status: "error",
-      message: "Case creation is disabled in the hosted demo.",
+      message: "Case saving is disabled in the hosted demo.",
     };
   }
 
@@ -479,14 +494,24 @@ export async function createStaffIntakeCaseAction(
   });
 
   if (!report) {
-    return { status: "error", message: "Report could not be created." };
+    return { status: "error", message: "Case could not be saved." };
   }
 
   await savePhotoAttachments(report.id, photos);
+  if (assignedStaffId) {
+    assignIssueReport({ reportId: report.id, staffMemberId: assignedStaffId });
+    await notifyAssignedStaff({
+      reportId: report.id,
+      staffMemberId: assignedStaffId,
+    });
+  }
+
+  revalidatePath("/staff");
+  revalidatePath("/staff/my");
 
   return {
     status: "success",
-    message: "Case created in the staff queue.",
+    message: "Case saved to the staff queue.",
     reportId: report.id,
     publicTrackingToken: report.publicTrackingToken,
     createdAt: report.createdAt,
@@ -539,6 +564,11 @@ export async function updateStaffIntakeCaseAction(
   const residentName = String(formData.get("residentName") ?? "").trim();
   const residentPhone = String(formData.get("residentPhone") ?? "").trim();
   const submittedStatus = String(formData.get("status") ?? "").trim();
+  const submittedStaffMemberId =
+    String(formData.get("assignedStaffId") ?? "").trim() || null;
+  const submittedStaffMember = submittedStaffMemberId
+    ? getStaffMemberById(submittedStaffMemberId)
+    : null;
   const createdDate = String(formData.get("createdDate") ?? "").trim();
   const createdAt = parseStaffCreatedDate(createdDate);
 
@@ -555,6 +585,18 @@ export async function updateStaffIntakeCaseAction(
 
   if (!ISSUE_STATUSES.includes(submittedStatus as IssueStatus)) {
     return { status: "error", message: "Choose a valid status." };
+  }
+
+  if (
+    submittedStaffMemberId &&
+    (!submittedStaffMember ||
+      (!submittedStaffMember.isActive &&
+        submittedStaffMemberId !== report.assignedStaffId))
+  ) {
+    return {
+      status: "error",
+      message: "Choose an active staff member for the assignment.",
+    };
   }
 
   if (!createdAt) {
@@ -599,6 +641,11 @@ export async function updateStaffIntakeCaseAction(
     addressText,
   });
   const nextStatus = submittedStatus as IssueStatus;
+  const currentStaffMember = report.assignedStaffId
+    ? getStaffMemberById(report.assignedStaffId)
+    : null;
+  const assignmentChanged =
+    (report.assignedStaffId ?? null) !== submittedStaffMemberId;
   const addressChanged = report.addressText !== addressText;
   const detailChanges = [
     buildTextAuditChange("createdAt", "Case date", report.createdAt.slice(0, 10), createdDate),
@@ -609,6 +656,12 @@ export async function updateStaffIntakeCaseAction(
     buildTextAuditChange("residentName", "Constituent", report.residentName, residentName),
     buildTextAuditChange("residentEmail", "Email", report.residentEmail, residentEmail),
     buildTextAuditChange("residentPhone", "Phone", report.residentPhone, residentPhone),
+    buildTextAuditChange(
+      "assignedStaffId",
+      "Assignment",
+      currentStaffMember?.name ?? "Unassigned",
+      submittedStaffMember?.name ?? "Unassigned",
+    ),
   ].filter((change): change is CaseDetailAuditChange => Boolean(change));
 
   updateIssueDetails({
@@ -644,6 +697,19 @@ export async function updateStaffIntakeCaseAction(
     updateIssueStatus({ reportId, status: nextStatus });
   }
 
+  if (assignmentChanged) {
+    assignIssueReport({
+      reportId,
+      staffMemberId: submittedStaffMemberId,
+    });
+    if (submittedStaffMemberId) {
+      await notifyAssignedStaff({
+        reportId,
+        staffMemberId: submittedStaffMemberId,
+      });
+    }
+  }
+
   if (detailChanges.length > 0) {
     addIssueAuditEvents({
       reportId,
@@ -664,6 +730,7 @@ export async function updateStaffIntakeCaseAction(
   }
 
   revalidatePath("/staff");
+  revalidatePath("/staff/my");
   revalidatePath("/staff/analytics");
   revalidatePath(`/staff/reports/${reportId}`);
   revalidatePath(`/report/${updatedReport.publicTrackingToken}`);
@@ -676,6 +743,7 @@ export async function updateStaffIntakeCaseAction(
       id: updatedReport.id,
       publicTrackingToken: updatedReport.publicTrackingToken,
       status: updatedReport.status,
+      assignedStaffId: updatedReport.assignedStaffId,
       category: updatedReport.category,
       description: updatedReport.description,
       addressText: updatedReport.addressText,

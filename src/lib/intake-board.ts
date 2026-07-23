@@ -2,6 +2,7 @@ export type IntakeBoardCase = {
   id: string;
   publicTrackingToken: string;
   status: string;
+  assignedStaffId: string | null;
   category: string;
   description: string;
   addressText: string;

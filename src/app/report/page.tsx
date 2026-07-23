@@ -14,6 +14,7 @@ import {
   getJurisdictionConfig,
   listAttachments,
   listIssueReports,
+  listStaffMembers,
 } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 
@@ -26,10 +27,17 @@ export default async function ReportPage() {
   const demoMode = isDemoMode();
   const now = new Date();
   const jurisdictionConfig = getJurisdictionConfig();
+  const staffMembers = listStaffMembers().map((staffMember) => ({
+    id: staffMember.id,
+    name: staffMember.name,
+    title: staffMember.title,
+    isActive: staffMember.isActive,
+  }));
   const existingCases: IntakeBoardCase[] = listIssueReports().map((report) => ({
     id: report.id,
     publicTrackingToken: report.publicTrackingToken,
     status: report.status,
+    assignedStaffId: report.assignedStaffId,
     category: report.category,
     description: report.description,
     addressText: report.addressText,
@@ -102,7 +110,7 @@ export default async function ReportPage() {
           <div className="mt-6 rounded-lg border border-[#edf0f7] bg-[#fbfcff] p-4 text-sm shadow-sm">
             <div className="font-semibold">One board, real cases</div>
             <p className="mt-2 text-xs leading-5 text-[#68728f]">
-              Saved rows are in the staff queue. Draft rows remain on this computer until created.
+              Saved rows are in the staff queue. Draft rows remain on this computer until saved.
             </p>
           </div>
         </aside>
@@ -136,6 +144,7 @@ export default async function ReportPage() {
           <ReportForm
             demoMode={demoMode}
             existingCases={existingCases}
+            staffMembers={staffMembers}
             currentGroupLabel={formatIntakeMonthGroup(now)}
             todayDateValue={formatDistrictDateInputValue(now)}
           />

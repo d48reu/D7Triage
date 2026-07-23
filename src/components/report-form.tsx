@@ -39,7 +39,7 @@ const MAX_PHOTO_COUNT = 4;
 const MAX_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
 const AUTOSAVE_DELAY_MS = 900;
 const BOARD_GRID =
-  "grid-cols-[44px_250px_130px_160px_340px_280px_155px_220px_190px_155px_170px]";
+  "grid-cols-[44px_250px_190px_130px_160px_340px_280px_155px_220px_155px_190px_170px]";
 const ALLOWED_PHOTO_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -65,6 +65,14 @@ type DraftRow = {
   residentPhone: string;
   residentEmail: string;
   category: string;
+  assignedStaffId: string;
+};
+
+type AssignmentOption = {
+  id: string;
+  name: string;
+  title: string | null;
+  isActive: boolean;
 };
 
 type DraftGroup = {
@@ -96,11 +104,13 @@ const AUTOSAVE_ACTION_STATE: UpdateIntakeCaseState = {
 export function ReportForm({
   demoMode = false,
   existingCases,
+  staffMembers,
   currentGroupLabel,
   todayDateValue,
 }: {
   demoMode?: boolean;
   existingCases: IntakeBoardCase[];
+  staffMembers: AssignmentOption[];
   currentGroupLabel: string;
   todayDateValue: string;
 }) {
@@ -237,6 +247,7 @@ export function ReportForm({
       id: createdCase.reportId,
       publicTrackingToken: createdCase.publicTrackingToken,
       status: row.status,
+      assignedStaffId: row.assignedStaffId || null,
       category: row.category,
       description: row.description,
       addressText: row.addressText,
@@ -248,9 +259,8 @@ export function ReportForm({
       attachmentCount: createdCase.attachmentCount,
     };
 
-    setSavedCases((current) => [savedCase, ...current]);
-    setGroups((current) => {
-      const nextGroups = current.map((group) => {
+    const nextGroups = ensureCaseMonthGroup(
+      groups.map((group) => {
         if (group.id !== groupId) return group;
         const remainingRows = group.rows.filter((item) => item.id !== row.id);
         return {
@@ -260,9 +270,17 @@ export function ReportForm({
               ? remainingRows
               : [makeBlankRow(todayDateValue)],
         };
-      });
-      return ensureCaseMonthGroup(nextGroups, createdCase.createdAt);
-    });
+      }),
+      createdCase.createdAt,
+    );
+
+    setSavedCases((current) => [savedCase, ...current]);
+    setGroups(nextGroups);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextGroups));
+    } catch {
+      // Draft persistence is best-effort and never blocks a successful save.
+    }
     setLastCreatedCase(createdCase);
   }
 
@@ -319,7 +337,7 @@ export function ReportForm({
         </div>
         <div className="text-xs text-[#68728f]">
           {savedCases.length} saved case{savedCases.length === 1 ? "" : "s"} ·
-          Saved rows autosave. New drafts stay local until created.
+          Saved rows autosave. New drafts stay local until saved.
         </div>
       </div>
 
@@ -328,7 +346,7 @@ export function ReportForm({
           role="status"
           className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded border border-[#a8dfc5] bg-[#effbf5] px-4 py-3 text-sm text-[#12613c]"
         >
-          <span className="font-semibold">Case created. A fresh draft row is ready.</span>
+          <span className="font-semibold">Case saved. A fresh draft row is ready.</span>
           <div className="flex items-center gap-3">
             <Link
               href={`/staff/reports/${lastCreatedCase.reportId}`}
@@ -340,7 +358,7 @@ export function ReportForm({
               type="button"
               onClick={() => setLastCreatedCase(null)}
               className="rounded px-2 py-1 hover:bg-white"
-              aria-label="Dismiss case created message"
+              aria-label="Dismiss case saved message"
             >
               Dismiss
             </button>
@@ -397,13 +415,14 @@ export function ReportForm({
                   groupLabel={group.label}
                   accentColor={group.color}
                 >
-                  <div className="min-w-[2094px] border-y border-r border-[#c9d3e8]">
+                  <div className="min-w-[2284px] border-y border-r border-[#c9d3e8]">
                     <BoardHeader />
                     {group.rows.map((row) => (
                       <DraftCaseRow
                         key={row.id}
                         row={row}
                         demoMode={demoMode}
+                        staffMembers={staffMembers}
                         onChange={(patch) => updateRow(group.id, row.id, patch)}
                         onRemove={() => removeRow(group.id, row.id)}
                         onCreated={(createdCase) =>
@@ -416,6 +435,7 @@ export function ReportForm({
                         key={intakeCase.id}
                         intakeCase={intakeCase}
                         demoMode={demoMode}
+                        staffMembers={staffMembers}
                         onUpdated={handleUpdatedCase}
                       />
                     ))}
@@ -430,7 +450,7 @@ export function ReportForm({
                           + Add item
                         </button>
                       </Cell>
-                      {Array.from({ length: 9 }).map((_, index) => (
+                      {Array.from({ length: 10 }).map((_, index) => (
                         <Cell key={index} />
                       ))}
                     </div>
@@ -553,7 +573,7 @@ function BoardScrollArea({
           aria-label={`Horizontal scrollbar for ${groupLabel} cases`}
           tabIndex={0}
         >
-          <div className="h-px min-w-[2094px]" />
+          <div className="h-px min-w-[2284px]" />
         </div>
         <button
           type="button"
@@ -659,10 +679,12 @@ function GroupTitleMenu({
 function SavedCaseRow({
   intakeCase,
   demoMode,
+  staffMembers,
   onUpdated,
 }: {
   intakeCase: IntakeBoardCase;
   demoMode: boolean;
+  staffMembers: AssignmentOption[];
   onUpdated: (updatedCase: IntakeBoardCase) => void;
 }) {
   const [draft, setDraft] = useState(intakeCase);
@@ -892,6 +914,24 @@ function SavedCaseRow({
         />
       </Cell>
       <Cell>
+        <select
+          name="category"
+          required
+          value={draft.category}
+          onChange={(event) =>
+            updateDraft({ category: event.target.value }, true)
+          }
+          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-[#eaf5ff] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          aria-label="Category"
+        >
+          {ISSUE_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </Cell>
+      <Cell>
         <input
           name="createdDate"
           type="date"
@@ -966,28 +1006,22 @@ function SavedCaseRow({
           onBlur={flushAutosave}
         />
       </Cell>
-      <Cell>
-        <select
-          name="category"
-          required
-          value={draft.category}
-          onChange={(event) =>
-            updateDraft({ category: event.target.value }, true)
-          }
-          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-[#eaf5ff] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
-          aria-label="Category"
-        >
-          {ISSUE_CATEGORIES.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-      </Cell>
       <Cell center>
         <span className="px-2 text-center text-xs text-[#4d5672]">
           {draft.districtLabel}
         </span>
+      </Cell>
+      <Cell>
+        <BoardAssignmentSelect
+          value={draft.assignedStaffId ?? ""}
+          staffMembers={staffMembers}
+          onChange={(assignedStaffId) =>
+            updateDraft(
+              { assignedStaffId: assignedStaffId || null },
+              true,
+            )
+          }
+        />
       </Cell>
       <Cell
         center
@@ -1080,12 +1114,14 @@ function SavedCaseRow({
 function DraftCaseRow({
   row,
   demoMode,
+  staffMembers,
   onChange,
   onRemove,
   onCreated,
 }: {
   row: DraftRow;
   demoMode: boolean;
+  staffMembers: AssignmentOption[];
   onChange: (patch: Partial<DraftRow>) => void;
   onRemove: () => void;
   onCreated: (createdCase: CreatedCaseMetadata) => void;
@@ -1261,6 +1297,22 @@ function DraftCaseRow({
         />
       </Cell>
       <Cell>
+        <select
+          name="category"
+          required
+          value={row.category}
+          onChange={(event) => onChange({ category: event.target.value })}
+          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          aria-label="Category"
+        >
+          {ISSUE_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </Cell>
+      <Cell>
         <input
           name="createdDate"
           type="date"
@@ -1331,22 +1383,6 @@ function DraftCaseRow({
           onChange={(value) => onChange({ residentEmail: value })}
         />
       </Cell>
-      <Cell>
-        <select
-          name="category"
-          required
-          value={row.category}
-          onChange={(event) => onChange({ category: event.target.value })}
-          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
-          aria-label="Category"
-        >
-          {ISSUE_CATEGORIES.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-      </Cell>
       <Cell center>
         <div className="flex flex-col items-center gap-1 px-2 py-2 text-center">
           <button
@@ -1376,6 +1412,13 @@ function DraftCaseRow({
             {jurisdictionPreview.message || locationState.message || "Optional preview"}
           </span>
         </div>
+      </Cell>
+      <Cell>
+        <BoardAssignmentSelect
+          value={row.assignedStaffId}
+          staffMembers={staffMembers}
+          onChange={(assignedStaffId) => onChange({ assignedStaffId })}
+        />
       </Cell>
       <Cell
         center
@@ -1409,7 +1452,7 @@ function DraftCaseRow({
             disabled={isPending || demoMode}
             className="w-full rounded bg-[#0073ea] px-2 py-1.5 text-xs font-semibold text-white hover:bg-[#0060b9] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isPending ? "Creating…" : demoMode ? "Demo only" : "Create case"}
+            {isPending ? "Saving…" : demoMode ? "Demo only" : "Save case"}
           </button>
           <button
             type="button"
@@ -1427,7 +1470,7 @@ function DraftCaseRow({
                 : "text-[#4d5672]"
             }`}
           >
-            {photoError || state.message || "Ctrl + Enter to create"}
+            {photoError || state.message || "Ctrl + Enter to save"}
           </span>
         </div>
       </Cell>
@@ -1440,14 +1483,15 @@ function BoardHeader() {
     <div className={`grid ${BOARD_GRID} bg-white text-sm text-[#323650]`}>
       <HeaderCell label="Type" />
       <HeaderCell label="Constituent" />
+      <HeaderCell label="Category *" />
       <HeaderCell label="Date" />
       <HeaderCell label="Status" />
       <HeaderCell label="Call Summary *" />
       <HeaderCell label="Address *" />
       <HeaderCell label="Phone" />
       <HeaderCell label="Email *" />
-      <HeaderCell label="Category *" />
       <HeaderCell label="District" />
+      <HeaderCell label="Assignment" />
       <HeaderCell
         label="Files / Case"
         className="sticky right-0 z-20 shadow-[-8px_0_12px_-12px_#5b6680]"
@@ -1487,6 +1531,39 @@ function Cell({
     >
       {children}
     </div>
+  );
+}
+
+function BoardAssignmentSelect({
+  value,
+  staffMembers,
+  onChange,
+}: {
+  value: string;
+  staffMembers: AssignmentOption[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      name="assignedStaffId"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-full w-full cursor-pointer bg-transparent px-3 text-sm outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+      aria-label="Assignment"
+    >
+      <option value="">Unassigned</option>
+      {staffMembers.map((staffMember) => (
+        <option
+          key={staffMember.id}
+          value={staffMember.id}
+          disabled={!staffMember.isActive && staffMember.id !== value}
+        >
+          {staffMember.name}
+          {staffMember.title ? ` — ${staffMember.title}` : ""}
+          {!staffMember.isActive ? " (inactive)" : ""}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -1605,6 +1682,7 @@ function savedCaseSnapshot(intakeCase: IntakeBoardCase) {
     intakeCase.residentName,
     dateInputValue(intakeCase.createdAt),
     intakeCase.status,
+    intakeCase.assignedStaffId,
     intakeCase.description,
     intakeCase.addressText,
     intakeCase.residentPhone,
@@ -1619,6 +1697,7 @@ function buildSavedCaseFormData(intakeCase: IntakeBoardCase) {
   formData.set("residentName", intakeCase.residentName);
   formData.set("createdDate", dateInputValue(intakeCase.createdAt));
   formData.set("status", intakeCase.status);
+  formData.set("assignedStaffId", intakeCase.assignedStaffId ?? "");
   formData.set("description", intakeCase.description);
   formData.set("addressText", intakeCase.addressText);
   formData.set("residentPhone", intakeCase.residentPhone);
@@ -1638,6 +1717,7 @@ function makeBlankRow(todayDateValue: string, id = makeId("row")): DraftRow {
     residentPhone: "",
     residentEmail: "",
     category: "Other / unsure",
+    assignedStaffId: "",
   };
 }
 
@@ -1851,6 +1931,8 @@ function normalizeStoredGroup(
         ? row.dateValue
         : todayDateValue,
       status: ISSUE_STATUSES.includes(row.status) ? row.status : "received",
+      assignedStaffId:
+        typeof row.assignedStaffId === "string" ? row.assignedStaffId : "",
     })),
   };
 }

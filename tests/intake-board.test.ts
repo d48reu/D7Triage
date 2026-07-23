@@ -12,6 +12,7 @@ const intakeCase: IntakeBoardCase = {
   id: "report-1",
   publicTrackingToken: "token-1",
   status: "received",
+  assignedStaffId: null,
   category: "STREETLIGHTS",
   description: "Streetlight is out near the park",
   addressText: "3750 S Dixie Highway, Miami, FL",
