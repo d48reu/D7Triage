@@ -187,12 +187,12 @@ export function ReportForm({
       return [
         ...current,
         {
-        id: makeId("group"),
-        label,
-        caseMonthLabel: label,
-        color: GROUP_COLORS[current.length % GROUP_COLORS.length].value,
-        collapsed: false,
-        rows: [makeBlankRow(todayLabel)],
+          id: makeId("group"),
+          label,
+          caseMonthLabel: label,
+          color: GROUP_COLORS[current.length % GROUP_COLORS.length].value,
+          collapsed: false,
+          rows: [makeBlankRow(todayLabel)],
         },
       ].sort((a, b) => compareIntakeMonthLabelsDescending(a.label, b.label));
     });
@@ -200,7 +200,11 @@ export function ReportForm({
 
   function addCurrentItem() {
     const currentGroup =
-      groups.find((group) => group.label === currentGroupLabel) ?? groups[0];
+      groups.find(
+        (group) =>
+          group.label === currentGroupLabel ||
+          group.caseMonthLabel === currentGroupLabel,
+      ) ?? groups[0];
     if (currentGroup) addRow(currentGroup.id);
   }
 
@@ -279,7 +283,8 @@ export function ReportForm({
           ) : null}
         </div>
         <div className="text-xs text-[#68728f]">
-          {savedCases.length} saved case{savedCases.length === 1 ? "" : "s"} · Draft edits save on this computer.
+          {savedCases.length} saved case{savedCases.length === 1 ? "" : "s"} ·
+          Click any blue draft cell to edit.
         </div>
       </div>
 
@@ -335,36 +340,14 @@ export function ReportForm({
                 >
                   {group.collapsed ? ">" : "⌄"}
                 </button>
-                <input
+                <GroupTitleMenu
                   id={`${group.id}-label`}
-                  value={group.label}
-                  onChange={(event) =>
-                    updateGroup(group.id, { label: event.target.value })
-                  }
-                  className="min-w-48 bg-transparent text-[20px] font-semibold outline-none focus:bg-[#f7f9fd]"
-                  style={{ color: group.color }}
-                  aria-label="Group name"
+                  group={group}
+                  onChange={(patch) => updateGroup(group.id, patch)}
                 />
                 <span className="text-xs text-[#7b839b]">
                   {itemCount} item{itemCount === 1 ? "" : "s"}
                 </span>
-                <label className="flex items-center gap-2 text-xs font-medium text-[#4d5672]">
-                  <span>Color</span>
-                  <select
-                    value={group.color}
-                    onChange={(event) =>
-                      updateGroup(group.id, { color: event.target.value })
-                    }
-                    className="h-8 rounded border border-[#c9d3e8] bg-white px-2"
-                    aria-label={`Color for ${group.label}`}
-                  >
-                    {GROUP_COLORS.map((color) => (
-                      <option key={color.value} value={color.value}>
-                        {color.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <button
                   type="button"
                   onClick={() => addRow(group.id)}
@@ -419,6 +402,80 @@ export function ReportForm({
         })}
       </div>
     </div>
+  );
+}
+
+function GroupTitleMenu({
+  id,
+  group,
+  onChange,
+}: {
+  id: string;
+  group: DraftGroup;
+  onChange: (patch: Partial<DraftGroup>) => void;
+}) {
+  return (
+    <details className="group/title relative">
+      <summary
+        id={id}
+        className="flex min-w-48 cursor-pointer list-none items-center gap-2 rounded px-2 py-1 text-[20px] font-semibold outline-none hover:bg-[#f5f7fb] focus-visible:ring-2 focus-visible:ring-[#0073ea] [&::-webkit-details-marker]:hidden"
+        style={{ color: group.color }}
+        aria-label={`Edit ${group.label} group name and color`}
+      >
+        <span>{group.label}</span>
+        <span
+          aria-hidden="true"
+          className="text-xs transition-transform group-open/title:rotate-180"
+        >
+          ▼
+        </span>
+      </summary>
+      <div className="absolute left-0 top-full z-30 mt-2 w-72 rounded-lg border border-[#c9d3e8] bg-white p-4 text-[#323650] shadow-xl">
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-[#68728f]">
+            Group name
+          </span>
+          <input
+            value={group.label}
+            onChange={(event) => onChange({ label: event.target.value })}
+            className="mt-2 h-10 w-full rounded border border-[#b8c4da] px-3 text-sm font-semibold outline-none focus:border-[#0073ea] focus:ring-2 focus:ring-[#cce5ff]"
+            aria-label="Group name"
+          />
+        </label>
+        <fieldset className="mt-4">
+          <legend className="text-xs font-semibold uppercase tracking-[0.08em] text-[#68728f]">
+            Group color
+          </legend>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {GROUP_COLORS.map((color) => (
+              <button
+                key={color.value}
+                type="button"
+                onClick={() => onChange({ color: color.value })}
+                className={`grid size-9 place-items-center rounded-full border-2 transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0073ea] ${
+                  group.color === color.value
+                    ? "border-[#181b34]"
+                    : "border-transparent"
+                }`}
+                aria-label={`Set ${group.label} group color to ${color.name}`}
+                aria-pressed={group.color === color.value}
+                title={color.name}
+              >
+                <span
+                  className="grid size-6 place-items-center rounded-full text-xs font-bold text-white"
+                  style={{ backgroundColor: color.value }}
+                >
+                  {group.color === color.value ? "✓" : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <p className="mt-3 text-xs leading-5 text-[#68728f]">
+          Group name and color changes save on this computer.
+        </p>
+      </div>
+    </details>
   );
 }
 
@@ -680,10 +737,18 @@ function DraftCaseRow({
         />
       </Cell>
       <Cell center>
-        <span className="text-xs">{row.dateLabel}</span>
+        <span
+          className="text-xs text-[#59627b]"
+          title="The case creation date is set automatically."
+        >
+          {row.dateLabel}
+        </span>
       </Cell>
       <Cell center>
-        <span className="rounded bg-[#fff0b8] px-2 py-1 text-xs font-semibold text-[#7a5600]">
+        <span
+          className="rounded bg-[#fff0b8] px-2 py-1 text-xs font-semibold text-[#7a5600]"
+          title="The case enters the staff queue as Received."
+        >
           Not created
         </span>
       </Cell>
@@ -735,7 +800,7 @@ function DraftCaseRow({
           required
           value={row.category}
           onChange={(event) => onChange({ category: event.target.value })}
-          className="h-full w-full bg-transparent px-3 outline-none focus:bg-white"
+          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
           aria-label="Category"
         >
           {ISSUE_CATEGORIES.map((category) => (
@@ -900,7 +965,7 @@ function BoardInput({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="h-full min-h-16 w-full bg-transparent px-3 outline-none placeholder:text-[#6c758f] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+      className="h-full min-h-16 w-full cursor-text bg-transparent px-3 outline-none placeholder:text-[#6c758f] hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
     />
   );
 }
@@ -934,7 +999,7 @@ function BoardTextarea({
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={onKeyDown}
       placeholder={placeholder}
-      className="h-full min-h-24 w-full resize-none bg-transparent px-3 py-2 outline-none placeholder:text-[#6c758f] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+      className="h-full min-h-24 w-full cursor-text resize-none bg-transparent px-3 py-2 outline-none placeholder:text-[#6c758f] hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
     />
   );
 }
@@ -1024,7 +1089,13 @@ function mergeDraftGroups(
     new Set(existingCases.map((intakeCase) => formatIntakeMonthGroup(intakeCase.createdAt))),
   ).sort(compareIntakeMonthLabelsDescending);
 
-  const knownLabels = new Set(storedGroups.map((group) => group.label));
+  const knownLabels = new Set(
+    storedGroups.flatMap((group) =>
+      group.caseMonthLabel
+        ? [group.label, group.caseMonthLabel]
+        : [group.label],
+    ),
+  );
   const missingCaseGroups = caseLabels
     .filter((label) => !knownLabels.has(label))
     .map((label, index) => ({
@@ -1037,7 +1108,9 @@ function mergeDraftGroups(
     }));
   const merged = [...storedGroups, ...missingCaseGroups];
   const existingCurrentGroup = merged.find(
-    (group) => group.label === currentGroupLabel,
+    (group) =>
+      group.label === currentGroupLabel ||
+      group.caseMonthLabel === currentGroupLabel,
   );
 
   if (
