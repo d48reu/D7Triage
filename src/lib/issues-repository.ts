@@ -27,6 +27,13 @@ import { getDataDir, getDbPath } from "@/lib/data-paths";
 const DATA_DIR = getDataDir();
 const DB_PATH = getDbPath();
 
+const STAFF_ROSTER_ADDITIONS = [
+  {
+    id: "staff-karl-eugene-boehm",
+    name: "Karl Eugene Boehm",
+  },
+] as const;
+
 let db: Database.Database | null = null;
 
 export type IssueReport = {
@@ -1110,6 +1117,29 @@ function seedNotificationTemplates(database: Database.Database) {
   }
 }
 
+function applyStaffRosterAdditions(database: Database.Database) {
+  const insertStaffMember = database.prepare(`
+    insert into staff_members (
+      id, name, email, title, focus_areas, role_label, is_active, created_at, updated_at
+    )
+    select
+      @id, @name, null, null, null, null, 1, @createdAt, @updatedAt
+    where not exists (
+      select 1
+      from staff_members
+      where id = @id or lower(name) = lower(@name)
+    )
+  `);
+
+  for (const staffMember of STAFF_ROSTER_ADDITIONS) {
+    insertStaffMember.run({
+      ...staffMember,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    });
+  }
+}
+
 function seedDemoData(database: Database.Database) {
   if (!isDemoMode()) return;
 
@@ -1494,6 +1524,7 @@ function getDb() {
   seedRoutingData(db);
   seedJurisdictionSettings(db);
   seedNotificationTemplates(db);
+  applyStaffRosterAdditions(db);
   seedDemoData(db);
 
   return db;

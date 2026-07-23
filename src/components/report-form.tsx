@@ -866,6 +866,10 @@ function BoardScrollArea({
     }
   }
 
+  function focusScrollControl(element: HTMLElement) {
+    element.focus({ preventScroll: true });
+  }
+
   const atStart = scrollMetrics.left <= 2;
   const atEnd =
     scrollMetrics.max <= 0 ||
@@ -879,6 +883,7 @@ function BoardScrollArea({
         </span>
         <button
           type="button"
+          onPointerDown={(event) => focusScrollControl(event.currentTarget)}
           onClick={() => scrollBoardToEdge("start")}
           disabled={atStart}
           className="shrink-0 rounded border border-[#9aa8c4] bg-white px-2 py-1 text-xs font-semibold text-[#323650] hover:bg-[#f5f7fb] disabled:cursor-not-allowed disabled:opacity-40"
@@ -893,6 +898,7 @@ function BoardScrollArea({
           step={1}
           value={Math.min(scrollMetrics.left, scrollMetrics.max)}
           disabled={scrollMetrics.max <= 0}
+          onPointerDown={(event) => focusScrollControl(event.currentTarget)}
           onChange={(event) => setBoardScrollLeft(Number(event.target.value))}
           className="h-5 min-w-24 flex-1 cursor-ew-resize accent-[#0073ea] disabled:cursor-not-allowed"
           aria-label={`Horizontal position for ${groupLabel} cases`}
@@ -900,6 +906,7 @@ function BoardScrollArea({
         />
         <button
           type="button"
+          onPointerDown={(event) => focusScrollControl(event.currentTarget)}
           onClick={() => scrollBoardToEdge("end")}
           disabled={atEnd}
           className="shrink-0 rounded border border-[#9aa8c4] bg-white px-2 py-1 text-xs font-semibold text-[#323650] hover:bg-[#f5f7fb] disabled:cursor-not-allowed disabled:opacity-40"
@@ -910,6 +917,11 @@ function BoardScrollArea({
       </div>
       <div
         ref={boardScrollerRef}
+        onPointerDown={(event) => {
+          if (event.target === event.currentTarget) {
+            focusScrollControl(event.currentTarget);
+          }
+        }}
         onScroll={(event) => recordBoardScroll(event.currentTarget)}
         onKeyDown={handleBoardKeyDown}
         tabIndex={0}
