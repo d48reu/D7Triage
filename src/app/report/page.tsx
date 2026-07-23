@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DemoSiteNotice } from "@/components/demo-site-notice";
+import { IntakeWorkspaceShell } from "@/components/intake-workspace-shell";
 import { ReportForm } from "@/components/report-form";
 import { isDemoMode } from "@/lib/demo-mode";
 import {
@@ -79,42 +80,7 @@ export default async function ReportPage() {
         </div>
       </header>
 
-      <div className="grid min-h-[calc(100vh-44px)] grid-cols-[248px_1fr] max-lg:grid-cols-1">
-        <aside className="border-r border-[#d9e0ef] bg-white px-3 py-3 max-lg:hidden">
-          <nav className="space-y-1 text-sm text-[#48506c]" aria-label="Staff workspace">
-            <RailLink href="/staff" label="Case Dashboard" />
-            <RailLink href="/staff/my" label="My Assignments" />
-            <RailLink href="/staff/routing" label="Routing + Staff" />
-            <RailLink href="/staff/analytics" label="Analytics" />
-            <RailLink href="/staff/notifications" label="Notifications" />
-          </nav>
-
-          <div className="mt-7 text-xs font-semibold text-[#181b34]">Workspace</div>
-          <div className="mt-3 flex items-center gap-2 rounded border border-[#c9d3e8] bg-[#f7f8fc] px-2 py-2">
-            <span className="rounded bg-[#ff5ac8] px-1.5 py-1 text-xs font-bold text-white">
-              D7
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-              D7 Main workflow
-            </span>
-          </div>
-          <Link
-            href="/report"
-            aria-current="page"
-            className="mt-3 flex items-center gap-2 rounded bg-[#eaf3ff] px-3 py-2 text-sm font-semibold text-[#181b34]"
-          >
-            <span className="size-3 rounded-sm border border-[#8b94ad] bg-white" />
-            Constituent Calls
-          </Link>
-
-          <div className="mt-6 rounded-lg border border-[#edf0f7] bg-[#fbfcff] p-4 text-sm shadow-sm">
-            <div className="font-semibold">One board, real cases</div>
-            <p className="mt-2 text-xs leading-5 text-[#68728f]">
-              Saved rows are in the staff queue. Draft rows remain on this computer until saved.
-            </p>
-          </div>
-        </aside>
-
+      <IntakeWorkspaceShell>
         <section className="min-w-0 bg-white">
           <div className="border-b border-[#d9e0ef] px-8 pt-6 max-md:px-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -149,7 +115,7 @@ export default async function ReportPage() {
             todayDateValue={formatDistrictDateInputValue(now)}
           />
         </section>
-      </div>
+      </IntakeWorkspaceShell>
     </main>
   );
 }
@@ -166,12 +132,4 @@ function formatDistrictDateInputValue(date: Date) {
   );
 
   return `${values.year}-${values.month}-${values.day}`;
-}
-
-function RailLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link href={href} className="block rounded px-3 py-2 hover:bg-[#f5f7fb]">
-      {label}
-    </Link>
-  );
 }

@@ -36,11 +36,10 @@ import {
 
 const STORAGE_KEY = "district7.intake-board.v2";
 const LEGACY_STORAGE_KEY = "district7.intake-board.v1";
+const COLUMN_WIDTHS_STORAGE_KEY = "district7.intake-column-widths.v1";
 const MAX_PHOTO_COUNT = 4;
 const MAX_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
 const AUTOSAVE_DELAY_MS = 900;
-const BOARD_GRID =
-  "grid-cols-[44px_250px_190px_130px_160px_340px_280px_155px_220px_155px_190px_170px]";
 const ALLOWED_PHOTO_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -55,6 +54,88 @@ const GROUP_COLORS = [
   { name: "Orange", value: "#fdab3d" },
   { name: "Purple", value: "#784bd1" },
 ] as const;
+
+const BOARD_COLUMN_SPECS = [
+  { key: "type", label: "Type", defaultWidth: 44, minWidth: 44, maxWidth: 80 },
+  {
+    key: "constituent",
+    label: "Constituent",
+    defaultWidth: 250,
+    minWidth: 150,
+    maxWidth: 420,
+  },
+  {
+    key: "category",
+    label: "Category *",
+    defaultWidth: 190,
+    minWidth: 140,
+    maxWidth: 320,
+  },
+  { key: "date", label: "Date", defaultWidth: 130, minWidth: 115, maxWidth: 180 },
+  {
+    key: "status",
+    label: "Status",
+    defaultWidth: 160,
+    minWidth: 130,
+    maxWidth: 230,
+  },
+  {
+    key: "summary",
+    label: "Call Summary *",
+    defaultWidth: 340,
+    minWidth: 200,
+    maxWidth: 600,
+  },
+  {
+    key: "address",
+    label: "Address *",
+    defaultWidth: 280,
+    minWidth: 180,
+    maxWidth: 520,
+  },
+  {
+    key: "phone",
+    label: "Phone",
+    defaultWidth: 155,
+    minWidth: 120,
+    maxWidth: 260,
+  },
+  {
+    key: "email",
+    label: "Email *",
+    defaultWidth: 220,
+    minWidth: 170,
+    maxWidth: 360,
+  },
+  {
+    key: "district",
+    label: "District",
+    defaultWidth: 155,
+    minWidth: 130,
+    maxWidth: 260,
+  },
+  {
+    key: "assignment",
+    label: "Assignment",
+    defaultWidth: 190,
+    minWidth: 150,
+    maxWidth: 360,
+  },
+  {
+    key: "files",
+    label: "Files / Case",
+    defaultWidth: 170,
+    minWidth: 150,
+    maxWidth: 260,
+  },
+] as const;
+
+type BoardColumnKey = (typeof BOARD_COLUMN_SPECS)[number]["key"];
+type BoardColumnWidths = Record<BoardColumnKey, number>;
+
+const DEFAULT_COLUMN_WIDTHS = Object.fromEntries(
+  BOARD_COLUMN_SPECS.map((column) => [column.key, column.defaultWidth]),
+) as BoardColumnWidths;
 
 type DraftRow = {
   id: string;
@@ -132,6 +213,7 @@ export function ReportForm({
   const [draftsLoaded, setDraftsLoaded] = useState(false);
   const [savedCases, setSavedCases] = useState(existingCases);
   const [searchQuery, setSearchQuery] = useState("");
+  const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS);
   const [navigationSaveMessage, setNavigationSaveMessage] = useState<
     string | null
   >(null);
@@ -153,6 +235,22 @@ export function ReportForm({
 
     return () => window.clearTimeout(loadTimer);
   }, [currentGroupLabel, existingCases, todayDateValue]);
+
+  useEffect(() => {
+    const loadTimer = window.setTimeout(() => {
+      try {
+        const storedWidths = window.localStorage.getItem(
+          COLUMN_WIDTHS_STORAGE_KEY,
+        );
+        if (!storedWidths) return;
+        setColumnWidths(normalizeColumnWidths(JSON.parse(storedWidths)));
+      } catch {
+        // Invalid or unavailable preferences fall back to the default widths.
+      }
+    }, 0);
+
+    return () => window.clearTimeout(loadTimer);
+  }, []);
 
   useEffect(() => {
     groupsRef.current = groups;
@@ -282,6 +380,43 @@ export function ReportForm({
     }
     return grouped;
   }, [visibleCases]);
+  const gridTemplateColumns = useMemo(
+    () =>
+      BOARD_COLUMN_SPECS.map(
+        (column) => `${columnWidths[column.key]}px`,
+      ).join(" "),
+    [columnWidths],
+  );
+  const boardWidth = useMemo(
+    () =>
+      BOARD_COLUMN_SPECS.reduce(
+        (total, column) => total + columnWidths[column.key],
+        0,
+      ),
+    [columnWidths],
+  );
+
+  function updateColumnWidth(columnKey: BoardColumnKey, width: number) {
+    const column = BOARD_COLUMN_SPECS.find(
+      (candidate) => candidate.key === columnKey,
+    );
+    if (!column) return;
+
+    const nextWidths = {
+      ...columnWidths,
+      [columnKey]: Math.min(
+        column.maxWidth,
+        Math.max(column.minWidth, Math.round(width)),
+      ),
+    };
+    setColumnWidths(nextWidths);
+    storeColumnWidths(nextWidths);
+  }
+
+  function resetColumnWidths() {
+    setColumnWidths(DEFAULT_COLUMN_WIDTHS);
+    storeColumnWidths(DEFAULT_COLUMN_WIDTHS);
+  }
 
   function updateGroup(groupId: string, patch: Partial<DraftGroup>) {
     updateGroups((current) =>
@@ -435,6 +570,14 @@ export function ReportForm({
           >
             New group
           </button>
+          <button
+            type="button"
+            onClick={resetColumnWidths}
+            className="h-9 rounded border border-[#c9d3e8] bg-white px-3 text-xs font-medium text-[#4d5672] hover:bg-[#f5f7fb]"
+            title="Restore the original table column widths"
+          >
+            Reset columns
+          </button>
           <label className="relative block">
             <span className="sr-only">Search saved cases</span>
             <input
@@ -542,15 +685,24 @@ export function ReportForm({
                 <BoardScrollArea
                   groupLabel={group.label}
                   accentColor={group.color}
+                  boardWidth={boardWidth}
                 >
-                  <div className="min-w-[2284px] border-y border-r border-[#c9d3e8]">
-                    <BoardHeader />
+                  <div
+                    className="border-y border-r border-[#c9d3e8]"
+                    style={{ width: boardWidth, minWidth: boardWidth }}
+                  >
+                    <BoardHeader
+                      gridTemplateColumns={gridTemplateColumns}
+                      columnWidths={columnWidths}
+                      onColumnWidthChange={updateColumnWidth}
+                    />
                     {group.rows.map((row) => (
                       <DraftCaseRow
                         key={row.id}
                         row={row}
                         demoMode={demoMode}
                         staffMembers={staffMembers}
+                        gridTemplateColumns={gridTemplateColumns}
                         onChange={(patch) => updateRow(group.id, row.id, patch)}
                         onRemove={() => removeRow(group.id, row.id)}
                         onCreated={(createdCase) =>
@@ -564,11 +716,15 @@ export function ReportForm({
                         intakeCase={intakeCase}
                         demoMode={demoMode}
                         staffMembers={staffMembers}
+                        gridTemplateColumns={gridTemplateColumns}
                         onUpdated={handleUpdatedCase}
                         onSaveController={registerCaseSaveController}
                       />
                     ))}
-                    <div className={`grid h-10 ${BOARD_GRID} bg-white text-sm text-[#6a728c]`}>
+                    <div
+                      className="grid h-10 bg-white text-sm text-[#6a728c]"
+                      style={{ gridTemplateColumns }}
+                    >
                       <Cell />
                       <Cell>
                         <button
@@ -597,100 +753,84 @@ export function ReportForm({
 function BoardScrollArea({
   groupLabel,
   accentColor,
+  boardWidth,
   children,
 }: {
   groupLabel: string;
   accentColor: string;
+  boardWidth: number;
   children: ReactNode;
 }) {
-  const topScrollerRef = useRef<HTMLDivElement>(null);
-  const topTrackRef = useRef<HTMLDivElement>(null);
   const boardScrollerRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef(0);
-  const [scrollEdges, setScrollEdges] = useState({
-    atStart: true,
-    atEnd: false,
+  const desiredEdgeRef = useRef<"start" | "end" | null>("start");
+  const [scrollMetrics, setScrollMetrics] = useState({
+    left: 0,
+    max: 0,
   });
 
-  function updateScrollEdges() {
-    const board = boardScrollerRef.current;
-    if (!board) return;
-
-    const maxScrollLeft = Math.max(0, board.scrollWidth - board.clientWidth);
-    const nextEdges = {
-      atStart: board.scrollLeft <= 2,
-      atEnd: board.scrollLeft >= maxScrollLeft - 2,
-    };
-    setScrollEdges((current) =>
-      current.atStart === nextEdges.atStart &&
-      current.atEnd === nextEdges.atEnd
-        ? current
-        : nextEdges,
-    );
-  }
-
   useEffect(() => {
-    const initialTopScroller = topScrollerRef.current;
-    const initialTopTrack = topTrackRef.current;
     const initialBoardScroller = boardScrollerRef.current;
-    if (!initialTopScroller || !initialTopTrack || !initialBoardScroller) return;
+    if (!initialBoardScroller) return;
 
     let active = true;
-    function remeasureScrollers() {
+    function remeasureBoard() {
       if (!active) return;
 
-      const topScroller = topScrollerRef.current;
-      const topTrack = topTrackRef.current;
-      const boardScroller = boardScrollerRef.current;
-      if (!topScroller || !topTrack || !boardScroller) return;
+      const board = boardScrollerRef.current;
+      if (!board) return;
 
-      const boardMax = Math.max(
-        0,
-        boardScroller.scrollWidth - boardScroller.clientWidth,
-      );
-      topTrack.style.width = `${Math.ceil(topScroller.clientWidth + boardMax)}px`;
-
-      const nextScrollLeft = scrollProgressRef.current * boardMax;
-      boardScroller.scrollLeft = nextScrollLeft;
-      topScroller.scrollLeft = nextScrollLeft;
-      updateScrollEdges();
+      const max = Math.max(0, board.scrollWidth - board.clientWidth);
+      const nextLeft =
+        desiredEdgeRef.current === "end"
+          ? max
+          : desiredEdgeRef.current === "start"
+            ? 0
+            : scrollProgressRef.current * max;
+      board.scrollLeft = nextLeft;
+      setScrollMetrics({ left: nextLeft, max });
     }
 
-    const resizeObserver = new ResizeObserver(remeasureScrollers);
-    resizeObserver.observe(initialTopScroller);
+    const resizeObserver = new ResizeObserver(remeasureBoard);
     resizeObserver.observe(initialBoardScroller);
     const boardContent = initialBoardScroller.firstElementChild;
     if (boardContent) resizeObserver.observe(boardContent);
 
-    const initialFrame = window.requestAnimationFrame(remeasureScrollers);
-    void document.fonts?.ready.then(remeasureScrollers);
-    window.addEventListener("resize", remeasureScrollers);
+    const initialFrame = window.requestAnimationFrame(remeasureBoard);
+    void document.fonts?.ready.then(remeasureBoard);
+    window.addEventListener("resize", remeasureBoard);
     return () => {
       active = false;
       window.cancelAnimationFrame(initialFrame);
       resizeObserver.disconnect();
-      window.removeEventListener("resize", remeasureScrollers);
+      window.removeEventListener("resize", remeasureBoard);
     };
   }, []);
 
-  function syncHorizontalScroll(
-    source: HTMLDivElement,
-    target: HTMLDivElement | null,
-  ) {
-    if (!target) return;
+  function recordBoardScroll(board: HTMLDivElement) {
+    const max = Math.max(0, board.scrollWidth - board.clientWidth);
+    const left = Math.min(board.scrollLeft, max);
+    scrollProgressRef.current = max > 0 ? left / max : 0;
+    desiredEdgeRef.current =
+      left <= 2 ? "start" : left >= max - 2 ? "end" : null;
+    setScrollMetrics({ left, max });
+  }
 
-    const sourceMax = Math.max(0, source.scrollWidth - source.clientWidth);
-    const nextScrollLeft = Math.min(source.scrollLeft, sourceMax);
-    scrollProgressRef.current =
-      sourceMax > 0 ? nextScrollLeft / sourceMax : 0;
+  function setBoardScrollLeft(left: number) {
+    const board = boardScrollerRef.current;
+    if (!board) return;
 
-    if (Math.abs(target.scrollLeft - nextScrollLeft) > 1) {
-      target.scrollLeft = nextScrollLeft;
-    }
-    updateScrollEdges();
+    const max = Math.max(0, board.scrollWidth - board.clientWidth);
+    const nextLeft = Math.min(max, Math.max(0, left));
+    desiredEdgeRef.current =
+      nextLeft <= 2 ? "start" : nextLeft >= max - 2 ? "end" : null;
+    scrollProgressRef.current = max > 0 ? nextLeft / max : 0;
+    board.scrollLeft = nextLeft;
+    setScrollMetrics({ left: nextLeft, max });
   }
 
   function scrollBoard(left: number) {
+    desiredEdgeRef.current = null;
     boardScrollerRef.current?.scrollBy({
       left,
       behavior: "auto",
@@ -701,10 +841,11 @@ function BoardScrollArea({
     const board = boardScrollerRef.current;
     if (!board) return;
 
-    board.scrollTo({
-      left: edge === "start" ? 0 : board.scrollWidth - board.clientWidth,
-      behavior: "auto",
-    });
+    desiredEdgeRef.current = edge;
+    scrollProgressRef.current = edge === "start" ? 0 : 1;
+    setBoardScrollLeft(
+      edge === "start" ? 0 : board.scrollWidth - board.clientWidth,
+    );
   }
 
   function handleBoardKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -725,6 +866,11 @@ function BoardScrollArea({
     }
   }
 
+  const atStart = scrollMetrics.left <= 2;
+  const atEnd =
+    scrollMetrics.max <= 0 ||
+    scrollMetrics.left >= scrollMetrics.max - 2;
+
   return (
     <div className="mt-3">
       <div className="sticky top-0 z-30 flex items-center gap-2 border border-[#c9d3e8] bg-white px-2 py-1.5 shadow-sm">
@@ -734,31 +880,28 @@ function BoardScrollArea({
         <button
           type="button"
           onClick={() => scrollBoardToEdge("start")}
-          disabled={scrollEdges.atStart}
+          disabled={atStart}
           className="shrink-0 rounded border border-[#9aa8c4] bg-white px-2 py-1 text-xs font-semibold text-[#323650] hover:bg-[#f5f7fb] disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={`Scroll ${groupLabel} cases left`}
         >
           ← Left
         </button>
-        <div
-          ref={topScrollerRef}
-          onScroll={(event) =>
-            syncHorizontalScroll(event.currentTarget, boardScrollerRef.current)
-          }
-          className="h-5 min-w-24 flex-1 overflow-x-scroll overscroll-x-contain rounded border border-[#d9e0ef] bg-[#f7f8fc]"
-          aria-label={`Horizontal scrollbar for ${groupLabel} cases`}
-          tabIndex={0}
-        >
-          <div
-            ref={topTrackRef}
-            className="h-px min-w-full"
-            style={{ width: 2284 }}
-          />
-        </div>
+        <input
+          type="range"
+          min={0}
+          max={Math.max(1, scrollMetrics.max)}
+          step={1}
+          value={Math.min(scrollMetrics.left, scrollMetrics.max)}
+          disabled={scrollMetrics.max <= 0}
+          onChange={(event) => setBoardScrollLeft(Number(event.target.value))}
+          className="h-5 min-w-24 flex-1 cursor-ew-resize accent-[#0073ea] disabled:cursor-not-allowed"
+          aria-label={`Horizontal position for ${groupLabel} cases`}
+          title="Drag to move left or right"
+        />
         <button
           type="button"
           onClick={() => scrollBoardToEdge("end")}
-          disabled={scrollEdges.atEnd}
+          disabled={atEnd}
           className="shrink-0 rounded border border-[#9aa8c4] bg-white px-2 py-1 text-xs font-semibold text-[#323650] hover:bg-[#f5f7fb] disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={`Scroll ${groupLabel} cases right`}
         >
@@ -767,14 +910,12 @@ function BoardScrollArea({
       </div>
       <div
         ref={boardScrollerRef}
-        onScroll={(event) =>
-          syncHorizontalScroll(event.currentTarget, topScrollerRef.current)
-        }
+        onScroll={(event) => recordBoardScroll(event.currentTarget)}
         onKeyDown={handleBoardKeyDown}
         tabIndex={0}
         className="mt-2 overflow-x-auto overscroll-x-contain border-l-8 outline-none focus-visible:ring-2 focus-visible:ring-[#0073ea]"
         style={{ borderLeftColor: accentColor }}
-        aria-label={`${groupLabel} cases table. Use the scrollbar or arrow keys to move left and right.`}
+        aria-label={`${groupLabel} cases table, ${boardWidth} pixels wide. Use the slider or arrow keys to move left and right.`}
       >
         {children}
       </div>
@@ -860,12 +1001,14 @@ function SavedCaseRow({
   intakeCase,
   demoMode,
   staffMembers,
+  gridTemplateColumns,
   onUpdated,
   onSaveController,
 }: {
   intakeCase: IntakeBoardCase;
   demoMode: boolean;
   staffMembers: AssignmentOption[];
+  gridTemplateColumns: string;
   onUpdated: (updatedCase: IntakeBoardCase) => void;
   onSaveController: (
     caseId: string,
@@ -1110,7 +1253,8 @@ function SavedCaseRow({
 
   return (
     <div
-      className={`grid min-h-24 ${BOARD_GRID} bg-[#f7fbff] text-sm text-[#323650] hover:bg-[#eef7ff]`}
+      className="grid min-h-24 bg-[#f7fbff] text-sm text-[#323650] hover:bg-[#eef7ff]"
+      style={{ gridTemplateColumns }}
       aria-label={`Saved case for ${draft.residentName || "unnamed constituent"}`}
     >
       <Cell center>
@@ -1328,6 +1472,7 @@ function DraftCaseRow({
   row,
   demoMode,
   staffMembers,
+  gridTemplateColumns,
   onChange,
   onRemove,
   onCreated,
@@ -1335,6 +1480,7 @@ function DraftCaseRow({
   row: DraftRow;
   demoMode: boolean;
   staffMembers: AssignmentOption[];
+  gridTemplateColumns: string;
   onChange: (patch: Partial<DraftRow>) => void;
   onRemove: () => void;
   onCreated: (createdCase: CreatedCaseMetadata) => void;
@@ -1486,7 +1632,8 @@ function DraftCaseRow({
     <form
       action={formAction}
       onSubmit={handleSubmit}
-      className={`grid min-h-24 ${BOARD_GRID} bg-[#eaf5ff] text-sm text-[#323650] hover:bg-[#e1f0ff]`}
+      className="grid min-h-24 bg-[#eaf5ff] text-sm text-[#323650] hover:bg-[#e1f0ff]"
+      style={{ gridTemplateColumns }}
       aria-label={`Draft case for ${row.residentName || "new constituent"}`}
     >
       <input type="hidden" name="latitude" value={locationState.latitude} />
@@ -1691,39 +1838,134 @@ function DraftCaseRow({
   );
 }
 
-function BoardHeader() {
+function BoardHeader({
+  gridTemplateColumns,
+  columnWidths,
+  onColumnWidthChange,
+}: {
+  gridTemplateColumns: string;
+  columnWidths: BoardColumnWidths;
+  onColumnWidthChange: (columnKey: BoardColumnKey, width: number) => void;
+}) {
   return (
-    <div className={`grid ${BOARD_GRID} bg-white text-sm text-[#323650]`}>
-      <HeaderCell label="Type" />
-      <HeaderCell label="Constituent" />
-      <HeaderCell label="Category *" />
-      <HeaderCell label="Date" />
-      <HeaderCell label="Status" />
-      <HeaderCell label="Call Summary *" />
-      <HeaderCell label="Address *" />
-      <HeaderCell label="Phone" />
-      <HeaderCell label="Email *" />
-      <HeaderCell label="District" />
-      <HeaderCell label="Assignment" />
-      <HeaderCell
-        label="Files / Case"
-        className="sticky right-0 z-20 shadow-[-8px_0_12px_-12px_#5b6680]"
-      />
+    <div
+      className="grid bg-white text-sm text-[#323650]"
+      style={{ gridTemplateColumns }}
+    >
+      {BOARD_COLUMN_SPECS.map((column) => (
+        <HeaderCell
+          key={column.key}
+          column={column}
+          width={columnWidths[column.key]}
+          onWidthChange={(width) => onColumnWidthChange(column.key, width)}
+          className={
+            column.key === "files"
+              ? "sticky right-0 z-20 shadow-[-8px_0_12px_-12px_#5b6680]"
+              : ""
+          }
+        />
+      ))}
     </div>
   );
 }
 
 function HeaderCell({
-  label,
+  column,
+  width,
+  onWidthChange,
   className = "",
 }: {
-  label: string;
+  column: (typeof BOARD_COLUMN_SPECS)[number];
+  width: number;
+  onWidthChange: (width: number) => void;
   className?: string;
 }) {
   return (
-    <div className={`flex h-10 items-center justify-center border-b border-r border-[#c9d3e8] bg-[#f8f9fc] px-2 text-center text-xs font-semibold ${className}`}>
-      {label}
+    <div
+      className={`relative flex h-10 items-center justify-center border-b border-r border-[#c9d3e8] bg-[#f8f9fc] px-2 text-center text-xs font-semibold ${className}`}
+    >
+      {column.label}
+      <ColumnResizeHandle
+        column={column}
+        width={width}
+        onWidthChange={onWidthChange}
+      />
     </div>
+  );
+}
+
+function ColumnResizeHandle({
+  column,
+  width,
+  onWidthChange,
+}: {
+  column: (typeof BOARD_COLUMN_SPECS)[number];
+  width: number;
+  onWidthChange: (width: number) => void;
+}) {
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+
+  function finishDrag(element: HTMLSpanElement, pointerId: number) {
+    if (element.hasPointerCapture(pointerId)) {
+      element.releasePointerCapture(pointerId);
+    }
+    dragRef.current = null;
+  }
+
+  return (
+    <span
+      role="separator"
+      aria-label={`Resize ${column.label.replace(" *", "")} column`}
+      aria-orientation="vertical"
+      aria-valuemin={column.minWidth}
+      aria-valuemax={column.maxWidth}
+      aria-valuenow={width}
+      tabIndex={0}
+      title="Drag to resize. Double-click to reset."
+      className="absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize touch-none select-none outline-none hover:bg-[#0073ea]/30 focus-visible:bg-[#0073ea]/40"
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dragRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startWidth: width,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        onWidthChange(drag.startWidth + event.clientX - drag.startX);
+      }}
+      onPointerUp={(event) =>
+        finishDrag(event.currentTarget, event.pointerId)
+      }
+      onPointerCancel={(event) =>
+        finishDrag(event.currentTarget, event.pointerId)
+      }
+      onDoubleClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onWidthChange(column.defaultWidth);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          onWidthChange(width - 12);
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          onWidthChange(width + 12);
+        } else if (event.key === "Home") {
+          event.preventDefault();
+          onWidthChange(column.defaultWidth);
+        }
+      }}
+    />
   );
 }
 
@@ -1953,6 +2195,38 @@ function storeDraftGroups(groups: DraftGroup[]) {
     window.localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     // Draft persistence is best-effort and never blocks intake.
+  }
+}
+
+function normalizeColumnWidths(value: unknown): BoardColumnWidths {
+  const stored =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+
+  return Object.fromEntries(
+    BOARD_COLUMN_SPECS.map((column) => {
+      const storedWidth = stored[column.key];
+      const width =
+        typeof storedWidth === "number" && Number.isFinite(storedWidth)
+          ? storedWidth
+          : column.defaultWidth;
+      return [
+        column.key,
+        Math.min(column.maxWidth, Math.max(column.minWidth, Math.round(width))),
+      ];
+    }),
+  ) as BoardColumnWidths;
+}
+
+function storeColumnWidths(widths: BoardColumnWidths) {
+  try {
+    window.localStorage.setItem(
+      COLUMN_WIDTHS_STORAGE_KEY,
+      JSON.stringify(widths),
+    );
+  } catch {
+    // Column preferences are best-effort.
   }
 }
 
