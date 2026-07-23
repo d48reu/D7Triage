@@ -63,7 +63,7 @@ export default async function ReportPage() {
             href="/staff"
             className="rounded border border-[#c9d3e8] bg-white px-3 py-1.5 font-medium hover:bg-[#f5f7fb]"
           >
-            Command Center
+            Case Dashboard
           </Link>
           <span className="rounded-full bg-[#ff642e] px-2 py-1 text-xs font-semibold text-white">
             D7
@@ -74,7 +74,7 @@ export default async function ReportPage() {
       <div className="grid min-h-[calc(100vh-44px)] grid-cols-[248px_1fr] max-lg:grid-cols-1">
         <aside className="border-r border-[#d9e0ef] bg-white px-3 py-3 max-lg:hidden">
           <nav className="space-y-1 text-sm text-[#48506c]" aria-label="Staff workspace">
-            <RailLink href="/staff" label="Command Center" />
+            <RailLink href="/staff" label="Case Dashboard" />
             <RailLink href="/staff/my" label="My Assignments" />
             <RailLink href="/staff/routing" label="Routing + Staff" />
             <RailLink href="/staff/analytics" label="Analytics" />

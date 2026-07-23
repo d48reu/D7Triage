@@ -155,7 +155,7 @@ export default async function StaffPage({
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <StaffHeader
         current="command"
-        title="Command center"
+        title="Case Dashboard"
         subtitle="Triage, assignment accountability, and active case follow-up."
       />
 

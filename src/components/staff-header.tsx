@@ -23,7 +23,7 @@ export function StaffHeader({
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <Link href="/staff" className="text-sm font-medium text-sky-700">
+          <Link href="/report" className="text-sm font-medium text-sky-700">
             District 7 Issue Reporter
           </Link>
           <h1 className="mt-1 text-xl font-semibold">{title}</h1>
@@ -36,7 +36,7 @@ export function StaffHeader({
             href="/staff"
             className={navClass(current === "command")}
           >
-            Command Center
+            Case Dashboard
           </Link>
           <Link
             href="/staff/my"

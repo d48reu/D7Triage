@@ -27,14 +27,14 @@ export default function DemoSubmissionPage() {
             This hosted version is a stable walkthrough environment, so new public
             submissions are not retained. The public form is still useful for
             showing the intake experience and district preview, and the seeded
-            staff command center shows the full routing workflow.
+            staff case dashboard shows the full routing workflow.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href="/staff"
               className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
             >
-              Open Command Center
+              Open Case Dashboard
             </Link>
             <Link
               href={`/report/${sampleTrackingToken}`}
