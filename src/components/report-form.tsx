@@ -393,9 +393,9 @@ export function ReportForm({
               </div>
 
               {!group.collapsed ? (
-                <div
-                  className="mt-3 overflow-x-auto border-l-8"
-                  style={{ borderLeftColor: group.color }}
+                <BoardScrollArea
+                  groupLabel={group.label}
+                  accentColor={group.color}
                 >
                   <div className="min-w-[2094px] border-y border-r border-[#c9d3e8]">
                     <BoardHeader />
@@ -435,11 +435,148 @@ export function ReportForm({
                       ))}
                     </div>
                   </div>
-                </div>
+                </BoardScrollArea>
               ) : null}
             </section>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function BoardScrollArea({
+  groupLabel,
+  accentColor,
+  children,
+}: {
+  groupLabel: string;
+  accentColor: string;
+  children: ReactNode;
+}) {
+  const topScrollerRef = useRef<HTMLDivElement>(null);
+  const boardScrollerRef = useRef<HTMLDivElement>(null);
+  const [scrollEdges, setScrollEdges] = useState({
+    atStart: true,
+    atEnd: false,
+  });
+
+  function updateScrollEdges() {
+    const board = boardScrollerRef.current;
+    if (!board) return;
+
+    const maxScrollLeft = Math.max(0, board.scrollWidth - board.clientWidth);
+    const nextEdges = {
+      atStart: board.scrollLeft <= 2,
+      atEnd: board.scrollLeft >= maxScrollLeft - 2,
+    };
+    setScrollEdges((current) =>
+      current.atStart === nextEdges.atStart &&
+      current.atEnd === nextEdges.atEnd
+        ? current
+        : nextEdges,
+    );
+  }
+
+  useEffect(() => {
+    updateScrollEdges();
+    window.addEventListener("resize", updateScrollEdges);
+    return () => window.removeEventListener("resize", updateScrollEdges);
+  }, []);
+
+  function syncHorizontalScroll(
+    source: HTMLDivElement,
+    target: HTMLDivElement | null,
+  ) {
+    if (!target) return;
+
+    const sourceMax = Math.max(0, source.scrollWidth - source.clientWidth);
+    const targetMax = Math.max(0, target.scrollWidth - target.clientWidth);
+    const ratio = sourceMax > 0 ? source.scrollLeft / sourceMax : 0;
+    const nextScrollLeft = ratio * targetMax;
+
+    if (Math.abs(target.scrollLeft - nextScrollLeft) > 1) {
+      target.scrollLeft = nextScrollLeft;
+    }
+    updateScrollEdges();
+  }
+
+  function scrollBoard(left: number) {
+    boardScrollerRef.current?.scrollBy({
+      left,
+      behavior: "smooth",
+    });
+  }
+
+  function handleBoardKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget) return;
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      scrollBoard(-360);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      scrollBoard(360);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      boardScrollerRef.current?.scrollTo({ left: 0, behavior: "smooth" });
+    } else if (event.key === "End") {
+      event.preventDefault();
+      boardScrollerRef.current?.scrollTo({
+        left: boardScrollerRef.current.scrollWidth,
+        behavior: "smooth",
+      });
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="sticky top-0 z-30 flex items-center gap-2 border border-[#c9d3e8] bg-white px-2 py-1.5 shadow-sm">
+        <span className="shrink-0 text-[11px] font-semibold text-[#4d5672]">
+          Scroll table
+        </span>
+        <button
+          type="button"
+          onClick={() => scrollBoard(-640)}
+          disabled={scrollEdges.atStart}
+          className="shrink-0 rounded border border-[#9aa8c4] bg-white px-2 py-1 text-xs font-semibold text-[#323650] hover:bg-[#f5f7fb] disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={`Scroll ${groupLabel} cases left`}
+        >
+          ← Left
+        </button>
+        <div
+          ref={topScrollerRef}
+          onScroll={(event) =>
+            syncHorizontalScroll(event.currentTarget, boardScrollerRef.current)
+          }
+          className="h-5 min-w-24 flex-1 overflow-x-scroll overscroll-x-contain rounded border border-[#d9e0ef] bg-[#f7f8fc]"
+          aria-label={`Horizontal scrollbar for ${groupLabel} cases`}
+          tabIndex={0}
+        >
+          <div className="h-px min-w-[2094px]" />
+        </div>
+        <button
+          type="button"
+          onClick={() => scrollBoard(640)}
+          disabled={scrollEdges.atEnd}
+          className="shrink-0 rounded border border-[#9aa8c4] bg-white px-2 py-1 text-xs font-semibold text-[#323650] hover:bg-[#f5f7fb] disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={`Scroll ${groupLabel} cases right`}
+        >
+          Right →
+        </button>
+      </div>
+      <div
+        ref={boardScrollerRef}
+        onScroll={(event) =>
+          syncHorizontalScroll(event.currentTarget, topScrollerRef.current)
+        }
+        onKeyDown={handleBoardKeyDown}
+        tabIndex={0}
+        className="mt-2 overflow-x-auto overscroll-x-contain border-l-8 outline-none focus-visible:ring-2 focus-visible:ring-[#0073ea]"
+        style={{ borderLeftColor: accentColor }}
+        aria-label={`${groupLabel} cases table. Use the scrollbar or arrow keys to move left and right.`}
+      >
+        {children}
       </div>
     </div>
   );
