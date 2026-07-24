@@ -8,7 +8,8 @@ type StaffSection =
   | "case"
   | "routing"
   | "analytics"
-  | "notifications";
+  | "notifications"
+  | "history";
 
 export function StaffHeader({
   current,
@@ -55,7 +56,8 @@ export function StaffHeader({
               className={`${navClass(
                 current === "routing" ||
                   current === "analytics" ||
-                  current === "notifications",
+                  current === "notifications" ||
+                  current === "history",
               )} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
             >
               Tools
@@ -72,6 +74,9 @@ export function StaffHeader({
                 active={current === "notifications"}
               >
                 Notifications
+              </ToolLink>
+              <ToolLink href="/staff/history" active={current === "history"}>
+                Historical Archive
               </ToolLink>
             </div>
           </details>

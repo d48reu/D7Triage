@@ -1530,6 +1530,10 @@ function getDb() {
   return db;
 }
 
+export function getIssuesDatabase() {
+  return getDb();
+}
+
 function mapReport(row: IssueReportRow): IssueReport {
   return {
     id: row.id,

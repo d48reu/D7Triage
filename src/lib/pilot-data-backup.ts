@@ -16,9 +16,17 @@ import {
   listStaffNotes,
   listStatusEvents,
 } from "@/lib/issues-repository";
+import {
+  getHistoricalArchiveSummary,
+  listAllHistoricalCases,
+  listHistoricalCaseAttachments,
+  listHistoricalCaseUpdates,
+  listHistoricalEvents,
+} from "@/lib/historical-archive-repository";
 
 export function buildPilotDataBackup() {
   const reports = listAllIssueReports();
+  const historicalCases = listAllHistoricalCases();
 
   return {
     schemaVersion: 1,
@@ -27,6 +35,7 @@ export function buildPilotDataBackup() {
     notes: [
       "This export contains case records and related metadata.",
       "Attachment file metadata is included, but attachment file bytes remain on the Render persistent disk.",
+      "The Monday.com historical archive is included separately and does not represent active cases.",
     ],
     reports: reports.map((report) => ({
       report,
@@ -48,6 +57,15 @@ export function buildPilotDataBackup() {
       analyticsViews: listAnalyticsViews(),
     },
     newsletterContacts: listNewsletterContacts(),
+    historicalArchive: {
+      summary: getHistoricalArchiveSummary(),
+      cases: historicalCases.map((historicalCase) => ({
+        historicalCase,
+        updates: listHistoricalCaseUpdates(historicalCase.id),
+        attachments: listHistoricalCaseAttachments(historicalCase.id),
+      })),
+      events: listHistoricalEvents(),
+    },
   };
 }
 
