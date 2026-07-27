@@ -28,3 +28,7 @@ export function getDbPath() {
 export function getUploadsDir() {
   return path.join(getDataDir(), "uploads");
 }
+
+export function getEventUploadsDir() {
+  return path.join(getUploadsDir(), "events");
+}

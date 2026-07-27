@@ -25,19 +25,26 @@ import {
   listHistoricalEventUpdates,
   listHistoricalEvents,
 } from "@/lib/historical-archive-repository";
+import {
+  listAllLiveEvents,
+  listLiveEventAttachments,
+  listLiveEventSubtasks,
+  listLiveEventUpdates,
+} from "@/lib/live-events-repository";
 
 export function buildPilotDataBackup() {
   const reports = listAllIssueReports();
   const historicalCases = listAllHistoricalCases();
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: new Date().toISOString(),
     source: "district-7-issue-reporter",
     notes: [
       "This export contains case records and related metadata.",
       "Attachment file metadata is included, but attachment file bytes remain on the Render persistent disk.",
       "The Monday.com historical archive is included separately and does not represent active cases.",
+      "Live event planning records are included separately from constituent cases and Monday.com history.",
     ],
     reports: reports.map((report) => ({
       report,
@@ -72,6 +79,12 @@ export function buildPilotDataBackup() {
         attachments: listHistoricalEventAttachments(event.id),
       })),
     },
+    liveEvents: listAllLiveEvents().map((event) => ({
+      event,
+      updates: listLiveEventUpdates(event.id),
+      subtasks: listLiveEventSubtasks(event.id),
+      attachments: listLiveEventAttachments(event.id),
+    })),
   };
 }
 

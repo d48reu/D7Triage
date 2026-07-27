@@ -61,7 +61,7 @@ test("builds a staff pilot backup with reports and related records", async () =>
 
   const backup = buildPilotDataBackup();
 
-  assert.equal(backup.schemaVersion, 1);
+  assert.equal(backup.schemaVersion, 2);
   assert.equal(backup.reports.length, 1);
   assert.equal(backup.reports[0].report.id, report.id);
   assert.equal(backup.reports[0].staffNotes.length, 1);

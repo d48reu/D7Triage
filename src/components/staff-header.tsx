@@ -5,6 +5,7 @@ import { logoutStaffAction } from "@/server-actions/auth";
 type StaffSection =
   | "command"
   | "assignments"
+  | "events"
   | "case"
   | "routing"
   | "analytics"
@@ -44,6 +45,12 @@ export function StaffHeader({
             className={navClass(current === "assignments")}
           >
             My Assignments
+          </Link>
+          <Link
+            href="/staff/events"
+            className={navClass(current === "events")}
+          >
+            Events
           </Link>
           <Link
             href="/report"

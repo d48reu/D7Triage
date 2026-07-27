@@ -29,6 +29,10 @@ const DB_PATH = getDbPath();
 
 const STAFF_ROSTER_ADDITIONS = [
   {
+    id: "staff-carol-gustafson",
+    name: "Carol Gustafson",
+  },
+  {
     id: "staff-karl-eugene-boehm",
     name: "Karl Eugene Boehm",
   },

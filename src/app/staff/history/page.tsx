@@ -275,7 +275,10 @@ export default async function HistoricalArchivePage({
         </section>
 
         {events.length > 0 ? (
-          <section className="mt-6 rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+          <section
+            id="historical-events"
+            className="mt-6 scroll-mt-4 rounded-md border border-slate-200 bg-white p-5 shadow-sm"
+          >
             <h2 className="text-lg font-semibold">Historical events</h2>
             <p className="mt-1 text-sm text-slate-600">
               Event planning data is stored separately from constituent cases.
