@@ -21,6 +21,8 @@ import {
   listAllHistoricalCases,
   listHistoricalCaseAttachments,
   listHistoricalCaseUpdates,
+  listHistoricalEventAttachments,
+  listHistoricalEventUpdates,
   listHistoricalEvents,
 } from "@/lib/historical-archive-repository";
 
@@ -64,7 +66,11 @@ export function buildPilotDataBackup() {
         updates: listHistoricalCaseUpdates(historicalCase.id),
         attachments: listHistoricalCaseAttachments(historicalCase.id),
       })),
-      events: listHistoricalEvents(),
+      events: listHistoricalEvents().map((event) => ({
+        event,
+        updates: listHistoricalEventUpdates(event.id),
+        attachments: listHistoricalEventAttachments(event.id),
+      })),
     },
   };
 }

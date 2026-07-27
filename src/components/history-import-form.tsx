@@ -11,6 +11,10 @@ type ImportResult = {
   newUpdates: number;
   attachmentReferences: number;
   events: number;
+  newEvents: number;
+  eventUpdates: number;
+  newEventUpdates: number;
+  eventAttachmentReferences: number;
   uploadedAssets: number;
   storedAssets: number;
 };
@@ -86,7 +90,7 @@ export function HistoryImportForm() {
           htmlFor="history-assets"
           className="block text-sm font-semibold text-slate-900"
         >
-          Archived case files
+          Archived case and event files
         </label>
         <input
           id="history-assets"
@@ -122,9 +126,14 @@ export function HistoryImportForm() {
         >
           <p className="font-semibold">Historical archive imported.</p>
           <p className="mt-1">
-            {result.cases.toLocaleString()} cases ({result.newCases.toLocaleString()} new),{" "}
-            {result.updates.toLocaleString()} updates ({result.newUpdates.toLocaleString()} new),{" "}
-            {result.events.toLocaleString()} event, and{" "}
+            {result.cases.toLocaleString()} cases (
+            {result.newCases.toLocaleString()} new),{" "}
+            {result.updates.toLocaleString()} case updates (
+            {result.newUpdates.toLocaleString()} new),{" "}
+            {result.events.toLocaleString()} events (
+            {result.newEvents.toLocaleString()} new),{" "}
+            {result.eventUpdates.toLocaleString()} event updates (
+            {result.newEventUpdates.toLocaleString()} new), and{" "}
             {result.storedAssets.toLocaleString()} archived files stored.
           </p>
           <Link

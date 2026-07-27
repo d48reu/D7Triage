@@ -67,14 +67,56 @@ test("imports Monday history idempotently without adding live issue reports", as
     events: [
       {
         sourceKey: "a".repeat(64),
+        externalItemId: "9001",
+        sourceGroup: "D7 Events",
         occurredOn: "2026-07-02",
         dateText: "Thursday, July 2",
         title: "Ice Cream Social",
+        owners: "Carol Gustafson",
+        collaborators: "Stephanie Womble",
         role: "",
         partners: "Federation Gardens",
         relevantInfo: "Seniors",
         commissionerAttending: "",
-        rawStatus: "",
+        rawStatus: "In progress",
+        priority: "Medium",
+        timelineStart: "2026-07-02",
+        timelineEnd: "2026-07-02",
+        durationDays: 1,
+        fileLinks: ["https://example.com/8001/file.pdf"],
+        subitems: [
+          {
+            externalItemId: "9002",
+            name: "Confirm seniors",
+            owner: "Carol Gustafson",
+            rawStatus: "Done",
+            dueOn: "2026-06-30",
+          },
+        ],
+      },
+    ],
+    eventUpdates: [
+      {
+        externalPostId: "7001",
+        parentExternalPostId: null,
+        eventExternalItemId: "9001",
+        itemName: "Ice Cream Social",
+        contentType: "Update",
+        authorName: "Carol Gustafson",
+        createdAt: "2026-06-30T15:00:00.000Z",
+        createdAtRaw: "30/June/2026  11:00:00 AM",
+        body: "Federation Gardens confirmed.",
+        likesCount: 0,
+        assetIds: [],
+      },
+    ],
+    eventAttachmentRefs: [
+      {
+        eventExternalItemId: "9001",
+        externalAssetId: "8001",
+        externalPostId: null,
+        source: "event-board",
+        originalLink: "https://example.com/8001/file.pdf",
       },
     ],
   };
@@ -84,15 +126,21 @@ test("imports Monday history idempotently without adding live issue reports", as
 
   assert.equal(first.newCases, 1);
   assert.equal(first.newUpdates, 1);
+  assert.equal(first.newEvents, 1);
+  assert.equal(first.newEventUpdates, 1);
   assert.equal(second.newCases, 0);
   assert.equal(second.newUpdates, 0);
+  assert.equal(second.newEvents, 0);
+  assert.equal(second.newEventUpdates, 0);
   assert.equal(issues.listAllIssueReports().length, 0);
 
   const summary = history.getHistoricalArchiveSummary();
   assert.equal(summary.caseCount, 1);
   assert.equal(summary.updateCount, 1);
-  assert.equal(summary.attachmentCount, 1);
+  assert.equal(summary.attachmentCount, 2);
   assert.equal(summary.eventCount, 1);
+  assert.equal(summary.eventUpdateCount, 1);
+  assert.equal(summary.eventAttachmentCount, 1);
 
   const search = history.listHistoricalCases({ query: "speed bump" });
   assert.equal(search.total, 1);
@@ -102,6 +150,13 @@ test("imports Monday history idempotently without adding live issue reports", as
   const updates = history.listHistoricalCaseUpdates(search.cases[0].id);
   assert.equal(updates.length, 1);
   assert.equal(updates[0].authorName, "Karl-Eugene Boehm");
+
+  const event = history.listHistoricalEvents()[0];
+  assert.equal(event.owners, "Carol Gustafson");
+  assert.equal(event.subitems.length, 1);
+  assert.equal(history.getHistoricalEventById(event.id)?.priority, "Medium");
+  assert.equal(history.listHistoricalEventUpdates(event.id).length, 1);
+  assert.equal(history.listHistoricalEventAttachments(event.id).length, 1);
 
   assert.equal(
     history.markHistoricalAttachmentStored({
@@ -113,5 +168,15 @@ test("imports Monday history idempotently without adding live issue reports", as
     }),
     1,
   );
-  assert.equal(history.getHistoricalArchiveSummary().storedAttachmentCount, 1);
+  assert.equal(
+    history.markHistoricalAttachmentStored({
+      externalAssetId: "8001",
+      fileName: "event.pdf",
+      storagePath: path.join(dataDir, "event.pdf"),
+      mimeType: "application/pdf",
+      sizeBytes: 84,
+    }),
+    1,
+  );
+  assert.equal(history.getHistoricalArchiveSummary().storedAttachmentCount, 2);
 });

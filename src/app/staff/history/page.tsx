@@ -74,7 +74,15 @@ export default async function HistoricalArchivePage({
                 : undefined
             }
           />
-          <Metric label="Historical events" value={summary.eventCount} />
+          <Metric
+            label="Historical events"
+            value={summary.eventCount}
+            detail={
+              summary.eventUpdateCount || summary.eventAttachmentCount
+                ? `${summary.eventUpdateCount.toLocaleString()} updates · ${summary.eventAttachmentCount.toLocaleString()} files`
+                : undefined
+            }
+          />
         </section>
 
         <section className="mt-5 rounded-md border border-slate-200 bg-white p-4 shadow-sm">
@@ -279,11 +287,18 @@ export default async function HistoricalArchivePage({
                   className="rounded-md border border-slate-200 p-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">{event.title}</h3>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold">
+                        <Link
+                          href={`/staff/history/events/${event.id}`}
+                          className="text-sky-900 hover:underline"
+                        >
+                          {event.title}
+                        </Link>
+                      </h3>
                       <p className="mt-1 text-sm text-slate-600">
-                        {event.occurredOn
-                          ? formatDate(event.occurredOn)
+                        {event.timelineStart || event.occurredOn
+                          ? formatDate(event.timelineStart || event.occurredOn || "")
                           : event.dateText || "Date not entered"}
                       </p>
                     </div>
@@ -292,10 +307,17 @@ export default async function HistoricalArchivePage({
                     </span>
                   </div>
                   <dl className="mt-3 grid gap-3 text-sm md:grid-cols-3">
-                    <Detail label="D7 role" value={event.role || "Not entered"} />
                     <Detail
-                      label="Partners"
-                      value={event.partners || "Not entered"}
+                      label="Owner"
+                      value={event.owners || "Not entered"}
+                    />
+                    <Detail
+                      label="Collaborators / partners"
+                      value={
+                        event.collaborators ||
+                        event.partners ||
+                        "Not entered"
+                      }
                     />
                     <Detail
                       label="Status"
@@ -304,9 +326,15 @@ export default async function HistoricalArchivePage({
                   </dl>
                   {event.relevantInfo ? (
                     <p className="mt-3 text-sm leading-6 text-slate-700">
-                      {event.relevantInfo}
+                      {truncate(event.relevantInfo, 320)}
                     </p>
                   ) : null}
+                  <Link
+                    href={`/staff/history/events/${event.id}`}
+                    className="mt-3 inline-block text-sm font-semibold text-sky-800 hover:underline"
+                  >
+                    Open event record
+                  </Link>
                 </article>
               ))}
             </div>

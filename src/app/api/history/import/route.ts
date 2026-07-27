@@ -65,7 +65,10 @@ export async function POST(request: Request) {
     const manifestInput = JSON.parse(await manifestFile.text()) as unknown;
     const manifest = parseHistoricalArchiveManifest(manifestInput);
     const expectedAssetIds = new Set(
-      manifest.attachmentRefs.map((item) => item.externalAssetId),
+      [
+        ...manifest.attachmentRefs,
+        ...manifest.eventAttachmentRefs,
+      ].map((item) => item.externalAssetId),
     );
     const uploads = assetFiles.map((file) => {
       const externalAssetId = file.name.match(/^(\d+)_/)?.[1] ?? "";
@@ -118,6 +121,8 @@ function inferMimeType(fileName: string) {
   const extension = path.extname(fileName).toLowerCase();
   const types: Record<string, string> = {
     ".gif": "image/gif",
+    ".docx":
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".jpeg": "image/jpeg",
     ".jpg": "image/jpeg",
     ".mov": "video/quicktime",
