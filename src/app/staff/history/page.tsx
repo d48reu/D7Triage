@@ -48,7 +48,7 @@ export default async function HistoricalArchivePage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-3xl text-sm text-slate-600">
             Imported records are read-only history. They do not affect active
-            dashboard counts, assignments, acknowledgments, or notifications.
+            dashboard counts, assignments, new-assignment indicators, or notifications.
           </p>
           <Link
             href="/staff/history/import"

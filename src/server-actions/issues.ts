@@ -245,6 +245,16 @@ function resolveSubmittedCategory(input: {
   return normalizedCategory;
 }
 
+function markCurrentAssignmentSeen(reportId: string) {
+  const report = getIssueReportById(reportId);
+  if (!report?.assignedStaffId) return null;
+
+  return acknowledgeAssignment({
+    reportId,
+    staffMemberId: report.assignedStaffId,
+  });
+}
+
 async function notifyAssignedStaff(input: {
   reportId: string;
   staffMemberId: string | null;
@@ -784,6 +794,7 @@ export async function updateIssueStatusAction(formData: FormData) {
   }
 
   updateIssueStatus({ reportId, status, publicNote });
+  markCurrentAssignmentSeen(reportId);
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
   revalidatePath(`/report/${report.publicTrackingToken}`);
@@ -819,6 +830,10 @@ export async function saveQuickTriageAction(formData: FormData) {
 
   if (internalNote) {
     addStaffNote({ reportId, body: internalNote });
+  }
+
+  if (!assignmentChanged) {
+    markCurrentAssignmentSeen(reportId);
   }
 
   revalidatePath("/staff");
@@ -865,6 +880,7 @@ export async function addIssuePhotosAction(formData: FormData) {
   }
 
   await savePhotoAttachments(reportId, photos);
+  markCurrentAssignmentSeen(reportId);
   addStaffNote({
     reportId,
     body: `${photos.length} staff photo${photos.length === 1 ? "" : "s"} attached.`,
@@ -1047,6 +1063,7 @@ export async function updateIssueDetailsAction(formData: FormData) {
     contactConsent,
     newsletterOptIn,
   });
+  markCurrentAssignmentSeen(reportId);
 
   if (addressChanged) {
     const locationIntelligence = await resolveReportLocationIntelligence({
@@ -1105,10 +1122,13 @@ export async function assignIssueReportAction(formData: FormData) {
   redirect(`/staff/reports/${reportId}?assignmentSaved=1`);
 }
 
-export async function acknowledgeAssignmentAction(formData: FormData) {
+export async function openAssignedCaseAction(formData: FormData) {
+  if (!(await hasStaffSession())) {
+    redirect("/staff/login");
+  }
+
   const reportId = readRequiredText(formData, "reportId");
   const staffMemberId = readRequiredText(formData, "staffMemberId");
-  const returnTo = String(formData.get("returnTo") ?? "").trim();
   const report = getIssueReportById(reportId);
   const staffMember = getStaffMemberById(staffMemberId);
 
@@ -1117,23 +1137,15 @@ export async function acknowledgeAssignmentAction(formData: FormData) {
   }
 
   if (!staffMember || report.assignedStaffId !== staffMember.id) {
-    throw new Error("Only the assigned staff member can acknowledge this case.");
+    throw new Error("This case is no longer assigned to that staff member.");
   }
 
-  const acknowledgment = acknowledgeAssignment({ reportId, staffMemberId });
-  if (acknowledgment) {
-    addStaffNote({
-      reportId,
-      body: `Assignment acknowledged by ${staffMember.name}.`,
-    });
-  }
+  acknowledgeAssignment({ reportId, staffMemberId });
 
   revalidatePath("/staff");
   revalidatePath("/staff/my");
   revalidatePath(`/staff/reports/${reportId}`);
-
-  const safeReturnTo = returnTo.startsWith("/staff") ? returnTo : `/staff/reports/${reportId}`;
-  redirect(`${safeReturnTo}${safeReturnTo.includes("?") ? "&" : "?"}acknowledged=1`);
+  redirect(`/staff/reports/${reportId}`);
 }
 
 export async function refreshLocationIntelligenceAction(formData: FormData) {
@@ -1154,6 +1166,7 @@ export async function refreshLocationIntelligenceAction(formData: FormData) {
     reportId,
     ...locationIntelligence,
   });
+  markCurrentAssignmentSeen(reportId);
 
   revalidatePath("/staff");
   revalidatePath("/staff/analytics");
@@ -1171,6 +1184,7 @@ export async function addStaffNoteAction(formData: FormData) {
   }
 
   addStaffNote({ reportId, body });
+  markCurrentAssignmentSeen(reportId);
   revalidatePath(`/staff/reports/${reportId}`);
   redirect(`/staff/reports/${reportId}`);
 }
@@ -1205,6 +1219,7 @@ export async function addReferralAction(formData: FormData) {
     outcomeNote: String(formData.get("outcomeNote") ?? "").trim(),
     publicNote: String(formData.get("publicNote") ?? "").trim(),
   });
+  markCurrentAssignmentSeen(reportId);
 
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
@@ -1234,6 +1249,7 @@ export async function updateReferralOutcomeAction(formData: FormData) {
     outcomeNote: String(formData.get("outcomeNote") ?? "").trim(),
     notes: String(formData.get("notes") ?? "").trim(),
   });
+  markCurrentAssignmentSeen(reportId);
 
   revalidatePath("/staff");
   revalidatePath("/staff/analytics");
@@ -1256,6 +1272,7 @@ export async function markDuplicateAction(formData: FormData) {
     masterReportId,
     note,
   });
+  markCurrentAssignmentSeen(reportId);
 
   revalidatePath("/staff");
   revalidatePath("/staff/analytics");
@@ -1278,6 +1295,7 @@ export async function markDistinctAction(formData: FormData) {
     reportId,
     note,
   });
+  markCurrentAssignmentSeen(reportId);
 
   if (report.duplicateOfReportId) {
     revalidatePath(`/staff/reports/${report.duplicateOfReportId}`);
@@ -1364,7 +1382,9 @@ export async function reviewAiSuggestionAction(
     feedbackDisposition,
     feedbackNote: String(formData.get("feedbackNote") ?? "").trim(),
   });
+  markCurrentAssignmentSeen(reportId);
 
+  revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
 
   return {

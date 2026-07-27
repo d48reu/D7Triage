@@ -65,8 +65,8 @@ export function getStaffInboxFilterOptions(rows: StaffInboxRow[]) {
     },
     {
       key: "needs_acknowledgment" as const,
-      label: "Needs acknowledgment",
-      count: count((row) => row.flags.includes("Needs acknowledgment")),
+      label: "New assignments",
+      count: count((row) => row.flags.includes("New assignment")),
     },
     {
       key: "needs_review" as const,
@@ -140,7 +140,7 @@ export function buildStaffInboxFlags(input: {
   jurisdiction: JurisdictionAssessment;
   referrals: Referral[];
   aiSuggestions: AiSuggestion[];
-  assignmentAcknowledged?: boolean;
+  assignmentSeen?: boolean;
   now?: Date;
 }) {
   const flags: string[] = [];
@@ -162,9 +162,9 @@ export function buildStaffInboxFlags(input: {
   if (
     input.report.assignedStaffId &&
     ACTIVE_STATUSES.has(input.report.status) &&
-    !input.assignmentAcknowledged
+    !input.assignmentSeen
   ) {
-    flags.push("Needs acknowledgment");
+    flags.push("New assignment");
   }
 
   if (
@@ -243,7 +243,7 @@ export function filterStaffInboxRows<T extends StaffInboxRow>(input: {
         !row.report.assignedStaffId &&
         !CLOSED_STATUSES.has(row.report.status)) ||
       (input.filter === "needs_acknowledgment" &&
-        row.flags.includes("Needs acknowledgment")) ||
+        row.flags.includes("New assignment")) ||
       (input.filter === "recently_updated" && recentlyUpdated) ||
       row.report.status === input.filter;
 

@@ -27,7 +27,7 @@ export default async function HistoricalImportPage() {
 
         <div className="my-5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
           This import is isolated from live cases. It does not send
-          notifications, request assignment acknowledgments, or reopen old
+          notifications, mark assignments as seen, or reopen old
           work.
         </div>
 

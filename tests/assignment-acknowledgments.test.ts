@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-test("tracks current assignment acknowledgments", async () => {
+test("tracks whether the current assignment has been seen", async () => {
   const dataDir = mkdtempSync(path.join(os.tmpdir(), "d7-assignment-ack-test-"));
   process.env.DATA_DIR = dataDir;
 

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildStaffInboxFlags,
   filterStaffInboxRows,
+  getStaffInboxFilterOptions,
   normalizeStaffInboxFilter,
   type StaffInboxRow,
 } from "../src/lib/staff-inbox";
@@ -153,7 +154,7 @@ test("filterStaffInboxRows defaults unknown filters to active and searches text"
   assert.equal(normalizeStaffInboxFilter("follow_up_due"), "follow_up_due");
 });
 
-test("flags and filters assigned cases that need acknowledgment", () => {
+test("flags and filters new assignments that have not been opened", () => {
   const assignedReport = {
     ...baseReport,
     assignedStaffId: "staff-1",
@@ -165,11 +166,11 @@ test("flags and filters assigned cases that need acknowledgment", () => {
     jurisdiction: { ...baseJurisdiction, districtHintStatus: "likely_in_district" },
     referrals: [],
     aiSuggestions: [],
-    assignmentAcknowledged: false,
+    assignmentSeen: false,
     now: new Date("2026-07-21T12:00:00.000Z"),
   });
 
-  assert.ok(flags.includes("Needs acknowledgment"));
+  assert.ok(flags.includes("New assignment"));
 
   const rows: StaffInboxRow[] = [
     {
@@ -189,5 +190,11 @@ test("flags and filters assigned cases that need acknowledgment", () => {
       query: "",
     }).length,
     1,
+  );
+  assert.equal(
+    getStaffInboxFilterOptions(rows).find(
+      (option) => option.key === "needs_acknowledgment",
+    )?.label,
+    "New assignments",
   );
 });

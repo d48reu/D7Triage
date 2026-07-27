@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { StaffHeader } from "@/components/staff-header";
-import { acknowledgeAssignmentAction } from "@/server-actions/issues";
+import { openAssignedCaseAction } from "@/server-actions/issues";
 import { formatStatus, type IssueStatus } from "@/lib/issue-types";
 import {
   getCurrentAssignmentAcknowledgment,
@@ -24,8 +24,6 @@ export default async function MyAssignmentsPage({
   await requireStaffSession();
   const params = (await searchParams) ?? {};
   const selectedStaffId = readSearchParam(params, "staffId");
-  const acknowledged =
-    readSearchParam(params, "acknowledged") === "1";
   const staffMembers = listStaffMembers().filter((staffMember) => staffMember.isActive);
   const selectedStaff =
     staffMembers.find((staffMember) => staffMember.id === selectedStaffId) ??
@@ -41,17 +39,16 @@ export default async function MyAssignmentsPage({
   const rows = reports.map((report) => ({
     report,
     latestStaffUpdate: listStaffNotes(report.id)[0] ?? null,
-    acknowledgment: getCurrentAssignmentAcknowledgment(report),
+    seen: getCurrentAssignmentAcknowledgment(report),
   }));
-  const needsAcknowledgmentCount = rows.filter((row) => !row.acknowledgment).length;
-  const returnTo = selectedStaff ? `/staff/my?staffId=${selectedStaff.id}` : "/staff/my";
+  const newAssignmentCount = rows.filter((row) => !row.seen).length;
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <StaffHeader
         current="assignments"
         title="My assignments"
-        subtitle="Acknowledge and work active cases assigned to one staff member."
+        subtitle="Open and work active cases assigned to one staff member."
       />
 
       <div className="mx-auto max-w-7xl px-5 py-6">
@@ -65,21 +62,14 @@ export default async function MyAssignmentsPage({
                 Assigned cases that need action
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Pick your name, acknowledge new assignments, and open cases that
-                need updates.
+                Pick your name and open the cases that need your attention.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <Metric label="Active assigned" value={rows.length} />
-              <Metric label="Needs acknowledgment" value={needsAcknowledgmentCount} />
+              <Metric label="New assignments" value={newAssignmentCount} />
             </div>
           </div>
-
-          {acknowledged ? (
-            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
-              Assignment acknowledged.
-            </div>
-          ) : null}
 
           <form className="mt-5 grid gap-3 md:grid-cols-[1fr_auto]">
             <label className="block">
@@ -112,14 +102,13 @@ export default async function MyAssignmentsPage({
         <section className="mt-6 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
           {selectedStaff && rows.length > 0 ? (
             <div className="divide-y divide-slate-200">
-              {rows.map(({ report, latestStaffUpdate, acknowledgment }) => (
+              {rows.map(({ report, latestStaffUpdate, seen }) => (
                 <AssignmentRow
                   key={report.id}
                   report={report}
                   staffMember={selectedStaff}
                   latestStaffUpdate={latestStaffUpdate?.body ?? null}
-                  acknowledgedAt={acknowledgment?.createdAt ?? null}
-                  returnTo={returnTo}
+                  seenAt={seen?.createdAt ?? null}
                 />
               ))}
             </div>
@@ -140,33 +129,28 @@ function AssignmentRow({
   report,
   staffMember,
   latestStaffUpdate,
-  acknowledgedAt,
-  returnTo,
+  seenAt,
 }: {
   report: IssueReport;
   staffMember: StaffMember;
   latestStaffUpdate: string | null;
-  acknowledgedAt: string | null;
-  returnTo: string;
+  seenAt: string | null;
 }) {
   return (
     <div className="grid gap-4 px-4 py-4 lg:grid-cols-[1fr_190px_170px]">
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/staff/reports/${report.id}`}
-            className="font-semibold text-slate-950 hover:text-sky-800"
-          >
+          <span className="font-semibold text-slate-950">
             {report.category}
-          </Link>
+          </span>
           <StatusBadge status={report.status} />
-          {acknowledgedAt ? (
+          {seenAt ? (
             <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-900">
-              Acknowledged
+              Seen
             </span>
           ) : (
             <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900">
-              Needs acknowledgment
+              New assignment
             </span>
           )}
         </div>
@@ -186,33 +170,33 @@ function AssignmentRow({
             ? new Date(report.assignedAt).toLocaleString()
             : "Time unavailable"}
         </div>
-        {acknowledgedAt ? (
+        {seenAt ? (
           <div className="mt-2 text-xs text-slate-500">
-            Acknowledged {new Date(acknowledgedAt).toLocaleString()}
+            Seen {new Date(seenAt).toLocaleString()}
           </div>
         ) : null}
       </div>
 
       <div className="flex flex-wrap items-start gap-2 lg:justify-end">
-        {!acknowledgedAt ? (
-          <form action={acknowledgeAssignmentAction}>
+        {!seenAt ? (
+          <form action={openAssignedCaseAction}>
             <input type="hidden" name="reportId" value={report.id} />
             <input type="hidden" name="staffMemberId" value={staffMember.id} />
-            <input type="hidden" name="returnTo" value={returnTo} />
             <button
               type="submit"
-              className="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+              className="rounded-md bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800"
             >
-              Acknowledge
+              Open case
             </button>
           </form>
-        ) : null}
-        <Link
-          href={`/staff/reports/${report.id}`}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Open
-        </Link>
+        ) : (
+          <Link
+            href={`/staff/reports/${report.id}`}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Open case
+          </Link>
+        )}
       </div>
     </div>
   );

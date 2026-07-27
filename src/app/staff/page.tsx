@@ -52,7 +52,7 @@ export default async function StaffPage({
     const jurisdiction = analyzeReportJurisdiction(report, jurisdictionConfig);
     const referrals = listReferrals(report.id);
     const latestStaffUpdate = listStaffNotes(report.id)[0] ?? null;
-    const assignmentAcknowledgment = getCurrentAssignmentAcknowledgment(report);
+    const assignmentSeen = Boolean(getCurrentAssignmentAcknowledgment(report));
     const aiSuggestions = listAiSuggestions(report.id);
     const ownerLabel =
       getManagedRoutingRule(report.category, report.municipalityName)?.ownerLabel ??
@@ -66,7 +66,7 @@ export default async function StaffPage({
       jurisdiction,
       referrals,
       aiSuggestions,
-      assignmentAcknowledged: Boolean(assignmentAcknowledgment),
+      assignmentSeen,
     });
     const followUpDate =
       referrals.find((referral) => referral.followUpDate)?.followUpDate ?? null;
@@ -87,7 +87,6 @@ export default async function StaffPage({
       assignedStaffName,
       flags,
       latestStaffUpdate,
-      assignmentAcknowledgment,
       followUpDate,
       nextAction,
       searchableText: buildStaffInboxSearchText({
@@ -111,8 +110,8 @@ export default async function StaffPage({
   });
   const filterOptions = getStaffInboxFilterOptions(reportRows);
   const activeRows = reportRows.filter((row) => ACTIVE_STATUSES.has(row.report.status));
-  const needsAcknowledgmentRows = reportRows.filter((row) =>
-    row.flags.includes("Needs acknowledgment"),
+  const newAssignmentRows = reportRows.filter((row) =>
+    row.flags.includes("New assignment"),
   );
   const activeCount = activeRows.length;
   const followUpDueCount = reports.filter(
@@ -128,8 +127,8 @@ export default async function StaffPage({
       const assignedRows = activeRows.filter(
         (row) => row.report.assignedStaffId === staffMember.id,
       );
-      const needsAcknowledgment = assignedRows.filter((row) =>
-        row.flags.includes("Needs acknowledgment"),
+      const newAssignments = assignedRows.filter((row) =>
+        row.flags.includes("New assignment"),
       );
       const latestAssignedAt = assignedRows
         .map((row) => row.report.assignedAt)
@@ -140,13 +139,13 @@ export default async function StaffPage({
       return {
         staffMember,
         assignedCount: assignedRows.length,
-        needsAcknowledgmentCount: needsAcknowledgment.length,
+        newAssignmentCount: newAssignments.length,
         latestAssignedAt,
       };
     })
-    .filter((row) => row.assignedCount > 0 || row.needsAcknowledgmentCount > 0)
+    .filter((row) => row.assignedCount > 0 || row.newAssignmentCount > 0)
     .sort((a, b) =>
-      b.needsAcknowledgmentCount - a.needsAcknowledgmentCount ||
+      b.newAssignmentCount - a.newAssignmentCount ||
       b.assignedCount - a.assignedCount ||
       a.staffMember.name.localeCompare(b.staffMember.name),
     );
@@ -170,7 +169,7 @@ export default async function StaffPage({
           <Metric label="All reports" value={reports.length} />
           <Metric label="Active" value={activeCount} />
           <Metric label="Unassigned" value={unassignedCount.length} tone="amber" />
-          <Metric label="Needs ack" value={needsAcknowledgmentRows.length} tone="amber" />
+          <Metric label="New assignments" value={newAssignmentRows.length} tone="amber" />
           <Metric label="Follow-up due" value={followUpDueCount} tone="rose" />
         </section>
 
@@ -185,12 +184,12 @@ export default async function StaffPage({
             <Link
               href="/staff?filter=needs_acknowledgment"
               className={`rounded-md px-4 py-2 text-sm font-semibold ${
-                needsAcknowledgmentRows.length > 0
+                newAssignmentRows.length > 0
                   ? "bg-amber-600 text-white hover:bg-amber-700"
                   : "border border-slate-300 text-slate-700 hover:bg-slate-50"
               }`}
             >
-              Needs acknowledgment: {needsAcknowledgmentRows.length}
+              New assignments: {newAssignmentRows.length}
             </Link>
           </div>
 
@@ -211,12 +210,12 @@ export default async function StaffPage({
                     </span>
                     <span
                       className={`rounded px-2 py-1 ${
-                        row.needsAcknowledgmentCount > 0
+                        row.newAssignmentCount > 0
                           ? "bg-amber-100 text-amber-900"
                           : "bg-emerald-100 text-emerald-900"
                       }`}
                     >
-                      Ack needed {row.needsAcknowledgmentCount}
+                      New {row.newAssignmentCount}
                     </span>
                   </div>
                   {row.latestAssignedAt ? (
@@ -450,7 +449,7 @@ function FlagBadge({ label }: { label: string }) {
   const style =
     label === "Needs first triage"
       ? "border-rose-200 bg-rose-50 text-rose-800"
-      : label === "Needs acknowledgment"
+      : label === "New assignment"
         ? "border-amber-200 bg-amber-50 text-amber-900"
       : label === "Check location"
         ? "border-amber-200 bg-amber-50 text-amber-900"
@@ -495,8 +494,8 @@ function getNextAction(input: {
     return "Assign owner";
   }
 
-  if (input.flags.includes("Needs acknowledgment")) {
-    return "Acknowledge assignment";
+  if (input.flags.includes("New assignment")) {
+    return "Open assignment";
   }
 
   if (input.flags.includes("Check location")) {
