@@ -102,7 +102,7 @@ const BOARD_COLUMN_SPECS = [
   },
   {
     key: "email",
-    label: "Email *",
+    label: "Email",
     defaultWidth: 220,
     minWidth: 170,
     maxWidth: 360,
@@ -1450,8 +1450,7 @@ function SavedCaseRow({
           name="residentEmail"
           value={draft.residentEmail}
           type="email"
-          required
-          placeholder="name@example.com"
+          placeholder="Optional"
           onChange={(value) => updateDraft({ residentEmail: value })}
           onBlur={flushAutosave}
         />
@@ -1831,8 +1830,7 @@ function DraftCaseRow({
           name="residentEmail"
           value={row.residentEmail}
           type="email"
-          required
-          placeholder="name@example.com"
+          placeholder="Optional"
           onChange={(value) => onChange({ residentEmail: value })}
         />
       </Cell>

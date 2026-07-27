@@ -33,3 +33,37 @@ test("staff intake can set the initial case date and status", async () => {
   });
   assert.equal(movedReport?.createdAt, "2026-06-15T12:00:00.000Z");
 });
+
+test("staff intake can create and edit a case without an email address", async () => {
+  const dataDir = mkdtempSync(path.join(os.tmpdir(), "d7-intake-no-email-"));
+  process.env.DATA_DIR = dataDir;
+
+  const repository = await import("../src/lib/issues-repository");
+  const report = repository.createIssueReport({
+    category: "OTHER / UNSURE",
+    description: "Caller does not use email and requested help by phone",
+    addressText: "111 NW 1st Street, Miami, FL 33128",
+    residentEmail: "",
+    residentPhone: "305-555-0100",
+    contactConsent: true,
+  });
+
+  assert.equal(report.residentEmail, "");
+  assert.equal(repository.listNotificationEvents(report.id).length, 0);
+
+  const updatedReport = repository.updateIssueDetails({
+    reportId: report.id,
+    category: report.category,
+    description: report.description,
+    addressText: report.addressText,
+    residentName: report.residentName,
+    residentEmail: "",
+    residentPhone: "305-555-0101",
+    preferredLanguage: report.preferredLanguage,
+    contactConsent: report.contactConsent,
+    newsletterOptIn: report.newsletterOptIn,
+  });
+
+  assert.equal(updatedReport?.residentEmail, "");
+  assert.equal(updatedReport?.residentPhone, "305-555-0101");
+});

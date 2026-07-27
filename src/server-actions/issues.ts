@@ -19,6 +19,7 @@ import {
   type IssueStatus,
 } from "@/lib/issue-types";
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
+import { isValidOptionalEmail } from "@/lib/contact-details";
 import { getUploadsDir } from "@/lib/data-paths";
 import { resolveReportLocationIntelligence } from "@/lib/report-location-intelligence";
 import { sendStaffAssignmentNotification } from "@/lib/staff-assignment-notifications";
@@ -351,10 +352,10 @@ export async function createStaffIntakeCaseAction(
     .getAll("photos")
     .filter((value): value is File => value instanceof File && value.size > 0);
 
-  if (!submittedCategory || !description || !addressText || !residentEmail) {
+  if (!submittedCategory || !description || !addressText) {
     return {
       status: "error",
-      message: "Category, description, location, and email are required.",
+      message: "Category, description, and location are required.",
     };
   }
 
@@ -390,11 +391,14 @@ export async function createStaffIntakeCaseAction(
     };
   }
 
-  if (!residentEmail.includes("@")) {
-    return { status: "error", message: "Enter a valid email address." };
+  if (!isValidOptionalEmail(residentEmail)) {
+    return {
+      status: "error",
+      message: "Enter a valid email address or leave email blank.",
+    };
   }
 
-  if (!contactConsent) {
+  if (residentEmail && !contactConsent) {
     return {
       status: "error",
       message: "Email update consent is required for this local MVP.",
@@ -572,10 +576,10 @@ export async function updateStaffIntakeCaseAction(
   const createdDate = String(formData.get("createdDate") ?? "").trim();
   const createdAt = parseStaffCreatedDate(createdDate);
 
-  if (!submittedCategory || !description || !addressText || !residentEmail) {
+  if (!submittedCategory || !description || !addressText) {
     return {
       status: "error",
-      message: "Category, summary, address, and email are required.",
+      message: "Category, summary, and address are required.",
     };
   }
 
@@ -603,8 +607,11 @@ export async function updateStaffIntakeCaseAction(
     return { status: "error", message: "Choose a valid case date." };
   }
 
-  if (!residentEmail.includes("@")) {
-    return { status: "error", message: "Enter a valid email address." };
+  if (!isValidOptionalEmail(residentEmail)) {
+    return {
+      status: "error",
+      message: "Enter a valid email address or leave email blank.",
+    };
   }
 
   if (description.length > MAX_DESCRIPTION_LENGTH) {
@@ -960,7 +967,7 @@ export async function updateIssueDetailsAction(formData: FormData) {
     description,
     addressText,
   });
-  const residentEmail = readRequiredText(formData, "residentEmail");
+  const residentEmail = String(formData.get("residentEmail") ?? "").trim();
   const residentName = String(formData.get("residentName") ?? "").trim();
   const residentPhone = String(formData.get("residentPhone") ?? "").trim();
   const preferredLanguage =
@@ -975,8 +982,8 @@ export async function updateIssueDetailsAction(formData: FormData) {
     throw new Error("Invalid category");
   }
 
-  if (!residentEmail.includes("@")) {
-    throw new Error("Enter a valid email address.");
+  if (!isValidOptionalEmail(residentEmail)) {
+    throw new Error("Enter a valid email address or leave email blank.");
   }
 
   if (description.length > MAX_DESCRIPTION_LENGTH) {

@@ -1888,16 +1888,18 @@ export function createIssueReport(input: CreateIssueReportInput) {
       createdAt,
     });
 
-    insertNotificationEventTx(database, {
-      reportId: id,
-      eventType: "confirmation",
-      templateKey: "confirmation",
-      recipient: input.residentEmail,
-      subject: "District 7 received your report",
-      body: `${initialPublicNote} Tracking token: ${token}`,
-      deliveryStatus: "local_stub",
-      createdAt,
-    });
+    if (input.residentEmail.trim()) {
+      insertNotificationEventTx(database, {
+        reportId: id,
+        eventType: "confirmation",
+        templateKey: "confirmation",
+        recipient: input.residentEmail,
+        subject: "District 7 received your report",
+        body: `${initialPublicNote} Tracking token: ${token}`,
+        deliveryStatus: "local_stub",
+        createdAt,
+      });
+    }
   })();
 
   return getIssueReportById(id);

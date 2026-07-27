@@ -62,7 +62,9 @@ export default async function StaffAnalyticsPage({
     ),
   );
   const uniqueReporterEmails = new Set(
-    reports.map((report) => report.residentEmail.toLowerCase()),
+    reports
+      .map((report) => report.residentEmail.trim().toLowerCase())
+      .filter(Boolean),
   );
   const aiReviewed = allSuggestions.filter(
     (suggestion) => suggestion.feedbackDisposition !== null,

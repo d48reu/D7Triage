@@ -149,8 +149,8 @@ export default async function EditStaffReportPage({
                 <input
                   name="residentEmail"
                   type="email"
-                  required
                   defaultValue={report.residentEmail}
+                  placeholder="Optional"
                   className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                 />
               </label>

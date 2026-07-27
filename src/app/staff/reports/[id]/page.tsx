@@ -539,7 +539,7 @@ export default async function StaffReportPage({
             <Detail label="Parcel folio" value={report.parcelFolio || "Not available"} />
             <Detail label="Parcel address" value={report.parcelAddress || "Not available"} />
             <Detail label="Parcel owner" value={report.parcelOwner || "Not available"} />
-            <Detail label="Email" value={report.residentEmail} />
+            <Detail label="Email" value={report.residentEmail || "Not provided"} />
             <Detail label="Name" value={report.residentName || "Not provided"} />
             <Detail label="Phone" value={report.residentPhone || "Not provided"} />
             <Detail label="Language" value={report.preferredLanguage} />
