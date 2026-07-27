@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildStaffInboxFlags,
+  canStaffMemberMarkAssignmentSeen,
   filterStaffInboxRows,
   getStaffInboxFilterOptions,
   normalizeStaffInboxFilter,
@@ -196,5 +197,29 @@ test("flags and filters new assignments that have not been opened", () => {
       (option) => option.key === "needs_acknowledgment",
     )?.label,
     "New assignments",
+  );
+});
+
+test("only the assigned coworker's session can mark an assignment seen", () => {
+  const assignedReport = {
+    ...baseReport,
+    assignedStaffId: "staff-david",
+  };
+
+  assert.equal(
+    canStaffMemberMarkAssignmentSeen(assignedReport, "staff-david"),
+    true,
+  );
+  assert.equal(
+    canStaffMemberMarkAssignmentSeen(assignedReport, "staff-diego"),
+    false,
+  );
+  assert.equal(canStaffMemberMarkAssignmentSeen(assignedReport, null), false);
+  assert.equal(
+    canStaffMemberMarkAssignmentSeen(
+      { ...assignedReport, assignedStaffId: null },
+      "staff-david",
+    ),
+    false,
   );
 });

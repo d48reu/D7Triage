@@ -34,7 +34,7 @@ test("staff intake can set the initial case date and status", async () => {
   assert.equal(movedReport?.createdAt, "2026-06-15T12:00:00.000Z");
 });
 
-test("staff intake can create and edit a case without an email address", async () => {
+test("staff intake accepts a blank email or a telephone-only contact note", async () => {
   const dataDir = mkdtempSync(path.join(os.tmpdir(), "d7-intake-no-email-"));
   process.env.DATA_DIR = dataDir;
 
@@ -66,4 +66,18 @@ test("staff intake can create and edit a case without an email address", async (
 
   assert.equal(updatedReport?.residentEmail, "");
   assert.equal(updatedReport?.residentPhone, "305-555-0101");
+
+  const noteOnlyReport = repository.createIssueReport({
+    category: "OTHER / UNSURE",
+    description: "Resident should be contacted by telephone",
+    addressText: "222 NW 2nd Street, Miami, FL 33128",
+    residentEmail: "No email — telephone only",
+    residentPhone: "305-555-0102",
+    contactConsent: true,
+    newsletterOptIn: true,
+  });
+
+  assert.equal(noteOnlyReport.residentEmail, "No email — telephone only");
+  assert.equal(noteOnlyReport.newsletterOptIn, false);
+  assert.equal(repository.listNotificationEvents(noteOnlyReport.id).length, 0);
 });

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { StaffHeader } from "@/components/staff-header";
+import { selectStaffIdentityAction } from "@/server-actions/auth";
 import { openAssignedCaseAction } from "@/server-actions/issues";
 import { formatStatus, type IssueStatus } from "@/lib/issue-types";
 import {
@@ -8,7 +9,6 @@ import {
   listStaffMembers,
   listStaffNotes,
   type IssueReport,
-  type StaffMember,
 } from "@/lib/issues-repository";
 import { requireStaffSession } from "@/lib/staff-auth";
 import { ACTIVE_STATUSES } from "@/lib/staff-inbox";
@@ -21,14 +21,73 @@ export default async function MyAssignmentsPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireStaffSession();
+  const session = await requireStaffSession();
   const params = (await searchParams) ?? {};
   const selectedStaffId = readSearchParam(params, "staffId");
   const staffMembers = listStaffMembers().filter((staffMember) => staffMember.isActive);
+  const currentStaff =
+    staffMembers.find(
+      (staffMember) => staffMember.id === session.staffMemberId,
+    ) ?? null;
+
+  if (!currentStaff) {
+    return (
+      <main className="min-h-screen bg-slate-100 text-slate-950">
+        <StaffHeader
+          current="assignments"
+          title="My assignments"
+          subtitle="Choose your name once so the app can protect coworkers' new assignments."
+        />
+        <div className="mx-auto max-w-2xl px-5 py-8">
+          <section className="rounded-md border border-amber-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800">
+              Identity needed
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+              Who is using this browser?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              This keeps another coworker&apos;s case marked as new when you
+              view it. Your choice is stored only in this signed staff session.
+            </p>
+            <form action={selectStaffIdentityAction} className="mt-5 space-y-4">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-800">
+                  Your name
+                </span>
+                <select
+                  name="staffMemberId"
+                  required
+                  defaultValue=""
+                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+                >
+                  <option value="" disabled>
+                    Choose your name
+                  </option>
+                  {staffMembers.map((staffMember) => (
+                    <option key={staffMember.id} value={staffMember.id}>
+                      {staffMember.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="submit"
+                className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+              >
+                Continue to my assignments
+              </button>
+            </form>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   const selectedStaff =
     staffMembers.find((staffMember) => staffMember.id === selectedStaffId) ??
-    staffMembers[0] ??
-    null;
+    currentStaff;
+  const viewingOwnQueue = selectedStaff.id === currentStaff.id;
   const reports = selectedStaff
     ? listIssueReports().filter(
         (report) =>
@@ -56,13 +115,17 @@ export default async function MyAssignmentsPage({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-800">
-                Coworker queue
+                Signed in as {currentStaff.name}
               </p>
               <h2 className="mt-1 text-2xl font-semibold tracking-tight">
-                Assigned cases that need action
+                {viewingOwnQueue
+                  ? "Your assigned cases"
+                  : `${selectedStaff.name}'s assigned cases`}
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Pick your name and open the cases that need your attention.
+                {viewingOwnQueue
+                  ? "Opening one of your new assignments marks it as seen."
+                  : "This coworker queue is view-only. Opening a case here will not mark it as seen."}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -74,7 +137,7 @@ export default async function MyAssignmentsPage({
           <form className="mt-5 grid gap-3 md:grid-cols-[1fr_auto]">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-800">
-                Staff member
+                View assignments for
               </span>
               <select
                 name="staffId"
@@ -84,6 +147,9 @@ export default async function MyAssignmentsPage({
                 {staffMembers.map((staffMember) => (
                   <option key={staffMember.id} value={staffMember.id}>
                     {staffMember.name}
+                    {staffMember.id === currentStaff.id
+                      ? " (you)"
+                      : " (view only)"}
                   </option>
                 ))}
               </select>
@@ -106,9 +172,9 @@ export default async function MyAssignmentsPage({
                 <AssignmentRow
                   key={report.id}
                   report={report}
-                  staffMember={selectedStaff}
                   latestStaffUpdate={latestStaffUpdate?.body ?? null}
                   seenAt={seen?.createdAt ?? null}
+                  viewingOwnQueue={viewingOwnQueue}
                 />
               ))}
             </div>
@@ -127,14 +193,14 @@ export default async function MyAssignmentsPage({
 
 function AssignmentRow({
   report,
-  staffMember,
   latestStaffUpdate,
   seenAt,
+  viewingOwnQueue,
 }: {
   report: IssueReport;
-  staffMember: StaffMember;
   latestStaffUpdate: string | null;
   seenAt: string | null;
+  viewingOwnQueue: boolean;
 }) {
   return (
     <div className="grid gap-4 px-4 py-4 lg:grid-cols-[1fr_190px_170px]">
@@ -178,10 +244,9 @@ function AssignmentRow({
       </div>
 
       <div className="flex flex-wrap items-start gap-2 lg:justify-end">
-        {!seenAt ? (
+        {!seenAt && viewingOwnQueue ? (
           <form action={openAssignedCaseAction}>
             <input type="hidden" name="reportId" value={report.id} />
-            <input type="hidden" name="staffMemberId" value={staffMember.id} />
             <button
               type="submit"
               className="rounded-md bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800"
@@ -194,7 +259,7 @@ function AssignmentRow({
             href={`/staff/reports/${report.id}`}
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
-            Open case
+            {viewingOwnQueue ? "Open case" : "View case"}
           </Link>
         )}
       </div>

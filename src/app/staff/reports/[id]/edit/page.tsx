@@ -144,13 +144,14 @@ export default async function EditStaffReportPage({
 
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Resident email
+                  Email / contact note
                 </span>
                 <input
                   name="residentEmail"
-                  type="email"
+                  type="text"
                   defaultValue={report.residentEmail}
-                  placeholder="Optional"
+                  placeholder="Email, no email, or contact note"
+                  maxLength={250}
                   className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
                 />
               </label>

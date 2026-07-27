@@ -5,6 +5,11 @@ import { redirect } from "next/navigation";
 const STAFF_COOKIE_NAME = "district7_staff_session";
 const DEFAULT_STAFF_PASSWORD = "district7-local";
 
+export type StaffSession = {
+  issuedAt: number;
+  staffMemberId: string | null;
+};
+
 function getStaffPassword() {
   const configuredPassword = process.env.STAFF_PASSWORD?.trim();
   if (configuredPassword) {
@@ -59,54 +64,115 @@ function sign(value: string) {
     .digest("base64url");
 }
 
-function createSessionValue() {
-  const payload = `staff.${Date.now()}`;
+function createSessionValue(staffMemberId: string | null) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      issuedAt: Date.now(),
+      staffMemberId,
+    } satisfies StaffSession),
+  ).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
-function isValidSession(value?: string) {
-  if (!value) return false;
-
-  const parts = value.split(".");
-  if (parts.length !== 3) return false;
-
-  const payload = `${parts[0]}.${parts[1]}`;
-  const signature = parts[2];
+function hasValidSignature(payload: string, signature: string) {
   const expected = sign(payload);
 
-  if (signature.length !== expected.length) {
+  if (!signature || signature.length !== expected.length) {
     return false;
   }
 
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
-    return false;
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+
+function isFreshIssuedAt(issuedAt: number) {
+  const age = Date.now() - issuedAt;
+  return Number.isFinite(issuedAt) && age >= 0 && age <= getSessionMaxAgeSeconds() * 1000;
+}
+
+function readSessionValue(value?: string): StaffSession | null {
+  if (!value) return null;
+
+  const parts = value.split(".");
+
+  if (parts.length === 2) {
+    const [payload, signature] = parts;
+    if (!hasValidSignature(payload, signature)) return null;
+
+    try {
+      const parsed = JSON.parse(
+        Buffer.from(payload, "base64url").toString("utf8"),
+      ) as Partial<StaffSession>;
+      const issuedAt = Number(parsed.issuedAt);
+      const staffMemberId =
+        typeof parsed.staffMemberId === "string" && parsed.staffMemberId.trim()
+          ? parsed.staffMemberId.trim()
+          : null;
+
+      return isFreshIssuedAt(issuedAt) ? { issuedAt, staffMemberId } : null;
+    } catch {
+      return null;
+    }
   }
 
-  const issuedAt = Number(parts[1]);
-  return Date.now() - issuedAt <= getSessionMaxAgeSeconds() * 1000;
-}
+  // Keep existing shared-password sessions valid long enough for the user to
+  // choose their coworker identity once after this feature is deployed.
+  if (parts.length === 3) {
+    const payload = `${parts[0]}.${parts[1]}`;
+    const signature = parts[2];
+    const issuedAt = Number(parts[1]);
 
-export async function hasStaffSession() {
-  const cookieStore = await cookies();
-  return isValidSession(cookieStore.get(STAFF_COOKIE_NAME)?.value);
-}
+    if (!hasValidSignature(payload, signature) || !isFreshIssuedAt(issuedAt)) {
+      return null;
+    }
 
-export async function requireStaffSession() {
-  if (!(await hasStaffSession())) {
-    redirect("/staff/login");
+    return { issuedAt, staffMemberId: null };
   }
+
+  return null;
 }
 
-export async function createStaffSession() {
-  const cookieStore = await cookies();
-  const maxAge = getSessionMaxAgeSeconds();
-  cookieStore.set(STAFF_COOKIE_NAME, createSessionValue(), {
+function setStaffSessionCookie(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  staffMemberId: string | null,
+) {
+  cookieStore.set(STAFF_COOKIE_NAME, createSessionValue(staffMemberId), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge,
+    maxAge: getSessionMaxAgeSeconds(),
   });
+}
+
+export async function getStaffSession() {
+  const cookieStore = await cookies();
+  return readSessionValue(cookieStore.get(STAFF_COOKIE_NAME)?.value);
+}
+
+export async function hasStaffSession() {
+  return Boolean(await getStaffSession());
+}
+
+export async function requireStaffSession() {
+  const session = await getStaffSession();
+  if (!session) {
+    redirect("/staff/login");
+  }
+  return session;
+}
+
+export async function createStaffSession(staffMemberId: string | null = null) {
+  const cookieStore = await cookies();
+  setStaffSessionCookie(cookieStore, staffMemberId);
+}
+
+export async function setStaffIdentity(staffMemberId: string) {
+  const cookieStore = await cookies();
+  const session = readSessionValue(cookieStore.get(STAFF_COOKIE_NAME)?.value);
+  if (!session) return false;
+
+  setStaffSessionCookie(cookieStore, staffMemberId);
+  return true;
 }
 
 export async function clearStaffSession() {

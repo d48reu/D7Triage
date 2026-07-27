@@ -40,6 +40,17 @@ export const ACTIVE_STATUSES = new Set<IssueStatus>([
   "follow_up_due",
 ]);
 
+export function canStaffMemberMarkAssignmentSeen(
+  report: Pick<IssueReport, "assignedStaffId">,
+  actingStaffMemberId: string | null | undefined,
+) {
+  return Boolean(
+    actingStaffMemberId &&
+      report.assignedStaffId &&
+      actingStaffMemberId === report.assignedStaffId,
+  );
+}
+
 export function getStaffInboxFilterOptions(rows: StaffInboxRow[]) {
   const count = (predicate: (row: StaffInboxRow) => boolean) =>
     rows.filter(predicate).length;

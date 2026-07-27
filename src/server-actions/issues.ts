@@ -5,7 +5,7 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo-mode";
-import { hasStaffSession } from "@/lib/staff-auth";
+import { getStaffSession, hasStaffSession } from "@/lib/staff-auth";
 import {
   analyzeReportJurisdiction,
   formatDistrictHintStatus,
@@ -19,10 +19,11 @@ import {
   type IssueStatus,
 } from "@/lib/issue-types";
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
-import { isValidOptionalEmail } from "@/lib/contact-details";
+import { isEmailAddress } from "@/lib/contact-details";
 import { getUploadsDir } from "@/lib/data-paths";
 import { resolveReportLocationIntelligence } from "@/lib/report-location-intelligence";
 import { sendStaffAssignmentNotification } from "@/lib/staff-assignment-notifications";
+import { canStaffMemberMarkAssignmentSeen } from "@/lib/staff-inbox";
 import {
   addAttachment,
   acknowledgeAssignment,
@@ -108,6 +109,7 @@ const MAX_DESCRIPTION_LENGTH = 4000;
 const MAX_ADDRESS_LENGTH = 250;
 const MAX_NAME_LENGTH = 120;
 const MAX_PHONE_LENGTH = 40;
+const MAX_EMAIL_CONTACT_LENGTH = 250;
 const MAX_LANGUAGE_LENGTH = 60;
 const ALLOWED_PHOTO_TYPES = new Set([
   "image/jpeg",
@@ -245,13 +247,22 @@ function resolveSubmittedCategory(input: {
   return normalizedCategory;
 }
 
-function markCurrentAssignmentSeen(reportId: string) {
+async function markCurrentAssignmentSeen(reportId: string) {
   const report = getIssueReportById(reportId);
-  if (!report?.assignedStaffId) return null;
+  const session = await getStaffSession();
+  const actingStaffMemberId = session?.staffMemberId;
+
+  if (
+    !report ||
+    !actingStaffMemberId ||
+    !canStaffMemberMarkAssignmentSeen(report, actingStaffMemberId)
+  ) {
+    return null;
+  }
 
   return acknowledgeAssignment({
     reportId,
-    staffMemberId: report.assignedStaffId,
+    staffMemberId: actingStaffMemberId,
   });
 }
 
@@ -357,6 +368,8 @@ export async function createStaffIntakeCaseAction(
   const longitude = readOptionalNumber(formData, "longitude");
   const contactConsent = formData.get("contactConsent") === "on";
   const newsletterOptIn = formData.get("newsletterOptIn") === "on";
+  const safeNewsletterOptIn =
+    newsletterOptIn && isEmailAddress(residentEmail);
   const honeypot = String(formData.get("company") ?? "").trim();
   const photos = formData
     .getAll("photos")
@@ -401,14 +414,7 @@ export async function createStaffIntakeCaseAction(
     };
   }
 
-  if (!isValidOptionalEmail(residentEmail)) {
-    return {
-      status: "error",
-      message: "Enter a valid email address or leave email blank.",
-    };
-  }
-
-  if (residentEmail && !contactConsent) {
+  if (isEmailAddress(residentEmail) && !contactConsent) {
     return {
       status: "error",
       message: "Email update consent is required for this local MVP.",
@@ -447,6 +453,13 @@ export async function createStaffIntakeCaseAction(
     return {
       status: "error",
       message: `Phone must be ${MAX_PHONE_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (residentEmail.length > MAX_EMAIL_CONTACT_LENGTH) {
+    return {
+      status: "error",
+      message: `Email or contact note must be ${MAX_EMAIL_CONTACT_LENGTH} characters or fewer.`,
     };
   }
 
@@ -502,7 +515,7 @@ export async function createStaffIntakeCaseAction(
     residentName,
     residentPhone,
     preferredLanguage,
-    newsletterOptIn,
+    newsletterOptIn: safeNewsletterOptIn,
     createdAt,
     initialStatus: submittedStatus as IssueStatus,
   });
@@ -617,13 +630,6 @@ export async function updateStaffIntakeCaseAction(
     return { status: "error", message: "Choose a valid case date." };
   }
 
-  if (!isValidOptionalEmail(residentEmail)) {
-    return {
-      status: "error",
-      message: "Enter a valid email address or leave email blank.",
-    };
-  }
-
   if (description.length > MAX_DESCRIPTION_LENGTH) {
     return {
       status: "error",
@@ -649,6 +655,13 @@ export async function updateStaffIntakeCaseAction(
     return {
       status: "error",
       message: `Phone must be ${MAX_PHONE_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (residentEmail.length > MAX_EMAIL_CONTACT_LENGTH) {
+    return {
+      status: "error",
+      message: `Email or contact note must be ${MAX_EMAIL_CONTACT_LENGTH} characters or fewer.`,
     };
   }
 
@@ -794,7 +807,7 @@ export async function updateIssueStatusAction(formData: FormData) {
   }
 
   updateIssueStatus({ reportId, status, publicNote });
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
   revalidatePath(`/report/${report.publicTrackingToken}`);
@@ -833,7 +846,7 @@ export async function saveQuickTriageAction(formData: FormData) {
   }
 
   if (!assignmentChanged) {
-    markCurrentAssignmentSeen(reportId);
+    await markCurrentAssignmentSeen(reportId);
   }
 
   revalidatePath("/staff");
@@ -880,7 +893,7 @@ export async function addIssuePhotosAction(formData: FormData) {
   }
 
   await savePhotoAttachments(reportId, photos);
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
   addStaffNote({
     reportId,
     body: `${photos.length} staff photo${photos.length === 1 ? "" : "s"} attached.`,
@@ -990,16 +1003,14 @@ export async function updateIssueDetailsAction(formData: FormData) {
     String(formData.get("preferredLanguage") ?? "").trim() || "English";
   const contactConsent = formData.get("contactConsent") === "on";
   const newsletterOptIn = formData.get("newsletterOptIn") === "on";
+  const safeNewsletterOptIn =
+    newsletterOptIn && isEmailAddress(residentEmail);
 
   if (
     submittedCategory !== report.category &&
     !isKnownIssueCategoryInput(submittedCategory)
   ) {
     throw new Error("Invalid category");
-  }
-
-  if (!isValidOptionalEmail(residentEmail)) {
-    throw new Error("Enter a valid email address or leave email blank.");
   }
 
   if (description.length > MAX_DESCRIPTION_LENGTH) {
@@ -1016,6 +1027,12 @@ export async function updateIssueDetailsAction(formData: FormData) {
 
   if (residentPhone.length > MAX_PHONE_LENGTH) {
     throw new Error(`Phone must be ${MAX_PHONE_LENGTH} characters or fewer.`);
+  }
+
+  if (residentEmail.length > MAX_EMAIL_CONTACT_LENGTH) {
+    throw new Error(
+      `Email or contact note must be ${MAX_EMAIL_CONTACT_LENGTH} characters or fewer.`,
+    );
   }
 
   if (preferredLanguage.length > MAX_LANGUAGE_LENGTH) {
@@ -1045,7 +1062,7 @@ export async function updateIssueDetailsAction(formData: FormData) {
       "newsletterOptIn",
       "Newsletter consent",
       report.newsletterOptIn,
-      newsletterOptIn,
+      safeNewsletterOptIn,
     ),
   ].filter((change): change is CaseDetailAuditChange => Boolean(change));
   const changedFields = detailChanges.map((change) => change.fieldLabel.toLowerCase());
@@ -1061,9 +1078,9 @@ export async function updateIssueDetailsAction(formData: FormData) {
     residentPhone,
     preferredLanguage,
     contactConsent,
-    newsletterOptIn,
+    newsletterOptIn: safeNewsletterOptIn,
   });
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
 
   if (addressChanged) {
     const locationIntelligence = await resolveReportLocationIntelligence({
@@ -1128,19 +1145,25 @@ export async function openAssignedCaseAction(formData: FormData) {
   }
 
   const reportId = readRequiredText(formData, "reportId");
-  const staffMemberId = readRequiredText(formData, "staffMemberId");
   const report = getIssueReportById(reportId);
-  const staffMember = getStaffMemberById(staffMemberId);
+  const session = await getStaffSession();
+  const actingStaffMemberId = session?.staffMemberId;
 
   if (!report) {
     throw new Error("Report not found");
   }
 
-  if (!staffMember || report.assignedStaffId !== staffMember.id) {
-    throw new Error("This case is no longer assigned to that staff member.");
+  if (
+    !actingStaffMemberId ||
+    !canStaffMemberMarkAssignmentSeen(report, actingStaffMemberId)
+  ) {
+    throw new Error("Only the assigned coworker can mark this case as seen.");
   }
 
-  acknowledgeAssignment({ reportId, staffMemberId });
+  acknowledgeAssignment({
+    reportId,
+    staffMemberId: actingStaffMemberId,
+  });
 
   revalidatePath("/staff");
   revalidatePath("/staff/my");
@@ -1166,7 +1189,7 @@ export async function refreshLocationIntelligenceAction(formData: FormData) {
     reportId,
     ...locationIntelligence,
   });
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
 
   revalidatePath("/staff");
   revalidatePath("/staff/analytics");
@@ -1184,7 +1207,7 @@ export async function addStaffNoteAction(formData: FormData) {
   }
 
   addStaffNote({ reportId, body });
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
   revalidatePath(`/staff/reports/${reportId}`);
   redirect(`/staff/reports/${reportId}`);
 }
@@ -1219,7 +1242,7 @@ export async function addReferralAction(formData: FormData) {
     outcomeNote: String(formData.get("outcomeNote") ?? "").trim(),
     publicNote: String(formData.get("publicNote") ?? "").trim(),
   });
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
 
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);
@@ -1249,7 +1272,7 @@ export async function updateReferralOutcomeAction(formData: FormData) {
     outcomeNote: String(formData.get("outcomeNote") ?? "").trim(),
     notes: String(formData.get("notes") ?? "").trim(),
   });
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
 
   revalidatePath("/staff");
   revalidatePath("/staff/analytics");
@@ -1272,7 +1295,7 @@ export async function markDuplicateAction(formData: FormData) {
     masterReportId,
     note,
   });
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
 
   revalidatePath("/staff");
   revalidatePath("/staff/analytics");
@@ -1295,7 +1318,7 @@ export async function markDistinctAction(formData: FormData) {
     reportId,
     note,
   });
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
 
   if (report.duplicateOfReportId) {
     revalidatePath(`/staff/reports/${report.duplicateOfReportId}`);
@@ -1382,7 +1405,7 @@ export async function reviewAiSuggestionAction(
     feedbackDisposition,
     feedbackNote: String(formData.get("feedbackNote") ?? "").trim(),
   });
-  markCurrentAssignmentSeen(reportId);
+  await markCurrentAssignmentSeen(reportId);
 
   revalidatePath("/staff");
   revalidatePath(`/staff/reports/${reportId}`);

@@ -12,6 +12,10 @@ import {
 } from "@/demo-data/demo-seed";
 import { isDemoMode } from "@/lib/demo-mode";
 import {
+  getDeliverableEmail,
+  isEmailAddress,
+} from "@/lib/contact-details";
+import {
   ISSUE_CATEGORIES,
   formatStatus,
   normalizeIssueCategory,
@@ -1804,6 +1808,9 @@ export function createIssueReport(input: CreateIssueReportInput) {
   const database = getDb();
   const id = makeId();
   const createdAt = input.createdAt ?? nowIso();
+  const residentEmail = input.residentEmail.trim();
+  const deliverableEmail = getDeliverableEmail(residentEmail);
+  const newsletterOptIn = Boolean(input.newsletterOptIn && deliverableEmail);
   const initialStatus = input.initialStatus ?? "received";
   const token = makeTrackingToken();
   const initialPublicNote =
@@ -1870,12 +1877,12 @@ export function createIssueReport(input: CreateIssueReportInput) {
       rightOfWayHint: input.rightOfWayHint ?? "unclear",
       parcelMatchedAt: input.parcelMatchedAt ?? null,
       residentName: input.residentName || null,
-      residentEmail: input.residentEmail,
+      residentEmail,
       residentPhone: input.residentPhone || null,
       preferredLanguage: input.preferredLanguage || "English",
       contactConsent: input.contactConsent ? 1 : 0,
-      newsletterOptIn: input.newsletterOptIn ? 1 : 0,
-      newsletterOptInAt: input.newsletterOptIn ? createdAt : null,
+      newsletterOptIn: newsletterOptIn ? 1 : 0,
+      newsletterOptInAt: newsletterOptIn ? createdAt : null,
       createdAt,
       updatedAt: createdAt,
     });
@@ -1888,12 +1895,12 @@ export function createIssueReport(input: CreateIssueReportInput) {
       createdAt,
     });
 
-    if (input.residentEmail.trim()) {
+    if (deliverableEmail) {
       insertNotificationEventTx(database, {
         reportId: id,
         eventType: "confirmation",
         templateKey: "confirmation",
-        recipient: input.residentEmail,
+        recipient: deliverableEmail,
         subject: "District 7 received your report",
         body: `${initialPublicNote} Tracking token: ${token}`,
         deliveryStatus: "local_stub",
@@ -2041,7 +2048,10 @@ export function listNewsletterContacts() {
 
   const latestReportByEmail = new Map(
     listIssueReports()
-      .filter((report) => report.newsletterOptIn)
+      .filter(
+        (report) =>
+          report.newsletterOptIn && isEmailAddress(report.residentEmail),
+      )
       .reduce((map, report) => {
         const key = report.residentEmail.toLowerCase();
         if (!map.has(key)) {
@@ -2051,7 +2061,9 @@ export function listNewsletterContacts() {
       }, new Map<string, string>()),
   );
 
-  return rows.map(
+  return rows
+    .filter((row) => isEmailAddress(row.resident_email))
+    .map(
     (row): NewsletterContact => ({
       residentEmail: row.resident_email,
       residentName: row.resident_name,
@@ -2062,8 +2074,8 @@ export function listNewsletterContacts() {
       latestReportId:
         latestReportByEmail.get(row.resident_email.toLowerCase()) || "",
       reportCount: row.report_count,
-    }),
-  );
+      }),
+    );
 }
 
 export function getJurisdictionConfig(): JurisdictionConfig {
@@ -2563,7 +2575,10 @@ export function updateIssueDetails(input: {
   if (!report) return null;
 
   const now = nowIso();
-  const newsletterOptInAt = input.newsletterOptIn
+  const residentEmail = input.residentEmail.trim();
+  const newsletterOptIn =
+    input.newsletterOptIn && isEmailAddress(residentEmail);
+  const newsletterOptInAt = newsletterOptIn
     ? report.newsletterOptInAt || now
     : null;
 
@@ -2581,11 +2596,11 @@ export function updateIssueDetails(input: {
       input.description,
       input.addressText,
       input.residentName?.trim() || null,
-      input.residentEmail,
+      residentEmail,
       input.residentPhone?.trim() || null,
       input.preferredLanguage?.trim() || "English",
       input.contactConsent ? 1 : 0,
-      input.newsletterOptIn ? 1 : 0,
+      newsletterOptIn ? 1 : 0,
       newsletterOptInAt,
       now,
       input.reportId,
@@ -3232,7 +3247,7 @@ export function markIssueAsDuplicate(input: {
       reportId: report.id,
       eventType: "duplicate_linked",
       templateKey: "duplicate_linked",
-      recipient: report.residentEmail,
+      recipient: getDeliverableEmail(report.residentEmail),
       subject: "District 7 linked your report to an existing case",
       body: `${publicNote} Primary case: ${masterReport.category} at ${masterReport.addressText}.`,
       deliveryStatus: "local_stub",
@@ -3290,7 +3305,7 @@ export function markIssueAsDistinct(input: {
         reportId: report.id,
         eventType: "duplicate_reopened",
         templateKey: "status_update",
-        recipient: report.residentEmail,
+        recipient: getDeliverableEmail(report.residentEmail),
         subject: "District 7 kept your report as a separate case",
         body: publicNote,
         deliveryStatus: "local_stub",

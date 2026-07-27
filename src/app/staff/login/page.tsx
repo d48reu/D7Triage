@@ -3,10 +3,20 @@ import Link from "next/link";
 import { StaffLoginForm } from "@/components/staff-login-form";
 import { isDemoMode } from "@/lib/demo-mode";
 import { getStaffAuthConfiguration } from "@/lib/staff-auth";
+import { listStaffMembers } from "@/lib/issues-repository";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export default function StaffLoginPage() {
   const authConfig = getStaffAuthConfiguration();
   const demoMode = isDemoMode();
+  const staffMembers = listStaffMembers()
+    .filter((staffMember) => staffMember.isActive)
+    .map((staffMember) => ({
+      id: staffMember.id,
+      name: staffMember.name,
+    }));
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -43,7 +53,7 @@ export default function StaffLoginPage() {
                 : "derived from the staff password"}
             </div>
           </div>
-          <StaffLoginForm />
+          <StaffLoginForm staffMembers={staffMembers} />
         </section>
       </div>
     </main>

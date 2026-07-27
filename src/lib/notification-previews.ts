@@ -6,6 +6,7 @@ import type {
   Referral,
 } from "@/lib/issues-repository";
 import { formatStatus } from "@/lib/issue-types";
+import { getDeliverableEmail } from "@/lib/contact-details";
 import { NOTIFICATION_TEMPLATE_DEFINITIONS } from "@/lib/notification-template-definitions";
 
 export type NotificationPreview = {
@@ -68,7 +69,7 @@ export function buildNotificationPreview(input: {
   templates?: Map<string, NotificationTemplate>;
 }): NotificationPreview {
   const { report, events, referrals, templates } = input;
-  const recipient = trimOrNull(report.residentEmail);
+  const recipient = getDeliverableEmail(report.residentEmail);
   const canSend = Boolean(report.contactConsent && recipient);
   const deliveryStatus = canSend ? "ready" : "suppressed";
   const reason = canSend

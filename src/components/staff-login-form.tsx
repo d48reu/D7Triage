@@ -8,7 +8,11 @@ const initialState: LoginState = {
   message: "Use STAFF_PASSWORD from .env.local. The local fallback password is only meant for development.",
 };
 
-export function StaffLoginForm() {
+export function StaffLoginForm({
+  staffMembers,
+}: {
+  staffMembers: Array<{ id: string; name: string }>;
+}) {
   const [state, formAction, isPending] = useActionState(
     loginStaffAction,
     initialState,
@@ -16,6 +20,27 @@ export function StaffLoginForm() {
 
   return (
     <form action={formAction} className="mt-6 space-y-4">
+      <label className="block">
+        <span className="mb-2 block text-sm font-medium text-slate-800">
+          Your name
+        </span>
+        <select
+          name="staffMemberId"
+          required
+          defaultValue=""
+          className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+        >
+          <option value="" disabled>
+            Choose your name
+          </option>
+          {staffMembers.map((staffMember) => (
+            <option key={staffMember.id} value={staffMember.id}>
+              {staffMember.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label className="block">
         <span className="mb-2 block text-sm font-medium text-slate-800">
           Staff password
