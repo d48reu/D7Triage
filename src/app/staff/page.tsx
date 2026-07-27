@@ -1,6 +1,7 @@
 import { DemoSiteNotice } from "@/components/demo-site-notice";
 import { StaffHeader } from "@/components/staff-header";
 import Link from "next/link";
+import { isEmailAddress } from "@/lib/contact-details";
 import { isDemoMode } from "@/lib/demo-mode";
 import { formatStatus, type IssueStatus } from "@/lib/issue-types";
 import {
@@ -130,17 +131,11 @@ export default async function StaffPage({
       const newAssignments = assignedRows.filter((row) =>
         row.flags.includes("New assignment"),
       );
-      const latestAssignedAt = assignedRows
-        .map((row) => row.report.assignedAt)
-        .filter((value): value is string => Boolean(value))
-        .sort()
-        .at(-1);
 
       return {
         staffMember,
         assignedCount: assignedRows.length,
         newAssignmentCount: newAssignments.length,
-        latestAssignedAt,
       };
     })
     .filter((row) => row.assignedCount > 0 || row.newAssignmentCount > 0)
@@ -155,7 +150,7 @@ export default async function StaffPage({
       <StaffHeader
         current="command"
         title="Case Dashboard"
-        subtitle="Triage, assignment accountability, and active case follow-up."
+        subtitle="Find, assign, and follow up on constituent cases."
       />
 
       <div className="mx-auto max-w-7xl px-5 py-6">
@@ -165,258 +160,307 @@ export default async function StaffPage({
           </div>
         ) : null}
 
-        <section className="grid gap-3 sm:grid-cols-5">
-          <Metric label="All reports" value={reports.length} />
-          <Metric label="Active" value={activeCount} />
-          <Metric label="Unassigned" value={unassignedCount.length} tone="amber" />
-          <Metric label="New assignments" value={newAssignmentRows.length} tone="amber" />
-          <Metric label="Follow-up due" value={followUpDueCount} tone="rose" />
+        <section
+          aria-label="Case totals"
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <Metric
+            label="Active cases"
+            value={activeCount}
+            href="/staff"
+            selected={selectedFilter === "active"}
+          />
+          <Metric
+            label="Unassigned"
+            value={unassignedCount.length}
+            href="/staff?filter=unassigned"
+            tone="amber"
+            selected={selectedFilter === "unassigned"}
+          />
+          <Metric
+            label="New assignments"
+            value={newAssignmentRows.length}
+            href="/staff?filter=needs_acknowledgment"
+            tone="amber"
+            selected={selectedFilter === "needs_acknowledgment"}
+          />
+          <Metric
+            label="Follow-up due"
+            value={followUpDueCount}
+            href="/staff?filter=follow_up_due"
+            tone="rose"
+            selected={selectedFilter === "follow_up_due"}
+          />
         </section>
 
         <section className="mt-6 rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Assignment accountability</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Active assigned cases by coworker.
-              </p>
-            </div>
-            <Link
-              href="/staff?filter=needs_acknowledgment"
-              className={`rounded-md px-4 py-2 text-sm font-semibold ${
-                newAssignmentRows.length > 0
-                  ? "bg-amber-600 text-white hover:bg-amber-700"
-                  : "border border-slate-300 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              New assignments: {newAssignmentRows.length}
-            </Link>
-          </div>
-
-          {staffAssignmentRows.length > 0 ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {staffAssignmentRows.map((row) => (
-                <Link
-                  key={row.staffMember.id}
-                  href={`/staff/my?staffId=${row.staffMember.id}`}
-                  className="rounded-md border border-slate-200 bg-slate-50 p-4 hover:bg-white"
-                >
-                  <div className="font-semibold text-slate-950">
-                    {row.staffMember.name}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-                    <span className="rounded bg-white px-2 py-1 text-slate-700">
-                      Active {row.assignedCount}
-                    </span>
-                    <span
-                      className={`rounded px-2 py-1 ${
-                        row.newAssignmentCount > 0
-                          ? "bg-amber-100 text-amber-900"
-                          : "bg-emerald-100 text-emerald-900"
-                      }`}
-                    >
-                      New {row.newAssignmentCount}
-                    </span>
-                  </div>
-                  {row.latestAssignedAt ? (
-                    <div className="mt-3 text-xs text-slate-500">
-                      Latest assignment{" "}
-                      {new Date(row.latestAssignedAt).toLocaleString()}
-                    </div>
-                  ) : null}
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              No active assigned cases.
-            </div>
-          )}
-        </section>
-
-        <section className="mt-6 rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-          <form className="grid gap-3 lg:grid-cols-[1fr_auto_auto]">
-            <input type="hidden" name="filter" value={selectedFilter} />
+          <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto_auto] md:items-end">
             <label className="block">
-              <span className="sr-only">Search reports</span>
+              <span className="mb-1.5 block text-sm font-semibold text-slate-800">
+                Search cases
+              </span>
               <input
                 name="q"
                 defaultValue={searchQuery}
-                placeholder="Search address, category, resident, owner, or description"
+                placeholder="Name, email, phone, address, or case details"
                 className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
               />
             </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-slate-800">
+                Show
+              </span>
+              <select
+                name="filter"
+                defaultValue={selectedFilter}
+                className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
+              >
+                {filterOptions.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label} ({option.count})
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="submit"
-              className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+              className="h-11 rounded-md bg-sky-700 px-5 text-sm font-semibold text-white hover:bg-sky-800"
             >
-              Search
+              Apply
             </button>
             <Link
-              href={`/staff?filter=${selectedFilter}`}
-              className="rounded-md border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              href="/staff"
+              className="flex h-11 items-center justify-center rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
-              Clear
+              Reset
             </Link>
           </form>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {filterOptions.map((option) => (
-              <Link
-                key={option.key}
-                href={buildStaffHref({
-                  filter: option.key,
-                  q: searchQuery,
-                })}
-                className={`rounded-full px-3 py-1 text-sm font-medium ${
-                  selectedFilter === option.key
-                    ? "bg-sky-700 text-white"
-                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                {option.label}{" "}
-                <span className={selectedFilter === option.key ? "text-sky-100" : "text-slate-500"}>
-                  {option.count}
-                </span>
-              </Link>
-            ))}
-          </div>
-
-          <div className="mt-3 text-sm text-slate-600">
+          <div className="mt-3 text-sm text-slate-600" aria-live="polite">
             Showing {filteredRows.length} of {reports.length} reports
             {searchQuery ? ` for "${searchQuery}"` : ""}.
             {unassignedCount.length > 0 ? ` ${unassignedCount.length} active reports are unassigned.` : ""}
           </div>
         </section>
 
-        <section className="mt-6 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[1.2fr_180px_150px_210px_1fr_96px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 max-xl:hidden">
-            <div>Case</div>
-            <div>Owner</div>
-            <div>Status</div>
-            <div>Next action</div>
-            <div>Latest update</div>
-            <div>Open</div>
-          </div>
+        <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <section aria-labelledby="case-list-heading">
+            <div className="mb-3">
+              <h2 id="case-list-heading" className="text-xl font-semibold">
+                Cases
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {filteredRows.length} shown · {reports.length} total
+              </p>
+            </div>
 
-          {filteredRows.length > 0 ? (
-            <div className="divide-y divide-slate-200">
-              {filteredRows.map(({
-                report,
-                jurisdiction,
-                countyCommissionDistrict,
-                ownerLabel,
-                assignedStaffName,
-                flags,
-                referrals,
-                latestStaffUpdate,
-                followUpDate,
-                nextAction,
-              }) => (
-                <Link
-                  key={report.id}
-                  href={`/staff/reports/${report.id}`}
-                  className="grid gap-3 px-4 py-4 transition hover:bg-slate-50 xl:grid-cols-[1.2fr_180px_150px_210px_1fr_96px]"
-                >
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-slate-950">
-                        {report.category}
-                      </span>
-                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600 md:hidden">
-                        {formatStatus(report.status)}
-                      </span>
-                      {jurisdiction.districtHintStatus === "likely_outside_district" ? (
-                        <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
-                          Outside District 7
-                        </span>
-                      ) : null}
-                      {flags.slice(0, 3).map((flag) => (
-                        <FlagBadge key={flag} label={flag} />
-                      ))}
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">
-                      {report.description}
-                    </p>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {report.addressText}
-                    </div>
-                  </div>
-                  <div className="text-sm text-slate-700">
-                    <div className="font-medium text-slate-900">
-                      {assignedStaffName || "Unassigned"}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Suggested: {ownerLabel}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {formatOwnershipHint(jurisdiction.ownershipHint)} |{" "}
-                      {formatDistrictHintStatus(jurisdiction.districtHintStatus)}
-                    </div>
-                    {jurisdiction.districtHintStatus === "likely_outside_district" &&
-                    countyCommissionDistrict ? (
-                      <div className="mt-1 text-xs text-slate-500">
-                        County district {countyCommissionDistrict.districtNumber}
-                        {countyCommissionDistrict.commissionerName
-                          ? ` (${countyCommissionDistrict.commissionerName})`
-                          : ""}
-                      </div>
-                    ) : null}
-                    {report.municipalityName ? (
-                      <div className="mt-1 text-xs text-slate-500">
-                        {report.municipalityName}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="text-sm text-slate-700">
-                    <StatusBadge status={report.status} />
-                    <div className="mt-2 text-xs text-slate-500 xl:hidden">
-                      Updated {new Date(report.updatedAt).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="text-sm text-slate-700">
-                    <div className="font-medium text-slate-900">{nextAction}</div>
-                    {followUpDate ? (
-                      <div className="mt-1 rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">
-                        Follow up {formatDateOnly(followUpDate)}
-                      </div>
-                    ) : null}
-                    {referrals.length > 0 ? (
-                      <div className="mt-1 text-xs text-slate-500">
-                        Referrals: {referrals.length}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="text-sm text-slate-600">
-                    {latestStaffUpdate ? (
-                      <>
-                        <div className="line-clamp-2 leading-6">
-                          {latestStaffUpdate.body}
+            {filteredRows.length > 0 ? (
+              <div className="space-y-3">
+                {filteredRows.map(({
+                  report,
+                  jurisdiction,
+                  countyCommissionDistrict,
+                  ownerLabel,
+                  assignedStaffName,
+                  flags,
+                  referrals,
+                  latestStaffUpdate,
+                  followUpDate,
+                  nextAction,
+                }) => {
+                  const contactName = report.residentName?.trim() || "Name not entered";
+                  const emailOrNote = report.residentEmail.trim();
+
+                  return (
+                    <article
+                      key={report.id}
+                      className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"
+                    >
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-slate-950">
+                                {report.category}
+                              </span>
+                              <StatusBadge status={report.status} />
+                              {jurisdiction.districtHintStatus === "likely_outside_district" ? (
+                                <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                                  Outside District 7
+                                </span>
+                              ) : null}
+                              {flags.slice(0, 3).map((flag) => (
+                                <FlagBadge key={flag} label={flag} />
+                              ))}
+                            </div>
+                            <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-700">
+                              {report.description}
+                            </p>
+                            <div className="mt-1 text-sm text-slate-500">
+                              {report.addressText}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {formatOwnershipHint(jurisdiction.ownershipHint)} ·{" "}
+                              {formatDistrictHintStatus(jurisdiction.districtHintStatus)}
+                              {jurisdiction.districtHintStatus === "likely_outside_district" &&
+                              countyCommissionDistrict
+                                ? ` · County district ${countyCommissionDistrict.districtNumber}`
+                                : ""}
+                              {report.municipalityName ? ` · ${report.municipalityName}` : ""}
+                            </div>
+                          </div>
+                          <Link
+                            href={`/staff/reports/${report.id}`}
+                            aria-label={`Open ${report.category} case for ${contactName}`}
+                            className="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Open case
+                          </Link>
                         </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {new Date(latestStaffUpdate.createdAt).toLocaleString()}
+                      </div>
+
+                      <dl className="grid gap-px border-t border-slate-200 bg-slate-200 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="min-w-0 bg-slate-50 p-4">
+                          <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                            Caller / emailer
+                          </dt>
+                          <dd className="mt-2">
+                            <div className="font-semibold text-slate-950">{contactName}</div>
+                            {emailOrNote ? (
+                              isEmailAddress(emailOrNote) ? (
+                                <a
+                                  href={`mailto:${emailOrNote}`}
+                                  className="mt-1 block truncate text-sm text-sky-700 hover:underline"
+                                >
+                                  {emailOrNote}
+                                </a>
+                              ) : (
+                                <div className="mt-1 text-sm text-slate-600">
+                                  {emailOrNote}
+                                </div>
+                              )
+                            ) : (
+                              <div className="mt-1 text-sm text-slate-500">No email entered</div>
+                            )}
+                            {report.residentPhone ? (
+                              <a
+                                href={`tel:${report.residentPhone}`}
+                                className="mt-1 block text-sm text-slate-600 hover:text-sky-700 hover:underline"
+                              >
+                                {report.residentPhone}
+                              </a>
+                            ) : null}
+                          </dd>
                         </div>
-                      </>
-                    ) : (
-                      <span className="text-slate-500">No internal updates yet</span>
-                    )}
-                  </div>
-                  <div className="flex items-start xl:justify-end">
-                    <span className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-                      Open
+                        <div className="min-w-0 bg-slate-50 p-4">
+                          <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                            Assigned to
+                          </dt>
+                          <dd className="mt-2">
+                            <div className={`font-semibold ${
+                              assignedStaffName ? "text-slate-950" : "text-amber-800"
+                            }`}>
+                              {assignedStaffName || "Unassigned"}
+                            </div>
+                            <div className="mt-1 text-sm text-slate-500">
+                              Suggested: {ownerLabel}
+                            </div>
+                          </dd>
+                        </div>
+                        <div className="min-w-0 bg-slate-50 p-4">
+                          <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                            Next step
+                          </dt>
+                          <dd className="mt-2">
+                            <div className="font-semibold text-slate-950">{nextAction}</div>
+                            {followUpDate ? (
+                              <div className="mt-1 text-sm font-medium text-amber-800">
+                                Follow up {formatDateOnly(followUpDate)}
+                              </div>
+                            ) : null}
+                            {referrals.length > 0 ? (
+                              <div className="mt-1 text-sm text-slate-500">
+                                {referrals.length} {referrals.length === 1 ? "referral" : "referrals"}
+                              </div>
+                            ) : null}
+                          </dd>
+                        </div>
+                        <div className="min-w-0 bg-slate-50 p-4">
+                          <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                            Latest activity
+                          </dt>
+                          <dd className="mt-2 text-sm text-slate-600">
+                            {latestStaffUpdate ? (
+                              <div className="line-clamp-2">{latestStaffUpdate.body}</div>
+                            ) : (
+                              <div>No internal updates yet</div>
+                            )}
+                            <div className="mt-1 text-xs text-slate-500">
+                              {new Date(
+                                latestStaffUpdate?.createdAt ?? report.updatedAt,
+                              ).toLocaleString()}
+                            </div>
+                          </dd>
+                        </div>
+                      </dl>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-md border border-slate-200 bg-white p-8 text-sm text-slate-600 shadow-sm">
+                {reports.length > 0
+                  ? "No reports match this filter or search."
+                  : "No reports yet. Submit one through the public report form to test the local flow."}
+              </div>
+            )}
+          </section>
+
+          <aside className="rounded-md border border-slate-200 bg-white p-4 shadow-sm xl:sticky xl:top-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-slate-950">Team workload</h2>
+                <p className="mt-1 text-sm text-slate-600">Active assigned cases.</p>
+              </div>
+              <Link
+                href="/staff/my"
+                className="text-sm font-semibold text-sky-700 hover:underline"
+              >
+                My cases
+              </Link>
+            </div>
+
+            {staffAssignmentRows.length > 0 ? (
+              <div className="mt-3 divide-y divide-slate-200">
+                {staffAssignmentRows.map((row) => (
+                  <Link
+                    key={row.staffMember.id}
+                    href={`/staff/my?staffId=${row.staffMember.id}`}
+                    className="flex items-center justify-between gap-3 py-3 hover:text-sky-800"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">
+                        {row.staffMember.name}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {row.newAssignmentCount > 0
+                          ? `${row.newAssignmentCount} new`
+                          : "No new assignments"}
+                      </div>
+                    </div>
+                    <span className="rounded bg-slate-100 px-2 py-1 text-sm font-semibold tabular-nums text-slate-700">
+                      {row.assignedCount}
                     </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="p-8 text-sm text-slate-600">
-              {reports.length > 0
-                ? "No reports match this filter or search."
-                : "No reports yet. Submit one through the public report form to test the local flow."}
-            </div>
-          )}
-        </section>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-3 rounded-md bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                No active assigned cases.
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
     </main>
   );
@@ -431,18 +475,6 @@ function readSearchParam(
     return value[0] ?? "";
   }
   return value ?? "";
-}
-
-function buildStaffHref(input: { filter: string; q: string }) {
-  const query = new URLSearchParams();
-  if (input.filter && input.filter !== "active") {
-    query.set("filter", input.filter);
-  }
-  if (input.q) {
-    query.set("q", input.q);
-  }
-  const serialized = query.toString();
-  return serialized ? `/staff?${serialized}` : "/staff";
 }
 
 function FlagBadge({ label }: { label: string }) {
@@ -553,11 +585,15 @@ function formatDateOnly(value: string) {
 function Metric({
   label,
   value,
+  href,
   tone = "neutral",
+  selected = false,
 }: {
   label: string;
   value: number;
+  href: string;
   tone?: "neutral" | "amber" | "rose";
+  selected?: boolean;
 }) {
   const style =
     tone === "rose" && value > 0
@@ -567,11 +603,17 @@ function Metric({
         : "border-slate-200 bg-white text-slate-950";
 
   return (
-    <div className={`rounded-md border px-4 py-3 shadow-sm ${style}`}>
+    <Link
+      href={href}
+      aria-current={selected ? "page" : undefined}
+      className={`rounded-md border px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow ${
+        selected ? "ring-2 ring-sky-600 ring-offset-2" : ""
+      } ${style}`}
+    >
       <div className="text-2xl font-semibold tabular-nums">{value}</div>
       <div className="mt-1 text-xs font-medium uppercase tracking-[0.08em] opacity-70">
         {label}
       </div>
-    </div>
+    </Link>
   );
 }
