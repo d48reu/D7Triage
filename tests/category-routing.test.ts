@@ -14,9 +14,13 @@ test("normalizes legacy category labels to the current staff category set", () =
     "ILLEGAL DUMPING/TRASH",
   );
   assert.equal(normalizeIssueCategory("Sidewalks"), "SIDEWALKS");
+  assert.equal(
+    normalizeIssueCategory("Parking enforcement"),
+    "PARKING ENFORCEMENT",
+  );
 });
 
-test("infers housing and storm-drain categories from intake text", () => {
+test("infers housing, storm-drain, and parking categories from intake text", () => {
   assert.equal(
     inferIssueCategoryFromText({
       category: "Other / unsure",
@@ -35,5 +39,15 @@ test("infers housing and storm-drain categories from intake text", () => {
       addressText: "6690 SW 40th St, Miami, FL 33155",
     }),
     "FLOODING",
+  );
+
+  assert.equal(
+    inferIssueCategoryFromText({
+      category: "Other / unsure",
+      description:
+        "A vehicle is illegally parked across the sidewalk and blocking the driveway.",
+      addressText: "123 Main Street",
+    }),
+    "PARKING ENFORCEMENT",
   );
 });

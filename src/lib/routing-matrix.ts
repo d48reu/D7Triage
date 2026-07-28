@@ -100,6 +100,17 @@ export const ROUTING_RULES: RoutingRule[] = [
       "Escalate crash patterns, school-zone concerns, missing or damaged traffic control, and urgent visibility issues.",
   },
   {
+    category: "PARKING ENFORCEMENT",
+    likelyResponsibleParty:
+      "Parking enforcement, police non-emergency, or municipality",
+    staffGuidance:
+      "Capture the exact location, vehicle description or plate if available, the type of violation, when it occurs, and whether a driveway, sidewalk, travel lane, hydrant, or accessible space is blocked.",
+    residentExplanation:
+      "Parking concerns are routed to the enforcement agency responsible for that location.",
+    escalationNotes:
+      "Escalate blocked emergency access, occupied accessible spaces, traffic hazards, or vehicles preventing safe entry or exit.",
+  },
+  {
     category: "NOISE",
     likelyResponsibleParty: "Code compliance, police non-emergency, or municipality",
     staffGuidance:

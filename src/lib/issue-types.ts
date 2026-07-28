@@ -8,6 +8,7 @@ export const ISSUE_CATEGORIES = [
   "GARBAGE/RECYCLING",
   "SIDEWALKS",
   "TRAFFIC",
+  "PARKING ENFORCEMENT",
   "NOISE",
   "PEACOCKS",
   "PARKS",
@@ -42,6 +43,8 @@ const LEGACY_CATEGORY_ALIASES: Record<string, IssueCategory> = {
   "road and potholes": "TRAFFIC",
   potholes: "TRAFFIC",
   "traffic safety": "TRAFFIC",
+  parking: "PARKING ENFORCEMENT",
+  "parking enforcement": "PARKING ENFORCEMENT",
   "drainage and flooding": "FLOODING",
   "solid waste and illegal dumping": "ILLEGAL DUMPING/TRASH",
   "solid waste": "GARBAGE/RECYCLING",
@@ -95,6 +98,16 @@ const CATEGORY_INFERENCE_RULES: Array<{
   {
     category: "ILLEGAL DUMPING/TRASH",
     patterns: [/\billegal dumping\b/i, /\bdumping\b/i, /\btrash pile\b/i],
+  },
+  {
+    category: "PARKING ENFORCEMENT",
+    patterns: [
+      /\bparking enforcement\b/i,
+      /\bparking violation\b/i,
+      /\billegally parked\b/i,
+      /\bblocked driveway\b/i,
+      /\bparked (?:on|across) (?:the )?(?:sidewalk|driveway)\b/i,
+    ],
   },
   {
     category: "TRAFFIC",

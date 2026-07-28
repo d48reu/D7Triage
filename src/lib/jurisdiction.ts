@@ -337,6 +337,9 @@ function applyCategoryBias(
     case "TRAFFIC":
       addScore("municipal", "Traffic category context");
       break;
+    case "PARKING ENFORCEMENT":
+      addScore("municipal", "Parking enforcement category context");
+      break;
     case "NOISE":
       addScore("municipal", "Code/enforcement category context");
       break;
