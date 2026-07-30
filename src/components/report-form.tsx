@@ -1751,6 +1751,7 @@ function DraftCaseRow({
           value={row.assignedStaffId}
           staffMembers={staffMembers}
           onChange={(assignedStaffId) => onChange({ assignedStaffId })}
+          inputName="assignedStaffId"
         />
       </Cell>
       <Cell>
@@ -2078,15 +2079,18 @@ function BoardCategorySelect({
   className,
   ariaLabel,
   inputName,
+  displayValue = value,
 }: {
   value: string;
   onChange: (value: string) => void;
   className: string;
   ariaLabel: string;
   inputName?: string;
+  displayValue?: string;
 }) {
   const selectRef = useRef<HTMLSelectElement>(null);
   const userInteractionRef = useRef(false);
+  const [isEditing, setIsEditing] = useState(false);
   const isListedCategory = ISSUE_CATEGORIES.some(
     (category) => category === value,
   );
@@ -2107,56 +2111,74 @@ function BoardCategorySelect({
           autoComplete="off"
         />
       ) : null}
-      <select
-        ref={selectRef}
-        required
-        value={value}
-        autoComplete="off"
-        data-1p-ignore
-        data-bwignore
-        data-form-type="other"
-        data-lpignore="true"
-        onPointerDown={() => {
-          userInteractionRef.current = true;
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Tab" && event.key !== "Escape") {
+      {isEditing ? (
+        <select
+          ref={selectRef}
+          required
+          value={value}
+          autoComplete="off"
+          autoFocus
+          data-1p-ignore
+          data-bwignore
+          data-form-type="other"
+          data-lpignore="true"
+          onPointerDown={() => {
             userInteractionRef.current = true;
-          }
-        }}
-        onFocus={(event) => {
-          if (event.currentTarget.value !== value) {
-            event.currentTarget.value = value;
-          }
-        }}
-        onBlur={() => {
-          userInteractionRef.current = false;
-        }}
-        onChange={(event) => {
-          const nextCategory = event.currentTarget.value;
-          if (!userInteractionRef.current) {
-            event.currentTarget.value = value;
-            return;
-          }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setIsEditing(false);
+              return;
+            }
+            if (event.key !== "Tab") {
+              userInteractionRef.current = true;
+            }
+          }}
+          onFocus={(event) => {
+            if (event.currentTarget.value !== value) {
+              event.currentTarget.value = value;
+            }
+          }}
+          onBlur={() => {
+            userInteractionRef.current = false;
+            setIsEditing(false);
+          }}
+          onChange={(event) => {
+            const nextCategory = event.currentTarget.value;
+            if (!userInteractionRef.current) {
+              event.currentTarget.value = value;
+              return;
+            }
 
-          userInteractionRef.current = false;
-          onChange(nextCategory);
-        }}
-        className={className}
-        aria-label={ariaLabel}
-      >
-        <option value="" disabled>
-          Choose category
-        </option>
-        {!isListedCategory && value ? (
-          <option value={value}>{value}</option>
-        ) : null}
-        {ISSUE_CATEGORIES.map((category) => (
-          <option key={category} value={category}>
-            {category}
+            userInteractionRef.current = false;
+            onChange(nextCategory);
+            setIsEditing(false);
+          }}
+          className={className}
+          aria-label={ariaLabel}
+        >
+          <option value="" disabled>
+            Choose category
           </option>
-        ))}
-      </select>
+          {!isListedCategory && value ? (
+            <option value={value}>{value}</option>
+          ) : null}
+          {ISSUE_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsEditing(true)}
+          className="flex h-full w-full items-center px-3 text-left text-sm outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          aria-label={`${ariaLabel}. Click to edit.`}
+        >
+          <span className="break-words">{displayValue || "Choose category"}</span>
+        </button>
+      )}
     </>
   );
 }
@@ -2165,33 +2187,71 @@ function BoardAssignmentSelect({
   value,
   staffMembers,
   onChange,
+  inputName,
 }: {
   value: string;
   staffMembers: AssignmentOption[];
   onChange: (value: string) => void;
+  inputName?: string;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const selectedStaffMember = value
+    ? staffMembers.find((staffMember) => staffMember.id === value)
+    : null;
+  const displayValue = selectedStaffMember
+    ? formatStaffMemberDisplayName(selectedStaffMember)
+    : "Unassigned";
+
   return (
-    <select
-      name="assignedStaffId"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="h-full w-full cursor-pointer bg-transparent px-3 text-sm outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
-      aria-label="Assignment"
-    >
-      <option value="">Unassigned</option>
-      {staffMembers.map((staffMember) => (
-        <option
-          key={staffMember.id}
-          value={staffMember.id}
-          disabled={!staffMember.isActive && staffMember.id !== value}
+    <>
+      {inputName ? (
+        <input type="hidden" name={inputName} value={value} autoComplete="off" />
+      ) : null}
+      {isEditing ? (
+        <select
+          value={value}
+          autoComplete="off"
+          autoFocus
+          data-1p-ignore
+          data-bwignore
+          data-form-type="other"
+          data-lpignore="true"
+          onBlur={() => setIsEditing(false)}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setIsEditing(false);
+          }}
+          className="h-full w-full cursor-pointer bg-transparent px-3 text-sm outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          aria-label="Assignment"
         >
-          {staffMember.name}
-          {staffMember.title ? ` — ${staffMember.title}` : ""}
-          {!staffMember.isActive ? " (inactive)" : ""}
-        </option>
-      ))}
-    </select>
+          <option value="">Unassigned</option>
+          {staffMembers.map((staffMember) => (
+            <option
+              key={staffMember.id}
+              value={staffMember.id}
+              disabled={!staffMember.isActive && staffMember.id !== value}
+            >
+              {formatStaffMemberDisplayName(staffMember)}
+              {!staffMember.isActive ? " (inactive)" : ""}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsEditing(true)}
+          className="flex h-full w-full items-center px-3 text-left text-sm outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          aria-label="Assignment. Click to edit."
+        >
+          <span className="break-words">{displayValue}</span>
+        </button>
+      )}
+    </>
   );
+}
+
+function formatStaffMemberDisplayName(staffMember: AssignmentOption) {
+  return `${staffMember.name}${staffMember.title ? ` - ${staffMember.title}` : ""}`;
 }
 
 function BoardInput({
