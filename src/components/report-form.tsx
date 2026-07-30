@@ -56,75 +56,68 @@ const GROUP_COLORS = [
 ] as const;
 
 const BOARD_COLUMN_SPECS = [
-  { key: "type", label: "Type", defaultWidth: 44, minWidth: 44, maxWidth: 80 },
+  { key: "type", label: "", defaultWidth: 44, minWidth: 44, maxWidth: 80 },
   {
     key: "constituent",
-    label: "Constituent",
-    defaultWidth: 250,
+    label: "Item",
+    defaultWidth: 220,
     minWidth: 150,
     maxWidth: 420,
   },
   {
-    key: "category",
-    label: "Category *",
-    defaultWidth: 190,
-    minWidth: 140,
+    key: "assignment",
+    label: "People",
+    defaultWidth: 150,
+    minWidth: 145,
     maxWidth: 320,
   },
-  { key: "date", label: "Date", defaultWidth: 130, minWidth: 115, maxWidth: 180 },
+  { key: "date", label: "Date", defaultWidth: 105, minWidth: 105, maxWidth: 170 },
   {
     key: "status",
     label: "Status",
-    defaultWidth: 160,
+    defaultWidth: 150,
     minWidth: 130,
     maxWidth: 230,
   },
   {
     key: "summary",
     label: "Call Summary *",
-    defaultWidth: 340,
+    defaultWidth: 320,
     minWidth: 200,
     maxWidth: 600,
   },
   {
+    key: "resolution",
+    label: "Resolution",
+    defaultWidth: 220,
+    minWidth: 170,
+    maxWidth: 520,
+  },
+  {
     key: "address",
     label: "Address *",
-    defaultWidth: 280,
+    defaultWidth: 240,
     minWidth: 180,
     maxWidth: 520,
   },
   {
     key: "phone",
     label: "Phone",
-    defaultWidth: 155,
+    defaultWidth: 130,
     minWidth: 120,
     maxWidth: 260,
   },
   {
-    key: "email",
-    label: "Email / contact note",
-    defaultWidth: 220,
-    minWidth: 170,
-    maxWidth: 360,
-  },
-  {
-    key: "district",
-    label: "District",
+    key: "category",
+    label: "Category *",
     defaultWidth: 155,
-    minWidth: 130,
-    maxWidth: 260,
-  },
-  {
-    key: "assignment",
-    label: "Assignment",
-    defaultWidth: 190,
-    minWidth: 150,
-    maxWidth: 360,
+    minWidth: 140,
+    maxWidth: 320,
   },
   {
     key: "files",
     label: "Files / Case",
-    defaultWidth: 170,
+    defaultWidth: 155,
     minWidth: 150,
     maxWidth: 260,
   },
@@ -143,6 +136,8 @@ type DraftRow = {
   dateValue: string;
   status: IssueStatus;
   description: string;
+  intakeNotes: string;
+  resolutionNotes: string;
   addressText: string;
   residentPhone: string;
   residentEmail: string;
@@ -507,6 +502,8 @@ export function ReportForm({
       assignedStaffId: row.assignedStaffId || null,
       category: row.category,
       description: row.description,
+      intakeNotes: row.intakeNotes,
+      resolutionNotes: row.resolutionNotes,
       addressText: row.addressText,
       residentName: row.residentName,
       residentEmail: row.residentEmail,
@@ -735,7 +732,9 @@ export function ReportForm({
                           + Add item
                         </button>
                       </Cell>
-                      {Array.from({ length: 10 }).map((_, index) => (
+                      {Array.from({
+                        length: BOARD_COLUMN_SPECS.length - 1,
+                      }).map((_, index) => (
                         <Cell key={index} />
                       ))}
                     </div>
@@ -1114,6 +1113,7 @@ function SavedCaseRow({
     message: "Saved",
   });
   const latestDraftRef = useRef(intakeCase);
+  const explicitlySelectedCategoryRef = useRef<string | null>(null);
   const lastSavedSnapshotRef = useRef(savedCaseSnapshot(intakeCase));
   const queuedSnapshotsRef = useRef(new Set<string>());
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
@@ -1194,7 +1194,10 @@ function SavedCaseRow({
       try {
         const result = await updateStaffIntakeCaseAction(
           AUTOSAVE_ACTION_STATE,
-          buildSavedCaseFormData(nextDraft),
+          buildSavedCaseFormData(
+            nextDraft,
+            explicitlySelectedCategoryRef.current === nextDraft.category,
+          ),
         );
 
         if (result.status !== "success" || !result.updatedCase) {
@@ -1208,6 +1211,9 @@ function SavedCaseRow({
         }
 
         const savedCase = result.updatedCase;
+        if (explicitlySelectedCategoryRef.current === savedCase.category) {
+          explicitlySelectedCategoryRef.current = null;
+        }
         lastSavedSnapshotRef.current = savedCaseSnapshot(savedCase);
         onUpdated(savedCase);
 
@@ -1351,7 +1357,9 @@ function SavedCaseRow({
       aria-label={`Saved case for ${draft.residentName || "unnamed constituent"}`}
     >
       <Cell center>
-        <span className="size-2.5 rounded-full bg-[#00a25b]" title="Saved case" />
+        <span className="rounded bg-[#d6f7e6] px-1.5 py-1 text-[10px] font-bold uppercase text-[#087f49]">
+          Saved
+        </span>
       </Cell>
       <Cell>
         <BoardInput
@@ -1364,22 +1372,16 @@ function SavedCaseRow({
         />
       </Cell>
       <Cell>
-        <select
-          name="category"
-          required
-          value={draft.category}
-          onChange={(event) =>
-            updateDraft({ category: event.target.value }, true)
+        <BoardAssignmentSelect
+          value={draft.assignedStaffId ?? ""}
+          staffMembers={staffMembers}
+          onChange={(assignedStaffId) =>
+            updateDraft(
+              { assignedStaffId: assignedStaffId || null },
+              true,
+            )
           }
-          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-[#eaf5ff] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
-          aria-label="Category"
-        >
-          {ISSUE_CATEGORIES.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
+        />
       </Cell>
       <Cell>
         <input
@@ -1426,6 +1428,16 @@ function SavedCaseRow({
       </Cell>
       <Cell>
         <BoardTextarea
+          name="resolutionNotes"
+          value={draft.resolutionNotes}
+          maxLength={4000}
+          placeholder="Resolution, referral, or next step"
+          onChange={(value) => updateDraft({ resolutionNotes: value })}
+          onBlur={flushAutosave}
+        />
+      </Cell>
+      <Cell>
+        <BoardTextarea
           name="addressText"
           value={draft.addressText}
           required
@@ -1446,30 +1458,14 @@ function SavedCaseRow({
         />
       </Cell>
       <Cell>
-        <BoardInput
-          name="residentEmail"
-          value={draft.residentEmail}
-          type="text"
-          placeholder="Email, no email, or contact note"
-          onChange={(value) => updateDraft({ residentEmail: value })}
-          onBlur={flushAutosave}
-        />
-      </Cell>
-      <Cell center>
-        <span className="px-2 text-center text-xs text-[#4d5672]">
-          {draft.districtLabel}
-        </span>
-      </Cell>
-      <Cell>
-        <BoardAssignmentSelect
-          value={draft.assignedStaffId ?? ""}
-          staffMembers={staffMembers}
-          onChange={(assignedStaffId) =>
-            updateDraft(
-              { assignedStaffId: assignedStaffId || null },
-              true,
-            )
-          }
+        <BoardCategorySelect
+          value={draft.category}
+          onChange={(category) => {
+            explicitlySelectedCategoryRef.current = category;
+            updateDraft({ category }, true);
+          }}
+          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-[#eaf5ff] focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          ariaLabel={`Category for ${draft.residentName || "unnamed constituent"}`}
         />
       </Cell>
       <Cell
@@ -1733,6 +1729,8 @@ function DraftCaseRow({
       <input type="hidden" name="preferredLanguage" value="English" />
       <input type="hidden" name="contactConsent" value="on" />
       <input type="hidden" name="company" value="" />
+      <input type="hidden" name="intakeNotes" value={row.intakeNotes} />
+      <input type="hidden" name="residentEmail" value={row.residentEmail} />
 
       <Cell center>
         <span className="rounded bg-[#fff0b8] px-1.5 py-1 text-[10px] font-bold uppercase text-[#7a5600]">
@@ -1749,20 +1747,11 @@ function DraftCaseRow({
         />
       </Cell>
       <Cell>
-        <select
-          name="category"
-          required
-          value={row.category}
-          onChange={(event) => onChange({ category: event.target.value })}
-          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
-          aria-label="Category"
-        >
-          {ISSUE_CATEGORIES.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
+        <BoardAssignmentSelect
+          value={row.assignedStaffId}
+          staffMembers={staffMembers}
+          onChange={(assignedStaffId) => onChange({ assignedStaffId })}
+        />
       </Cell>
       <Cell>
         <input
@@ -1807,14 +1796,54 @@ function DraftCaseRow({
       </Cell>
       <Cell>
         <BoardTextarea
-          name="addressText"
-          value={row.addressText}
-          required
-          maxLength={250}
-          placeholder="Address, intersection, park, or landmark"
-          onChange={(value) => onChange({ addressText: value })}
+          name="resolutionNotes"
+          value={row.resolutionNotes}
+          maxLength={4000}
+          placeholder="Resolution, referral, or next step"
+          onChange={(value) => onChange({ resolutionNotes: value })}
           onKeyDown={submitWithShortcut}
         />
+      </Cell>
+      <Cell>
+        <div className="flex h-full flex-col">
+          <BoardTextarea
+            name="addressText"
+            value={row.addressText}
+            required
+            maxLength={250}
+            placeholder="Address, intersection, park, or landmark"
+            onChange={(value) => onChange({ addressText: value })}
+            onKeyDown={submitWithShortcut}
+          />
+          <div className="flex items-center gap-2 border-t border-[#d7e0ef] px-2 py-1">
+            <button
+              type="button"
+              onClick={previewJurisdiction}
+              disabled={jurisdictionPreview.status === "loading"}
+              className="rounded border border-[#9aa8c4] bg-white px-2 py-1 text-[11px] font-semibold hover:bg-[#f5f7fb] disabled:opacity-60"
+            >
+              Check D7
+            </button>
+            <button
+              type="button"
+              onClick={captureLocation}
+              className="text-[11px] text-[#4d5672] hover:text-[#0073ea]"
+            >
+              Use location
+            </button>
+            <span
+              className={`min-w-0 flex-1 truncate text-[10px] ${
+                jurisdictionPreview.status === "error"
+                  ? "font-semibold text-[#9f1239]"
+                  : jurisdictionPreview.status === "success"
+                    ? "font-semibold text-[#087f49]"
+                    : "text-[#4d5672]"
+              }`}
+            >
+              {jurisdictionPreview.message || locationState.message || "Optional"}
+            </span>
+          </div>
+        </div>
       </Cell>
       <Cell>
         <BoardInput
@@ -1826,49 +1855,12 @@ function DraftCaseRow({
         />
       </Cell>
       <Cell>
-        <BoardInput
-          name="residentEmail"
-          value={row.residentEmail}
-          type="text"
-          placeholder="Email, no email, or contact note"
-          onChange={(value) => onChange({ residentEmail: value })}
-        />
-      </Cell>
-      <Cell center>
-        <div className="flex flex-col items-center gap-1 px-2 py-2 text-center">
-          <button
-            type="button"
-            onClick={previewJurisdiction}
-            disabled={jurisdictionPreview.status === "loading"}
-            className="rounded border border-[#9aa8c4] bg-white px-2 py-1 text-xs font-semibold hover:bg-[#f5f7fb] disabled:opacity-60"
-          >
-            Check district
-          </button>
-          <button
-            type="button"
-            onClick={captureLocation}
-            className="text-[11px] text-[#4d5672] hover:text-[#0073ea]"
-          >
-            Use location
-          </button>
-          <span
-            className={`max-w-36 text-[10px] ${
-              jurisdictionPreview.status === "error"
-                ? "font-semibold text-[#9f1239]"
-                : jurisdictionPreview.status === "success"
-                  ? "font-semibold text-[#087f49]"
-                  : "text-[#4d5672]"
-            }`}
-          >
-            {jurisdictionPreview.message || locationState.message || "Optional preview"}
-          </span>
-        </div>
-      </Cell>
-      <Cell>
-        <BoardAssignmentSelect
-          value={row.assignedStaffId}
-          staffMembers={staffMembers}
-          onChange={(assignedStaffId) => onChange({ assignedStaffId })}
+        <BoardCategorySelect
+          value={row.category}
+          onChange={(category) => onChange({ category })}
+          className="h-full w-full cursor-pointer bg-transparent px-3 outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          ariaLabel={`Category for ${row.residentName || "new constituent"}`}
+          inputName="category"
         />
       </Cell>
       <Cell
@@ -2080,6 +2072,95 @@ function Cell({
   );
 }
 
+function BoardCategorySelect({
+  value,
+  onChange,
+  className,
+  ariaLabel,
+  inputName,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  className: string;
+  ariaLabel: string;
+  inputName?: string;
+}) {
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const userInteractionRef = useRef(false);
+  const isListedCategory = ISSUE_CATEGORIES.some(
+    (category) => category === value,
+  );
+
+  useEffect(() => {
+    if (selectRef.current && selectRef.current.value !== value) {
+      selectRef.current.value = value;
+    }
+  }, [value]);
+
+  return (
+    <>
+      {inputName ? (
+        <input
+          type="hidden"
+          name={inputName}
+          value={value}
+          autoComplete="off"
+        />
+      ) : null}
+      <select
+        ref={selectRef}
+        required
+        value={value}
+        autoComplete="off"
+        data-1p-ignore
+        data-bwignore
+        data-form-type="other"
+        data-lpignore="true"
+        onPointerDown={() => {
+          userInteractionRef.current = true;
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Tab" && event.key !== "Escape") {
+            userInteractionRef.current = true;
+          }
+        }}
+        onFocus={(event) => {
+          if (event.currentTarget.value !== value) {
+            event.currentTarget.value = value;
+          }
+        }}
+        onBlur={() => {
+          userInteractionRef.current = false;
+        }}
+        onChange={(event) => {
+          const nextCategory = event.currentTarget.value;
+          if (!userInteractionRef.current) {
+            event.currentTarget.value = value;
+            return;
+          }
+
+          userInteractionRef.current = false;
+          onChange(nextCategory);
+        }}
+        className={className}
+        aria-label={ariaLabel}
+      >
+        <option value="" disabled>
+          Choose category
+        </option>
+        {!isListedCategory && value ? (
+          <option value={value}>{value}</option>
+        ) : null}
+        {ISSUE_CATEGORIES.map((category) => (
+          <option key={category} value={category}>
+            {category}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+}
+
 function BoardAssignmentSelect({
   value,
   staffMembers,
@@ -2230,6 +2311,8 @@ function savedCaseSnapshot(intakeCase: IntakeBoardCase) {
     intakeCase.status,
     intakeCase.assignedStaffId,
     intakeCase.description,
+    intakeCase.intakeNotes,
+    intakeCase.resolutionNotes,
     intakeCase.addressText,
     intakeCase.residentPhone,
     intakeCase.residentEmail,
@@ -2237,7 +2320,10 @@ function savedCaseSnapshot(intakeCase: IntakeBoardCase) {
   ]);
 }
 
-function buildSavedCaseFormData(intakeCase: IntakeBoardCase) {
+function buildSavedCaseFormData(
+  intakeCase: IntakeBoardCase,
+  categoryChangeConfirmed = false,
+) {
   const formData = new FormData();
   formData.set("reportId", intakeCase.id);
   formData.set("residentName", intakeCase.residentName);
@@ -2245,10 +2331,16 @@ function buildSavedCaseFormData(intakeCase: IntakeBoardCase) {
   formData.set("status", intakeCase.status);
   formData.set("assignedStaffId", intakeCase.assignedStaffId ?? "");
   formData.set("description", intakeCase.description);
+  formData.set("intakeNotes", intakeCase.intakeNotes);
+  formData.set("resolutionNotes", intakeCase.resolutionNotes);
   formData.set("addressText", intakeCase.addressText);
   formData.set("residentPhone", intakeCase.residentPhone);
   formData.set("residentEmail", intakeCase.residentEmail);
   formData.set("category", intakeCase.category);
+  formData.set(
+    "categoryChangeConfirmed",
+    categoryChangeConfirmed ? "true" : "false",
+  );
   return formData;
 }
 
@@ -2259,6 +2351,8 @@ function makeBlankRow(todayDateValue: string, id = makeId("row")): DraftRow {
     dateValue: todayDateValue,
     status: "received",
     description: "",
+    intakeNotes: "",
+    resolutionNotes: "",
     addressText: "",
     residentPhone: "",
     residentEmail: "",
@@ -2518,6 +2612,10 @@ function normalizeStoredGroup(
         ? row.dateValue
         : todayDateValue,
       status: ISSUE_STATUSES.includes(row.status) ? row.status : "received",
+      intakeNotes:
+        typeof row.intakeNotes === "string" ? row.intakeNotes : "",
+      resolutionNotes:
+        typeof row.resolutionNotes === "string" ? row.resolutionNotes : "",
       assignedStaffId:
         typeof row.assignedStaffId === "string" ? row.assignedStaffId : "",
     })),

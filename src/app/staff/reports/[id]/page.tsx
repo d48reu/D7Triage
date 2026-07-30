@@ -529,6 +529,17 @@ export default async function StaffReportPage({
             </form>
           </div>
 
+          {report.intakeNotes ? (
+            <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4">
+              <h2 className="text-sm font-semibold text-amber-950">
+                Intake notes
+              </h2>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-900">
+                {report.intakeNotes}
+              </p>
+            </div>
+          ) : null}
+
           <div className="mt-6 border-t border-slate-200 pt-5">
             <h2 className="text-sm font-semibold text-slate-700">Photos</h2>
             {attachments.length > 0 ? (

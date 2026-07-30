@@ -49,7 +49,7 @@ export function IntakeWorkspaceShell({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className={`grid min-h-[calc(100vh-44px)] transition-[grid-template-columns] duration-150 max-lg:grid-cols-1 ${
+      className={`grid min-h-0 transition-[grid-template-columns] duration-150 max-lg:grid-cols-1 ${
         collapsed
           ? "grid-cols-[64px_minmax(0,1fr)]"
           : "grid-cols-[248px_minmax(0,1fr)]"
@@ -119,10 +119,10 @@ export function IntakeWorkspaceShell({ children }: { children: ReactNode }) {
         )}
 
         <Link
-          href="/report"
+          href="/staff/intake-board"
           aria-current="page"
-          aria-label="Constituent Calls"
-          title={collapsed ? "Constituent Calls" : undefined}
+          aria-label="Issue Intake Board"
+          title={collapsed ? "Issue Intake Board" : undefined}
           className={`mt-3 flex h-10 items-center rounded bg-[#eaf3ff] text-sm font-semibold text-[#181b34] ${
             collapsed ? "justify-center px-1" : "gap-2 px-3"
           }`}
@@ -130,7 +130,7 @@ export function IntakeWorkspaceShell({ children }: { children: ReactNode }) {
           <span className="grid size-6 place-items-center rounded-sm border border-[#8b94ad] bg-white text-[9px] font-bold">
             {collapsed ? "CC" : ""}
           </span>
-          {!collapsed ? <span>Constituent Calls</span> : null}
+          {!collapsed ? <span>Issue Intake Board</span> : null}
         </Link>
 
         {!collapsed ? (

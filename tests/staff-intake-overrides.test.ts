@@ -12,6 +12,8 @@ test("staff intake can set the initial case date and status", async () => {
   const report = repository.createIssueReport({
     category: "TRAFFIC",
     description: "Signal timing issue during school pickup",
+    intakeNotes: "Caller is available after 3 PM.",
+    resolutionNotes: "Traffic team review pending.",
     addressText: "6690 SW 40th St, Miami, FL 33155",
     residentEmail: "resident@example.com",
     contactConsent: true,
@@ -21,6 +23,8 @@ test("staff intake can set the initial case date and status", async () => {
 
   assert.equal(report.createdAt, "2026-07-10T12:00:00.000Z");
   assert.equal(report.status, "needs_review");
+  assert.equal(report.intakeNotes, "Caller is available after 3 PM.");
+  assert.equal(report.resolutionNotes, "Traffic team review pending.");
 
   const statusEvents = repository.listStatusEvents(report.id);
   assert.equal(statusEvents.length, 1);
@@ -55,6 +59,8 @@ test("staff intake accepts a blank email or a telephone-only contact note", asyn
     reportId: report.id,
     category: report.category,
     description: report.description,
+    intakeNotes: "Follow-up call requested.",
+    resolutionNotes: "Called resident back and left voicemail.",
     addressText: report.addressText,
     residentName: report.residentName,
     residentEmail: "",
@@ -66,6 +72,11 @@ test("staff intake accepts a blank email or a telephone-only contact note", asyn
 
   assert.equal(updatedReport?.residentEmail, "");
   assert.equal(updatedReport?.residentPhone, "305-555-0101");
+  assert.equal(updatedReport?.intakeNotes, "Follow-up call requested.");
+  assert.equal(
+    updatedReport?.resolutionNotes,
+    "Called resident back and left voicemail.",
+  );
 
   const noteOnlyReport = repository.createIssueReport({
     category: "OTHER / UNSURE",

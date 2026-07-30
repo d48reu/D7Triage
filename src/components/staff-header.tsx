@@ -4,6 +4,7 @@ import { logoutStaffAction } from "@/server-actions/auth";
 
 type StaffSection =
   | "command"
+  | "intake"
   | "assignments"
   | "events"
   | "case"
@@ -25,7 +26,7 @@ export function StaffHeader({
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <Link href="/report" className="text-sm font-medium text-sky-700">
+          <Link href="/staff" className="text-sm font-medium text-sky-700">
             District 7 Issue Reporter
           </Link>
           <h1 className="mt-1 text-xl font-semibold">{title}</h1>
@@ -41,6 +42,16 @@ export function StaffHeader({
             Case Dashboard
           </Link>
           <Link
+            href="/staff/intake-board"
+            className={
+              current === "intake"
+                ? "rounded-md bg-sky-800 px-4 py-2 text-sm font-semibold text-white"
+                : "rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
+            }
+          >
+            Intake Board
+          </Link>
+          <Link
             href="/staff/my"
             className={navClass(current === "assignments")}
           >
@@ -51,12 +62,6 @@ export function StaffHeader({
             className={navClass(current === "events")}
           >
             Events
-          </Link>
-          <Link
-            href="/report"
-            className="rounded-md bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
-          >
-            New Case
           </Link>
           <details className="relative">
             <summary

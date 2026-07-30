@@ -19,6 +19,7 @@ const baseReport: IssueReport = {
   assignedAt: null,
   category: "Roads and potholes",
   description: "Render persistence test",
+  intakeNotes: "",
   addressText: "3636 SW 16th Terrace, Miami, FL 33145",
   latitude: null,
   longitude: null,

@@ -15,6 +15,8 @@ const intakeCase: IntakeBoardCase = {
   assignedStaffId: null,
   category: "STREETLIGHTS",
   description: "Streetlight is out near the park",
+  intakeNotes: "Caller reports the outage happens every evening.",
+  resolutionNotes: "Referred to public works for repair scheduling.",
   addressText: "3750 S Dixie Highway, Miami, FL",
   residentName: "Denise Tyre",
   residentEmail: "denise@example.com",
@@ -45,5 +47,7 @@ test("searches saved intake cases across receptionist-facing fields", () => {
   assert.equal(intakeCaseMatchesSearch(intakeCase, "denise"), true);
   assert.equal(intakeCaseMatchesSearch(intakeCase, "dixie highway"), true);
   assert.equal(intakeCaseMatchesSearch(intakeCase, "streetlights"), true);
+  assert.equal(intakeCaseMatchesSearch(intakeCase, "every evening"), true);
+  assert.equal(intakeCaseMatchesSearch(intakeCase, "repair scheduling"), true);
   assert.equal(intakeCaseMatchesSearch(intakeCase, "housing"), false);
 });

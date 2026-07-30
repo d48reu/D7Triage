@@ -160,6 +160,32 @@ export function inferIssueCategoryFromText(input: {
   return normalizeIssueCategory(input.category);
 }
 
+export function resolveIntakeBoardCategory(input: {
+  currentCategory: string;
+  submittedCategory: string;
+  categoryChangeConfirmed: boolean;
+  description: string;
+  addressText: string;
+}) {
+  if (!input.categoryChangeConfirmed) {
+    return normalizeIssueCategory(input.currentCategory);
+  }
+
+  const normalizedCategory = normalizeIssueCategory(input.submittedCategory);
+  if (
+    normalizedCategory === "Other / unsure" ||
+    normalizedCategory !== input.submittedCategory
+  ) {
+    return inferIssueCategoryFromText({
+      category: input.submittedCategory,
+      description: input.description,
+      addressText: input.addressText,
+    });
+  }
+
+  return normalizedCategory;
+}
+
 export function formatStatus(status: string) {
   return status
     .split("_")

@@ -52,6 +52,8 @@ export type IssueReport = {
   assignedAt: string | null;
   category: string;
   description: string;
+  intakeNotes: string;
+  resolutionNotes: string;
   addressText: string;
   latitude: number | null;
   longitude: number | null;
@@ -279,6 +281,8 @@ type IssueReportRow = {
   assigned_at: string | null;
   category: string;
   description: string;
+  intake_notes: string;
+  resolution_notes: string;
   address_text: string;
   latitude: number | null;
   longitude: number | null;
@@ -510,6 +514,8 @@ type AnalyticsViewRow = {
 export type CreateIssueReportInput = {
   category: string;
   description: string;
+  intakeNotes?: string;
+  resolutionNotes?: string;
   addressText: string;
   latitude?: number | null;
   longitude?: number | null;
@@ -639,6 +645,14 @@ function ensureSchemaMigrations(database: Database.Database) {
 
   if (!hasColumn(database, "issue_reports", "newsletter_opt_in")) {
     database.exec("alter table issue_reports add column newsletter_opt_in integer not null default 0;");
+  }
+
+  if (!hasColumn(database, "issue_reports", "intake_notes")) {
+    database.exec("alter table issue_reports add column intake_notes text not null default '';");
+  }
+
+  if (!hasColumn(database, "issue_reports", "resolution_notes")) {
+    database.exec("alter table issue_reports add column resolution_notes text not null default '';");
   }
 
   database.exec(`
@@ -1292,6 +1306,8 @@ function getDb() {
       assigned_at text,
       category text not null,
       description text not null,
+      intake_notes text not null default '',
+      resolution_notes text not null default '',
       address_text text not null,
       latitude real,
       longitude real,
@@ -1551,6 +1567,8 @@ function mapReport(row: IssueReportRow): IssueReport {
     assignedAt: row.assigned_at,
     category: row.category,
     description: row.description,
+    intakeNotes: row.intake_notes,
+    resolutionNotes: row.resolution_notes,
     addressText: row.address_text,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -1820,7 +1838,7 @@ export function createIssueReport(input: CreateIssueReportInput) {
 
   const insertReport = database.prepare(`
     insert into issue_reports (
-    id, public_tracking_token, status, assigned_staff_id, assigned_at, category, description, address_text,
+    id, public_tracking_token, status, assigned_staff_id, assigned_at, category, description, intake_notes, resolution_notes, address_text,
       latitude, longitude, location_source, geocoding_status, geocoded_address,
       geocoding_provider, geocoded_at, municipality_name, municipality_code,
       municipality_lookup_status, municipality_source, municipality_matched_at,
@@ -1831,7 +1849,7 @@ export function createIssueReport(input: CreateIssueReportInput) {
       duplicate_of_report_id, duplicate_review_decision, duplicate_reviewed_at,
       duplicate_review_note, created_at, updated_at
     ) values (
-      @id, @publicTrackingToken, @status, null, null, @category, @description, @addressText,
+      @id, @publicTrackingToken, @status, null, null, @category, @description, @intakeNotes, @resolutionNotes, @addressText,
       @latitude, @longitude, @locationSource, @geocodingStatus, @geocodedAddress,
       @geocodingProvider, @geocodedAt, @municipalityName, @municipalityCode,
       @municipalityLookupStatus, @municipalitySource, @municipalityMatchedAt,
@@ -1857,6 +1875,8 @@ export function createIssueReport(input: CreateIssueReportInput) {
       status: initialStatus,
       category: input.category,
       description: input.description,
+      intakeNotes: input.intakeNotes?.trim() ?? "",
+      resolutionNotes: input.resolutionNotes?.trim() ?? "",
       addressText: input.addressText,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
@@ -2563,6 +2583,8 @@ export function updateIssueDetails(input: {
   reportId: string;
   category: string;
   description: string;
+  intakeNotes?: string | null;
+  resolutionNotes?: string | null;
   addressText: string;
   residentName?: string | null;
   residentEmail: string;
@@ -2585,7 +2607,7 @@ export function updateIssueDetails(input: {
   getDb()
     .prepare(
       `update issue_reports
-       set category = ?, description = ?, address_text = ?,
+       set category = ?, description = ?, intake_notes = ?, resolution_notes = ?, address_text = ?,
            resident_name = ?, resident_email = ?, resident_phone = ?,
            preferred_language = ?, contact_consent = ?, newsletter_opt_in = ?,
            newsletter_opt_in_at = ?, updated_at = ?
@@ -2594,6 +2616,8 @@ export function updateIssueDetails(input: {
     .run(
       input.category,
       input.description,
+      input.intakeNotes?.trim() ?? report.intakeNotes,
+      input.resolutionNotes?.trim() ?? report.resolutionNotes,
       input.addressText,
       input.residentName?.trim() || null,
       residentEmail,

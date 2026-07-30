@@ -40,7 +40,7 @@ export async function loginStaffAction(
   }
 
   await createStaffSession(staffMember.id);
-  redirect("/staff");
+  redirect("/staff/intake-board");
 }
 
 export async function selectStaffIdentityAction(formData: FormData) {

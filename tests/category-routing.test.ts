@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   inferIssueCategoryFromText,
   normalizeIssueCategory,
+  resolveIntakeBoardCategory,
 } from "../src/lib/issue-types";
 
 test("normalizes legacy category labels to the current staff category set", () => {
@@ -46,6 +47,30 @@ test("infers housing, storm-drain, and parking categories from intake text", () 
       category: "Other / unsure",
       description:
         "A vehicle is illegally parked across the sidewalk and blocking the driveway.",
+      addressText: "123 Main Street",
+    }),
+    "PARKING ENFORCEMENT",
+  );
+});
+
+test("requires an explicit intake-board action before changing a saved category", () => {
+  assert.equal(
+    resolveIntakeBoardCategory({
+      currentCategory: "TRAFFIC",
+      submittedCategory: "HOUSING",
+      categoryChangeConfirmed: false,
+      description: "Roundabout maintenance and traffic signs",
+      addressText: "SW 128 Street and SW 107 Avenue",
+    }),
+    "TRAFFIC",
+  );
+
+  assert.equal(
+    resolveIntakeBoardCategory({
+      currentCategory: "TRAFFIC",
+      submittedCategory: "PARKING ENFORCEMENT",
+      categoryChangeConfirmed: true,
+      description: "Vehicle repeatedly blocks the driveway",
       addressText: "123 Main Street",
     }),
     "PARKING ENFORCEMENT",

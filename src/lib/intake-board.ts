@@ -5,6 +5,8 @@ export type IntakeBoardCase = {
   assignedStaffId: string | null;
   category: string;
   description: string;
+  intakeNotes: string;
+  resolutionNotes: string;
   addressText: string;
   residentName: string;
   residentEmail: string;
@@ -39,6 +41,8 @@ export function intakeCaseMatchesSearch(
     intakeCase.residentEmail,
     intakeCase.residentPhone,
     intakeCase.description,
+    intakeCase.intakeNotes,
+    intakeCase.resolutionNotes,
     intakeCase.addressText,
     intakeCase.category,
     intakeCase.status,

@@ -16,6 +16,7 @@ import {
   inferIssueCategoryFromText,
   isKnownIssueCategoryInput,
   normalizeIssueCategory,
+  resolveIntakeBoardCategory,
   type IssueStatus,
 } from "@/lib/issue-types";
 import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
@@ -106,6 +107,7 @@ export type ReviewAiSuggestionState = {
 const UPLOAD_DIR = getUploadsDir();
 const MAX_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
 const MAX_DESCRIPTION_LENGTH = 4000;
+const MAX_INTAKE_NOTES_LENGTH = 4000;
 const MAX_ADDRESS_LENGTH = 250;
 const MAX_NAME_LENGTH = 120;
 const MAX_PHONE_LENGTH = 40;
@@ -345,6 +347,8 @@ export async function createStaffIntakeCaseAction(
   }
 
   const description = String(formData.get("description") ?? "").trim();
+  const intakeNotes = String(formData.get("intakeNotes") ?? "").trim();
+  const resolutionNotes = String(formData.get("resolutionNotes") ?? "").trim();
   const addressText = String(formData.get("addressText") ?? "").trim();
   const residentEmail = String(formData.get("residentEmail") ?? "").trim();
   const submittedCategory = String(formData.get("category") ?? "").trim();
@@ -435,6 +439,20 @@ export async function createStaffIntakeCaseAction(
     };
   }
 
+  if (intakeNotes.length > MAX_INTAKE_NOTES_LENGTH) {
+    return {
+      status: "error",
+      message: `Notes must be ${MAX_INTAKE_NOTES_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (resolutionNotes.length > MAX_INTAKE_NOTES_LENGTH) {
+    return {
+      status: "error",
+      message: `Resolution must be ${MAX_INTAKE_NOTES_LENGTH} characters or fewer.`,
+    };
+  }
+
   if (addressText.length > MAX_ADDRESS_LENGTH) {
     return {
       status: "error",
@@ -508,6 +526,8 @@ export async function createStaffIntakeCaseAction(
   const report = createIssueReport({
     category,
     description,
+    intakeNotes,
+    resolutionNotes,
     addressText,
     ...locationIntelligence,
     residentEmail,
@@ -534,6 +554,7 @@ export async function createStaffIntakeCaseAction(
   }
 
   revalidatePath("/staff");
+  revalidatePath("/staff/intake-board");
   revalidatePath("/staff/my");
 
   return {
@@ -585,7 +606,11 @@ export async function updateStaffIntakeCaseAction(
   }
 
   const submittedCategory = String(formData.get("category") ?? "").trim();
+  const categoryChangeConfirmed =
+    formData.get("categoryChangeConfirmed") === "true";
   const description = String(formData.get("description") ?? "").trim();
+  const intakeNotes = String(formData.get("intakeNotes") ?? "").trim();
+  const resolutionNotes = String(formData.get("resolutionNotes") ?? "").trim();
   const addressText = String(formData.get("addressText") ?? "").trim();
   const residentEmail = String(formData.get("residentEmail") ?? "").trim();
   const residentName = String(formData.get("residentName") ?? "").trim();
@@ -599,14 +624,17 @@ export async function updateStaffIntakeCaseAction(
   const createdDate = String(formData.get("createdDate") ?? "").trim();
   const createdAt = parseStaffCreatedDate(createdDate);
 
-  if (!submittedCategory || !description || !addressText) {
+  if (!description || !addressText) {
     return {
       status: "error",
-      message: "Category, summary, and address are required.",
+      message: "Summary and address are required.",
     };
   }
 
-  if (!isKnownIssueCategoryInput(submittedCategory)) {
+  if (
+    categoryChangeConfirmed &&
+    (!submittedCategory || !isKnownIssueCategoryInput(submittedCategory))
+  ) {
     return { status: "error", message: "Choose a valid category." };
   }
 
@@ -634,6 +662,20 @@ export async function updateStaffIntakeCaseAction(
     return {
       status: "error",
       message: `Summary must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (intakeNotes.length > MAX_INTAKE_NOTES_LENGTH) {
+    return {
+      status: "error",
+      message: `Notes must be ${MAX_INTAKE_NOTES_LENGTH} characters or fewer.`,
+    };
+  }
+
+  if (resolutionNotes.length > MAX_INTAKE_NOTES_LENGTH) {
+    return {
+      status: "error",
+      message: `Resolution must be ${MAX_INTAKE_NOTES_LENGTH} characters or fewer.`,
     };
   }
 
@@ -665,8 +707,10 @@ export async function updateStaffIntakeCaseAction(
     };
   }
 
-  const category = resolveSubmittedCategory({
-    category: submittedCategory,
+  const category = resolveIntakeBoardCategory({
+    currentCategory: report.category,
+    submittedCategory,
+    categoryChangeConfirmed,
     description,
     addressText,
   });
@@ -682,6 +726,8 @@ export async function updateStaffIntakeCaseAction(
     buildTextAuditChange("status", "Status", report.status, nextStatus),
     buildTextAuditChange("category", "Category", report.category, category),
     buildTextAuditChange("description", "Summary", report.description, description),
+    buildTextAuditChange("intakeNotes", "Notes", report.intakeNotes, intakeNotes),
+    buildTextAuditChange("resolutionNotes", "Resolution", report.resolutionNotes, resolutionNotes),
     buildTextAuditChange("addressText", "Address", report.addressText, addressText),
     buildTextAuditChange("residentName", "Constituent", report.residentName, residentName),
     buildTextAuditChange("residentEmail", "Email", report.residentEmail, residentEmail),
@@ -698,6 +744,8 @@ export async function updateStaffIntakeCaseAction(
     reportId,
     category,
     description,
+    intakeNotes,
+    resolutionNotes,
     addressText,
     residentName,
     residentEmail,
@@ -760,6 +808,7 @@ export async function updateStaffIntakeCaseAction(
   }
 
   revalidatePath("/staff");
+  revalidatePath("/staff/intake-board");
   revalidatePath("/staff/my");
   revalidatePath("/staff/analytics");
   revalidatePath(`/staff/reports/${reportId}`);
@@ -776,6 +825,8 @@ export async function updateStaffIntakeCaseAction(
       assignedStaffId: updatedReport.assignedStaffId,
       category: updatedReport.category,
       description: updatedReport.description,
+      intakeNotes: updatedReport.intakeNotes,
+      resolutionNotes: updatedReport.resolutionNotes,
       addressText: updatedReport.addressText,
       residentName: updatedReport.residentName ?? "",
       residentEmail: updatedReport.residentEmail,
@@ -1166,6 +1217,7 @@ export async function openAssignedCaseAction(formData: FormData) {
   });
 
   revalidatePath("/staff");
+  revalidatePath("/staff/intake-board");
   revalidatePath("/staff/my");
   revalidatePath(`/staff/reports/${reportId}`);
   redirect(`/staff/reports/${reportId}`);
