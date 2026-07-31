@@ -449,7 +449,7 @@ export async function createStaffIntakeCaseAction(
   if (resolutionNotes.length > MAX_INTAKE_NOTES_LENGTH) {
     return {
       status: "error",
-      message: `Resolution must be ${MAX_INTAKE_NOTES_LENGTH} characters or fewer.`,
+      message: `Notes must be ${MAX_INTAKE_NOTES_LENGTH} characters or fewer.`,
     };
   }
 
@@ -675,7 +675,7 @@ export async function updateStaffIntakeCaseAction(
   if (resolutionNotes.length > MAX_INTAKE_NOTES_LENGTH) {
     return {
       status: "error",
-      message: `Resolution must be ${MAX_INTAKE_NOTES_LENGTH} characters or fewer.`,
+      message: `Notes must be ${MAX_INTAKE_NOTES_LENGTH} characters or fewer.`,
     };
   }
 
@@ -727,7 +727,7 @@ export async function updateStaffIntakeCaseAction(
     buildTextAuditChange("category", "Category", report.category, category),
     buildTextAuditChange("description", "Summary", report.description, description),
     buildTextAuditChange("intakeNotes", "Notes", report.intakeNotes, intakeNotes),
-    buildTextAuditChange("resolutionNotes", "Resolution", report.resolutionNotes, resolutionNotes),
+    buildTextAuditChange("resolutionNotes", "Notes", report.resolutionNotes, resolutionNotes),
     buildTextAuditChange("addressText", "Address", report.addressText, addressText),
     buildTextAuditChange("residentName", "Constituent", report.residentName, residentName),
     buildTextAuditChange("residentEmail", "Email", report.residentEmail, residentEmail),

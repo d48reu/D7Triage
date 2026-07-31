@@ -88,7 +88,7 @@ const BOARD_COLUMN_SPECS = [
   },
   {
     key: "resolution",
-    label: "Resolution",
+    label: "Notes",
     defaultWidth: 220,
     minWidth: 170,
     maxWidth: 520,
@@ -1431,7 +1431,7 @@ function SavedCaseRow({
           name="resolutionNotes"
           value={draft.resolutionNotes}
           maxLength={4000}
-          placeholder="Resolution, referral, or next step"
+          placeholder="Add notes"
           onChange={(value) => updateDraft({ resolutionNotes: value })}
           onBlur={flushAutosave}
         />
@@ -1800,7 +1800,7 @@ function DraftCaseRow({
           name="resolutionNotes"
           value={row.resolutionNotes}
           maxLength={4000}
-          placeholder="Resolution, referral, or next step"
+          placeholder="Add notes"
           onChange={(value) => onChange({ resolutionNotes: value })}
           onKeyDown={submitWithShortcut}
         />
