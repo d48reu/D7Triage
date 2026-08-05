@@ -141,6 +141,17 @@ export const ROUTING_RULES: RoutingRule[] = [
       "Escalate safety hazards, broken playground equipment, restroom outages, lighting concerns, and blocked access.",
   },
   {
+    category: "TREES",
+    likelyResponsibleParty:
+      "Miami-Dade County Public Works or Parks, Recreation and Open Spaces",
+    staffGuidance:
+      "Capture the exact tree location, whether it is in a public right-of-way or park, and whether it is blocking a road, sidewalk, driveway, sign, or utility line.",
+    residentExplanation:
+      "Tree concerns are reviewed for the responsible roadway, public works, or parks maintenance team.",
+    escalationNotes:
+      "Escalate fallen or unstable trees, blocked roads or sidewalks, and branches contacting utility lines.",
+  },
+  {
     category: "ILLEGAL DUMPING/TRASH",
     likelyResponsibleParty: "Solid Waste / code compliance",
     staffGuidance:

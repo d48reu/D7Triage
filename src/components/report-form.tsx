@@ -109,6 +109,13 @@ const BOARD_COLUMN_SPECS = [
     maxWidth: 260,
   },
   {
+    key: "email",
+    label: "Email",
+    defaultWidth: 210,
+    minWidth: 160,
+    maxWidth: 420,
+  },
+  {
     key: "category",
     label: "Category *",
     defaultWidth: 155,
@@ -1448,6 +1455,16 @@ function SavedCaseRow({
         />
       </Cell>
       <Cell>
+        <BoardInput
+          name="residentEmail"
+          value={draft.residentEmail}
+          maxLength={250}
+          placeholder="Email or contact note"
+          onChange={(value) => updateDraft({ residentEmail: value })}
+          onBlur={flushAutosave}
+        />
+      </Cell>
+      <Cell>
         <BoardCategorySelect
           value={draft.category}
           onChange={(category) => {
@@ -1727,7 +1744,6 @@ function DraftCaseRow({
       <input type="hidden" name="contactConsent" value="on" />
       <input type="hidden" name="company" value="" />
       <input type="hidden" name="intakeNotes" value={row.intakeNotes} />
-      <input type="hidden" name="residentEmail" value={row.residentEmail} />
 
       <Cell center>
         <span className="rounded bg-[#fff0b8] px-1.5 py-1 text-[10px] font-bold uppercase text-[#7a5600]">
@@ -1850,6 +1866,15 @@ function DraftCaseRow({
           maxLength={40}
           placeholder="305…"
           onChange={(value) => onChange({ residentPhone: value })}
+        />
+      </Cell>
+      <Cell>
+        <BoardInput
+          name="residentEmail"
+          value={row.residentEmail}
+          maxLength={250}
+          placeholder="Email or contact note"
+          onChange={(value) => onChange({ residentEmail: value })}
         />
       </Cell>
       <Cell>

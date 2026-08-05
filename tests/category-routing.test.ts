@@ -1,10 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ISSUE_CATEGORIES,
   inferIssueCategoryFromText,
   normalizeIssueCategory,
   resolveIntakeBoardCategory,
 } from "../src/lib/issue-types";
+import { getRoutingRule } from "../src/lib/routing-matrix";
+
+test("keeps staff categories alphabetical with Other / unsure last", () => {
+  const standardCategories = ISSUE_CATEGORIES.slice(0, -1);
+
+  assert.deepEqual(
+    standardCategories,
+    [...standardCategories].sort((left, right) => left.localeCompare(right)),
+  );
+  assert.equal(ISSUE_CATEGORIES.at(-1), "Other / unsure");
+  assert.equal(getRoutingRule("TREES")?.category, "TREES");
+});
 
 test("normalizes legacy category labels to the current staff category set", () => {
   assert.equal(normalizeIssueCategory("Roads and potholes"), "TRAFFIC");
@@ -19,9 +32,10 @@ test("normalizes legacy category labels to the current staff category set", () =
     normalizeIssueCategory("Parking enforcement"),
     "PARKING ENFORCEMENT",
   );
+  assert.equal(normalizeIssueCategory("Trees"), "TREES");
 });
 
-test("infers housing, storm-drain, and parking categories from intake text", () => {
+test("infers housing, storm-drain, parking, and tree categories from intake text", () => {
   assert.equal(
     inferIssueCategoryFromText({
       category: "Other / unsure",
@@ -50,6 +64,15 @@ test("infers housing, storm-drain, and parking categories from intake text", () 
       addressText: "123 Main Street",
     }),
     "PARKING ENFORCEMENT",
+  );
+
+  assert.equal(
+    inferIssueCategoryFromText({
+      category: "Other / unsure",
+      description: "A large tree limb is hanging over the sidewalk.",
+      addressText: "123 Main Street",
+    }),
+    "TREES",
   );
 });
 
