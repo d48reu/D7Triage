@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   compareIntakeMonthLabelsDescending,
   formatIntakeMonthGroup,
+  intakeDraftMatchesSavedCase,
   intakeCaseMatchesSearch,
   nextIntakeMonthLabel,
   type IntakeBoardCase,
@@ -50,4 +51,38 @@ test("searches saved intake cases across receptionist-facing fields", () => {
   assert.equal(intakeCaseMatchesSearch(intakeCase, "every evening"), true);
   assert.equal(intakeCaseMatchesSearch(intakeCase, "repair scheduling"), true);
   assert.equal(intakeCaseMatchesSearch(intakeCase, "housing"), false);
+});
+
+test("recognizes a stale local draft that already exists as a saved case", () => {
+  assert.equal(
+    intakeDraftMatchesSavedCase(
+      {
+        residentName: intakeCase.residentName,
+        dateValue: intakeCase.createdAt.slice(0, 10),
+        description: intakeCase.description,
+        resolutionNotes: intakeCase.resolutionNotes,
+        addressText: intakeCase.addressText,
+        residentPhone: intakeCase.residentPhone,
+        residentEmail: intakeCase.residentEmail,
+      },
+      intakeCase,
+    ),
+    true,
+  );
+
+  assert.equal(
+    intakeDraftMatchesSavedCase(
+      {
+        residentName: intakeCase.residentName,
+        dateValue: intakeCase.createdAt.slice(0, 10),
+        description: `${intakeCase.description} New caller detail.`,
+        resolutionNotes: intakeCase.resolutionNotes,
+        addressText: intakeCase.addressText,
+        residentPhone: intakeCase.residentPhone,
+        residentEmail: intakeCase.residentEmail,
+      },
+      intakeCase,
+    ),
+    false,
+  );
 });

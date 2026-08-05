@@ -16,6 +16,43 @@ export type IntakeBoardCase = {
   attachmentCount: number;
 };
 
+export type IntakeDraftIdentity = {
+  residentName: string;
+  dateValue: string;
+  description: string;
+  resolutionNotes: string;
+  addressText: string;
+  residentPhone: string;
+  residentEmail: string;
+};
+
+function normalizeIdentityValue(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export function intakeDraftMatchesSavedCase(
+  draft: IntakeDraftIdentity,
+  intakeCase: IntakeBoardCase,
+) {
+  if (!draft.description.trim() || !draft.addressText.trim()) return false;
+
+  return (
+    draft.dateValue === intakeCase.createdAt.slice(0, 10) &&
+    normalizeIdentityValue(draft.residentName) ===
+      normalizeIdentityValue(intakeCase.residentName) &&
+    normalizeIdentityValue(draft.description) ===
+      normalizeIdentityValue(intakeCase.description) &&
+    normalizeIdentityValue(draft.resolutionNotes) ===
+      normalizeIdentityValue(intakeCase.resolutionNotes) &&
+    normalizeIdentityValue(draft.addressText) ===
+      normalizeIdentityValue(intakeCase.addressText) &&
+    normalizeIdentityValue(draft.residentPhone) ===
+      normalizeIdentityValue(intakeCase.residentPhone) &&
+    normalizeIdentityValue(draft.residentEmail) ===
+      normalizeIdentityValue(intakeCase.residentEmail)
+  );
+}
+
 export function formatIntakeMonthGroup(value: Date | string) {
   const date = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(date.getTime())) return "Date unknown";

@@ -22,6 +22,7 @@ import {
 import {
   compareIntakeMonthLabelsDescending,
   formatIntakeMonthGroup,
+  intakeDraftMatchesSavedCase,
   intakeCaseMatchesSearch,
   nextIntakeMonthLabel,
   type IntakeBoardCase,
@@ -2466,12 +2467,21 @@ function mergeDraftGroups(
   storedGroups: DraftGroup[],
   todayDateValue: string,
 ) {
+  const cleanedStoredGroups = storedGroups.map((group) => ({
+    ...group,
+    rows: group.rows.filter(
+      (row) =>
+        !existingCases.some((intakeCase) =>
+          intakeDraftMatchesSavedCase(row, intakeCase),
+        ),
+    ),
+  }));
   const caseLabels = Array.from(
     new Set(existingCases.map((intakeCase) => formatIntakeMonthGroup(intakeCase.createdAt))),
   ).sort(compareIntakeMonthLabelsDescending);
 
   const knownLabels = new Set(
-    storedGroups.flatMap((group) =>
+    cleanedStoredGroups.flatMap((group) =>
       group.caseMonthLabel
         ? [group.label, group.caseMonthLabel]
         : [group.label],
@@ -2487,7 +2497,7 @@ function mergeDraftGroups(
       collapsed: false,
       rows: [],
     }));
-  const merged = [...storedGroups, ...missingCaseGroups];
+  const merged = [...cleanedStoredGroups, ...missingCaseGroups];
   const existingCurrentGroup = merged.find(
     (group) =>
       group.label === currentGroupLabel ||
@@ -2496,7 +2506,7 @@ function mergeDraftGroups(
 
   if (
     existingCurrentGroup &&
-    storedGroups.length === 0 &&
+    cleanedStoredGroups.length === 0 &&
     existingCurrentGroup.rows.length === 0
   ) {
     existingCurrentGroup.rows = [
