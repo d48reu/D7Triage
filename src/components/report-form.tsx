@@ -166,6 +166,7 @@ type CreatedCaseMetadata = {
   publicTrackingToken: string;
   createdAt: string;
   attachmentCount: number;
+  intakeCase: IntakeBoardCase;
 };
 
 type AutosaveIndicator = {
@@ -216,7 +217,11 @@ export function ReportForm({
     useState<CreatedCaseMetadata | null>(null);
 
   useEffect(() => {
+    if (draftsLoadedRef.current) return;
+
     const loadTimer = window.setTimeout(() => {
+      if (draftsLoadedRef.current) return;
+
       const loadedGroups = loadStoredGroups(
         currentGroupLabel,
         existingCases,
@@ -495,23 +500,7 @@ export function ReportForm({
     row: DraftRow,
     createdCase: CreatedCaseMetadata,
   ) {
-    const savedCase: IntakeBoardCase = {
-      id: createdCase.reportId,
-      publicTrackingToken: createdCase.publicTrackingToken,
-      status: row.status,
-      assignedStaffId: row.assignedStaffId || null,
-      category: row.category,
-      description: row.description,
-      intakeNotes: row.intakeNotes,
-      resolutionNotes: row.resolutionNotes,
-      addressText: row.addressText,
-      residentName: row.residentName,
-      residentEmail: row.residentEmail,
-      residentPhone: row.residentPhone,
-      createdAt: createdCase.createdAt,
-      districtLabel: "Pending review",
-      attachmentCount: createdCase.attachmentCount,
-    };
+    const savedCase = createdCase.intakeCase;
 
     const nextGroups = ensureCaseMonthGroup(
       groupsRef.current.map((group) => {
@@ -1599,6 +1588,7 @@ function DraftCaseRow({
       !state.reportId ||
       !state.publicTrackingToken ||
       !state.createdAt ||
+      !state.createdCase ||
       reportedCaseId.current === state.reportId
     ) {
       return;
@@ -1610,10 +1600,16 @@ function DraftCaseRow({
       publicTrackingToken: state.publicTrackingToken,
       createdAt: state.createdAt,
       attachmentCount: state.attachmentCount ?? 0,
+      intakeCase: state.createdCase,
     });
   }, [onCreated, state]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    const categoryInput = event.currentTarget.elements.namedItem("category");
+    if (categoryInput instanceof HTMLInputElement) {
+      categoryInput.value = row.category;
+    }
+
     const input = event.currentTarget.elements.namedItem("photos");
     const nextPhotoError =
       input instanceof HTMLInputElement ? validatePhotos(input.files) : null;
@@ -2088,18 +2084,7 @@ function BoardCategorySelect({
   inputName?: string;
   displayValue?: string;
 }) {
-  const selectRef = useRef<HTMLSelectElement>(null);
-  const userInteractionRef = useRef(false);
   const [isEditing, setIsEditing] = useState(false);
-  const isListedCategory = ISSUE_CATEGORIES.some(
-    (category) => category === value,
-  );
-
-  useEffect(() => {
-    if (selectRef.current && selectRef.current.value !== value) {
-      selectRef.current.value = value;
-    }
-  }, [value]);
 
   return (
     <>
@@ -2112,68 +2097,40 @@ function BoardCategorySelect({
         />
       ) : null}
       {isEditing ? (
-        <select
-          ref={selectRef}
-          required
-          value={value}
-          autoComplete="off"
-          autoFocus
-          data-1p-ignore
-          data-bwignore
-          data-form-type="other"
-          data-lpignore="true"
-          onPointerDown={() => {
-            userInteractionRef.current = true;
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              setIsEditing(false);
-              return;
-            }
-            if (event.key !== "Tab") {
-              userInteractionRef.current = true;
-            }
-          }}
-          onFocus={(event) => {
-            if (event.currentTarget.value !== value) {
-              event.currentTarget.value = value;
-            }
-          }}
-          onBlur={() => {
-            userInteractionRef.current = false;
-            setIsEditing(false);
-          }}
-          onChange={(event) => {
-            const nextCategory = event.currentTarget.value;
-            if (!userInteractionRef.current) {
-              event.currentTarget.value = value;
-              return;
-            }
-
-            userInteractionRef.current = false;
-            onChange(nextCategory);
-            setIsEditing(false);
-          }}
-          className={className}
-          aria-label={ariaLabel}
+        <div
+          className="flex max-h-64 w-full flex-col overflow-y-auto bg-white shadow-[inset_0_0_0_2px_#0073ea]"
+          role="group"
+          aria-label={`Choose ${ariaLabel.toLowerCase()}`}
         >
-          <option value="" disabled>
-            Choose category
-          </option>
-          {!isListedCategory && value ? (
-            <option value={value}>{value}</option>
-          ) : null}
           {ISSUE_CATEGORIES.map((category) => (
-            <option key={category} value={category}>
+            <button
+              key={category}
+              type="button"
+              onClick={() => {
+                onChange(category);
+                setIsEditing(false);
+              }}
+              className={`border-b border-[#e2e8f0] px-3 py-2 text-left text-xs hover:bg-[#eaf5ff] focus:bg-[#eaf5ff] focus:outline-none ${
+                category === value ? "font-semibold text-[#0060b9]" : "text-[#323650]"
+              }`}
+              aria-label={`Set ${ariaLabel.toLowerCase()} to ${category}`}
+            >
               {category}
-            </option>
+            </button>
           ))}
-        </select>
+          <button
+            type="button"
+            onClick={() => setIsEditing(false)}
+            className="px-3 py-2 text-left text-xs font-semibold text-[#7a4650] hover:bg-[#fff1f2] focus:bg-[#fff1f2] focus:outline-none"
+          >
+            Cancel
+          </button>
+        </div>
       ) : (
         <button
           type="button"
           onClick={() => setIsEditing(true)}
-          className="flex h-full w-full items-center px-3 text-left text-sm outline-none hover:bg-white/70 focus:bg-white focus:shadow-[inset_0_0_0_2px_#0073ea]"
+          className={`flex items-center text-left text-sm ${className}`}
           aria-label={`${ariaLabel}. Click to edit.`}
         >
           <span className="break-words">{displayValue || "Choose category"}</span>

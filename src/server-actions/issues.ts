@@ -58,6 +58,7 @@ export type CreateIntakeCaseState = {
   publicTrackingToken?: string;
   createdAt?: string;
   attachmentCount?: number;
+  createdCase?: IntakeBoardCase;
 };
 
 export type UpdateIntakeCaseState = {
@@ -553,7 +554,22 @@ export async function createStaffIntakeCaseAction(
     });
   }
 
+  const createdReport = getIssueReportById(report.id);
+  if (!createdReport) {
+    return { status: "error", message: "Case could not be reloaded after saving." };
+  }
+
+  const attachmentCount = listAttachments(report.id).length;
+
+  console.info("[staff-intake:create] case saved", {
+    reportId: createdReport.id,
+    submittedCategory,
+    storedCategory: createdReport.category,
+    categoryWasInferred: submittedCategory !== createdReport.category,
+  });
+
   revalidatePath("/staff");
+  revalidatePath("/report");
   revalidatePath("/staff/intake-board");
   revalidatePath("/staff/my");
 
@@ -563,7 +579,29 @@ export async function createStaffIntakeCaseAction(
     reportId: report.id,
     publicTrackingToken: report.publicTrackingToken,
     createdAt: report.createdAt,
-    attachmentCount: listAttachments(report.id).length,
+    attachmentCount,
+    createdCase: {
+      id: createdReport.id,
+      publicTrackingToken: createdReport.publicTrackingToken,
+      status: createdReport.status,
+      assignedStaffId: createdReport.assignedStaffId,
+      category: createdReport.category,
+      description: createdReport.description,
+      intakeNotes: createdReport.intakeNotes,
+      resolutionNotes: createdReport.resolutionNotes,
+      addressText: createdReport.addressText,
+      residentName: createdReport.residentName ?? "",
+      residentEmail: createdReport.residentEmail,
+      residentPhone: createdReport.residentPhone ?? "",
+      createdAt: createdReport.createdAt,
+      districtLabel: formatDistrictHintStatus(
+        analyzeReportJurisdiction(
+          createdReport,
+          getJurisdictionConfig(),
+        ).districtHintStatus,
+      ),
+      attachmentCount,
+    },
   };
 }
 
