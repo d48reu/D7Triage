@@ -22,7 +22,7 @@ Current capabilities:
 - Miami-Dade District 7 boundary-aware hinting when coordinates are available
 - AI-assisted routing suggestions with guardrails and staff feedback
 - analytics, saved views, and CSV exports
-- staff-only pilot backup JSON export
+- automatic SQLite and attachment snapshots plus a staff-only JSON export
 - notification preview center with editable templates
 
 ## Current Architecture
@@ -63,6 +63,7 @@ Most local work only needs:
 For Render or other hosted environments that need persistent local storage, you can also set:
 
 - `DATA_DIR`
+- `AUTOMATED_BACKUPS_ENABLED` and the backup interval/retention controls
 
 ### Geocoding
 
@@ -87,6 +88,9 @@ The current prototype includes:
 - hidden honeypot field on the intake form
 - dedicated staff session secret support
 - content-type hardening on attachment responses
+- action-level staff identity checks for every staff mutation
+- named staff actors in case audit history
+- automatic database and attachment snapshots in the configured data directory
 
 ## Important Local Paths
 

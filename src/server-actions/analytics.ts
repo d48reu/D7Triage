@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { upsertAnalyticsView } from "@/lib/issues-repository";
+import { requireStaffActionActor } from "@/lib/staff-action-auth";
 
 function readRequiredText(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -12,6 +13,8 @@ function readRequiredText(formData: FormData, key: string) {
 }
 
 export async function saveAnalyticsViewAction(formData: FormData) {
+  await requireStaffActionActor();
+
   upsertAnalyticsView({
     name: readRequiredText(formData, "name"),
     preset: String(formData.get("preset") ?? "all").trim() || "all",

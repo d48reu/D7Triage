@@ -15,6 +15,7 @@ import {
   upsertStaffMember,
 } from "@/lib/issues-repository";
 import { sendStaffAssignmentTestEmail } from "@/lib/staff-assignment-notifications";
+import { requireStaffActionActor } from "@/lib/staff-action-auth";
 
 function readRequiredText(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -25,6 +26,8 @@ function readRequiredText(formData: FormData, key: string) {
 }
 
 export async function saveAgencyAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const name = readRequiredText(formData, "name");
   upsertAgency({
     id: String(formData.get("agencyId") ?? "").trim() || undefined,
@@ -45,6 +48,8 @@ export async function saveAgencyAction(formData: FormData) {
 }
 
 export async function saveStaffMemberAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const name = readRequiredText(formData, "name");
   upsertStaffMember({
     id: String(formData.get("staffMemberId") ?? "").trim() || undefined,
@@ -60,6 +65,8 @@ export async function saveStaffMemberAction(formData: FormData) {
 }
 
 export async function sendAssignmentTestEmailAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const staffMemberId = readRequiredText(formData, "staffMemberId");
   const staffMember = getStaffMemberById(staffMemberId);
 
@@ -84,6 +91,8 @@ export async function sendAssignmentTestEmailAction(formData: FormData) {
 }
 
 export async function saveRoutingRuleAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const category = readRequiredText(formData, "category");
   upsertRoutingRule({
     category,
@@ -100,6 +109,8 @@ export async function saveRoutingRuleAction(formData: FormData) {
 }
 
 export async function saveJurisdictionConfigAction(formData: FormData) {
+  await requireStaffActionActor();
+
   saveJurisdictionConfig({
     districtMatchKeywords: String(
       formData.get("districtMatchKeywords") ?? "",
@@ -142,6 +153,8 @@ export async function saveJurisdictionConfigAction(formData: FormData) {
 }
 
 export async function loadOfficialMunicipalitiesAction() {
+  await requireStaffActionActor();
+
   const dataset = await fetchOfficialMiamiDadeMunicipalityBoundaries();
   const current = getJurisdictionConfig();
   saveJurisdictionConfig({
@@ -169,6 +182,8 @@ export async function loadOfficialMunicipalitiesAction() {
 }
 
 export async function loadOfficialCommissionDistrictsAction() {
+  await requireStaffActionActor();
+
   const dataset = await fetchOfficialMiamiDadeCommissionDistrictBoundaries();
   const current = getJurisdictionConfig();
   saveJurisdictionConfig({

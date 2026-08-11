@@ -27,6 +27,8 @@ On Render, the app is configured to store data under:
 
 - `/var/data/issues.db`
 - `/var/data/uploads`
+- `/var/data/historical-attachments`
+- `/var/data/backups`
 
 ## Recommended Steps
 
@@ -48,6 +50,7 @@ These must be set for a usable staff pilot:
 - `STAFF_PASSWORD`
 - `DEMO_MODE=false`
 - `NEXT_PUBLIC_DEMO_MODE=false`
+- `AUTOMATED_BACKUPS_ENABLED=true`
 
 These are optional:
 

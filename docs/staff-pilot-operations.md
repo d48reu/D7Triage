@@ -1,6 +1,6 @@
 # District 7 Issue Reporter Staff Pilot Operations
 
-Last updated: July 15, 2026
+Last updated: August 11, 2026
 
 This project is in an active staff pilot. Real cases are being entered, so the live Render data should be treated as operational data.
 
@@ -11,9 +11,31 @@ This project is in an active staff pilot. Real cases are being entered, so the l
 - Data storage: SQLite database and attachment files on the Render persistent disk at `/var/data`
 - Audience: District 7 staff only
 
-## Daily Backup
+## Automatic Backup
 
-At the end of each day with real case entry:
+The hosted app creates a consistent SQLite snapshot and copies all case, event,
+and historical attachments once every 24 hours. Completed snapshots are stored
+under `/var/data/backups/backup-<timestamp>`. The three newest snapshots are
+retained by default.
+
+Each snapshot contains:
+
+- `issues.db`, created with SQLite's online backup operation
+- `uploads`, including case and event files
+- `historical-attachments`
+- `manifest.json`, with the timestamp, attachment count, and total attachment bytes
+
+Successful runs write `[backup] data snapshot completed` to the Render logs.
+Failures write `[backup] data snapshot failed` and must be investigated before
+assuming the data is protected.
+
+These snapshots protect against an accidental record or file change, but they
+are stored on the same Render disk. Keep a separate off-platform copy for disk
+loss or account-level recovery.
+
+## Off-Platform Backup
+
+At least weekly, and after any large import:
 
 1. Sign in to the staff area.
 2. Open **Staff analytics**.
@@ -33,7 +55,17 @@ The pilot backup JSON includes:
 - jurisdiction/routing configuration
 - staff member and agency metadata
 
-The JSON does not include attachment file bytes. Attachment files remain on the Render persistent disk, so keep the Render disk intact and do not reset the service data directory.
+The JSON does not include attachment file bytes. The automatic snapshots contain
+those bytes, but remain on the Render persistent disk. Store the JSON somewhere
+staff-controlled and periodically copy a complete snapshot off Render.
+
+## Restore Check
+
+Before using a snapshot, confirm that its `manifest.json`, `issues.db`, `uploads`,
+and `historical-attachments` entries are present. Open a copy of `issues.db` and
+run `PRAGMA integrity_check`; it must return `ok`. Restore only while the web
+service is stopped, and preserve the current `/var/data` directory until the
+restored app has been verified.
 
 ## Weekly Case Quality Review
 

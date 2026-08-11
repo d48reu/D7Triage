@@ -41,6 +41,7 @@ This checklist is for the first staff-only District 7 Issue Reporter pilot on Re
 - Disk mount path: `/var/data`
 - Disk size: `1 GB` for the first pilot
 - `DATA_DIR`: `/var/data`
+- Automatic backups: every 24 hours, retaining the newest 3 snapshots
 
 If deploying from the larger `d7-ai-lab` repo instead of the nested Issue Reporter repo, set the service root directory to:
 
@@ -68,6 +69,10 @@ Required:
 - `STAFF_SESSION_SECRET`
 - `STAFF_SESSION_MAX_AGE_HOURS`
 - `RATE_LIMIT_SECRET`
+- `AUTOMATED_BACKUPS_ENABLED`
+- `AUTOMATED_BACKUP_INTERVAL_HOURS`
+- `AUTOMATED_BACKUP_RETENTION_COUNT`
+- `AUTOMATED_BACKUP_INITIAL_DELAY_SECONDS`
 
 Recommended defaults:
 
@@ -76,6 +81,9 @@ Recommended defaults:
 - `DATA_DIR=/var/data`
 - `AI_ROUTING_ENABLED=false`
 - `REPORT_RATE_LIMIT_ENABLED=true`
+- `AUTOMATED_BACKUPS_ENABLED=true`
+- `AUTOMATED_BACKUP_INTERVAL_HOURS=24`
+- `AUTOMATED_BACKUP_RETENTION_COUNT=3`
 
 Optional for launch:
 

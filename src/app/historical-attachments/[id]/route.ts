@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { getHistoricalAttachmentById } from "@/lib/historical-archive-repository";
+import { inlineContentDisposition } from "@/lib/http-content-disposition";
 import { hasStaffSession } from "@/lib/staff-auth";
 
 export const runtime = "nodejs";
@@ -28,7 +29,7 @@ export async function GET(
     return new NextResponse(file, {
       headers: {
         "Content-Type": attachment.mimeType || "application/octet-stream",
-        "Content-Disposition": `inline; filename="${safeHeaderFileName(fileName)}"`,
+        "Content-Disposition": inlineContentDisposition(fileName),
         "Cache-Control": "private, max-age=60",
         "X-Content-Type-Options": "nosniff",
       },
@@ -36,8 +37,4 @@ export async function GET(
   } catch {
     return new NextResponse("Archived file not found", { status: 404 });
   }
-}
-
-function safeHeaderFileName(value: string) {
-  return value.replace(/[\r\n"]/g, "_");
 }

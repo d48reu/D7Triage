@@ -7,10 +7,15 @@ import {
 import { getJurisdictionConfig } from "@/lib/issues-repository";
 import { findCountyCommissionDistrictForPoint } from "@/lib/location-intelligence";
 import { resolveReportLocationIntelligence } from "@/lib/report-location-intelligence";
+import { getStaffActionActor } from "@/lib/staff-action-auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  if (!(await getStaffActionActor())) {
+    return new NextResponse("Staff sign-in required", { status: 401 });
+  }
+
   try {
     const body = (await request.json()) as {
       addressText?: string;

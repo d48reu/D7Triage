@@ -7,6 +7,7 @@ import {
   updateNotificationReview,
   upsertNotificationTemplate,
 } from "@/lib/issues-repository";
+import { requireStaffActionActor } from "@/lib/staff-action-auth";
 
 function readRequiredText(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -17,6 +18,8 @@ function readRequiredText(formData: FormData, key: string) {
 }
 
 export async function saveNotificationTemplateAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const key = readRequiredText(
     formData,
     "templateKey",
@@ -32,6 +35,8 @@ export async function saveNotificationTemplateAction(formData: FormData) {
 }
 
 export async function updateNotificationReviewAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const report = getIssueReportById(reportId);
   if (!report) {

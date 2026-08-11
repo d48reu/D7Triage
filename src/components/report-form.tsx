@@ -1477,7 +1477,7 @@ function SavedCaseRow({
       </Cell>
       <Cell
         center
-        className="sticky right-0 z-10 bg-[#f7fbff] shadow-[-8px_0_12px_-12px_#5b6680]"
+        className="bg-[#f7fbff]"
       >
         <div className="flex flex-col items-center gap-1.5 px-2 py-2">
           <label
@@ -1888,7 +1888,7 @@ function DraftCaseRow({
       </Cell>
       <Cell
         center
-        className="sticky right-0 z-10 bg-[#eaf5ff] shadow-[-8px_0_12px_-12px_#5b6680]"
+        className="bg-[#eaf5ff]"
       >
         <div className="flex w-full flex-col items-center gap-1.5 px-2 py-2">
           <label className="w-full cursor-pointer rounded border border-[#9aa8c4] bg-white px-2 py-1.5 text-center text-xs font-semibold hover:bg-[#f5f7fb]">
@@ -1964,11 +1964,7 @@ function BoardHeader({
           column={column}
           width={columnWidths[column.key]}
           onWidthChange={(width) => onColumnWidthChange(column.key, width)}
-          className={
-            column.key === "files"
-              ? "sticky right-0 z-20 shadow-[-8px_0_12px_-12px_#5b6680]"
-              : ""
-          }
+          className=""
         />
       ))}
     </div>

@@ -25,6 +25,7 @@ test("builds a staff pilot backup with reports and related records", async () =>
   });
   repository.addIssueAuditEvents({
     reportId: report.id,
+    actorLabel: "Karl Eugene Boehm",
     changes: [
       {
         fieldName: "description",

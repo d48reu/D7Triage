@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { getLiveEventAttachmentById } from "@/lib/live-events-repository";
+import { inlineContentDisposition } from "@/lib/http-content-disposition";
 import { hasStaffSession } from "@/lib/staff-auth";
 
 export const runtime = "nodejs";
@@ -21,11 +22,10 @@ export async function GET(
 
   try {
     const file = await fs.readFile(attachment.storagePath);
-    const safeName = attachment.fileName.replace(/["\r\n]/g, "");
     return new NextResponse(file, {
       headers: {
         "Content-Type": attachment.mimeType || "application/octet-stream",
-        "Content-Disposition": `inline; filename="${safeName}"`,
+        "Content-Disposition": inlineContentDisposition(attachment.fileName),
         "Cache-Control": "private, max-age=60",
         "X-Content-Type-Options": "nosniff",
       },

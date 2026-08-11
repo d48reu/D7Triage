@@ -7,7 +7,7 @@ import {
   parseHistoricalArchiveManifest,
 } from "@/lib/historical-archive-repository";
 import { getDataDir } from "@/lib/data-paths";
-import { hasStaffSession } from "@/lib/staff-auth";
+import { getStaffActionActor } from "@/lib/staff-action-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ const MAX_ASSET_BYTES = 30 * 1024 * 1024;
 const MAX_TOTAL_ASSET_BYTES = 80 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  if (!(await hasStaffSession())) {
+  if (!(await getStaffActionActor())) {
     return new NextResponse("Staff sign-in required", { status: 401 });
   }
 

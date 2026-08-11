@@ -5,7 +5,11 @@ import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo-mode";
-import { getStaffSession, hasStaffSession } from "@/lib/staff-auth";
+import { getStaffSession } from "@/lib/staff-auth";
+import {
+  getStaffActionActor,
+  requireStaffActionActor,
+} from "@/lib/staff-action-auth";
 import {
   analyzeReportJurisdiction,
   formatDistrictHintStatus,
@@ -340,7 +344,7 @@ export async function createStaffIntakeCaseAction(
   _previousState: CreateIntakeCaseState,
   formData: FormData,
 ): Promise<CreateIntakeCaseState> {
-  if (!(await hasStaffSession())) {
+  if (!(await getStaffActionActor())) {
     return {
       status: "error",
       message: "Your staff session expired. Sign in again before saving the case.",
@@ -623,7 +627,8 @@ export async function updateStaffIntakeCaseAction(
   _previousState: UpdateIntakeCaseState,
   formData: FormData,
 ): Promise<UpdateIntakeCaseState> {
-  if (!(await hasStaffSession())) {
+  const actor = await getStaffActionActor();
+  if (!actor) {
     return {
       status: "error",
       message: "Your staff session expired. Sign in again before saving.",
@@ -829,7 +834,7 @@ export async function updateStaffIntakeCaseAction(
   if (detailChanges.length > 0) {
     addIssueAuditEvents({
       reportId,
-      actorLabel: "Staff intake board",
+      actorLabel: actor.actorLabel,
       changes: detailChanges,
     });
     addStaffNote({
@@ -882,6 +887,8 @@ export async function updateStaffIntakeCaseAction(
 }
 
 export async function updateIssueStatusAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const status = readRequiredText(formData, "status") as IssueStatus;
   const publicNote = String(formData.get("publicNote") ?? "").trim();
@@ -904,6 +911,8 @@ export async function updateIssueStatusAction(formData: FormData) {
 }
 
 export async function saveQuickTriageAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const status = readRequiredText(formData, "status") as IssueStatus;
   const staffMemberId =
@@ -946,9 +955,7 @@ export async function saveQuickTriageAction(formData: FormData) {
 }
 
 export async function addIssuePhotosAction(formData: FormData) {
-  if (!(await hasStaffSession())) {
-    throw new Error("Your staff session expired. Sign in again before uploading.");
-  }
+  await requireStaffActionActor();
 
   const reportId = readRequiredText(formData, "reportId");
   const photos = formData
@@ -996,7 +1003,7 @@ export async function addIssuePhotosAction(formData: FormData) {
 export async function addStaffIntakeCaseAttachmentsAction(
   formData: FormData,
 ): Promise<AddIntakeCaseAttachmentsState> {
-  if (!(await hasStaffSession())) {
+  if (!(await getStaffActionActor())) {
     return {
       status: "error",
       message: "Your staff session expired. Sign in again before uploading.",
@@ -1070,6 +1077,8 @@ export async function addStaffIntakeCaseAttachmentsAction(
 }
 
 export async function updateIssueDetailsAction(formData: FormData) {
+  const actor = await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const report = getIssueReportById(reportId);
 
@@ -1187,13 +1196,13 @@ export async function updateIssueDetailsAction(formData: FormData) {
   if (changedFields.length > 0) {
     addIssueAuditEvents({
       reportId,
-      actorLabel: "Staff",
+      actorLabel: actor.actorLabel,
       changes: detailChanges,
     });
 
     addStaffNote({
       reportId,
-      body: `Case details edited by staff. Updated fields: ${changedFields.join(", ")}.${
+      body: `Case details edited by ${actor.actorLabel}. Updated fields: ${changedFields.join(", ")}.${
         addressChanged ? " Location intelligence was refreshed from the edited address." : ""
       }`,
     });
@@ -1207,6 +1216,8 @@ export async function updateIssueDetailsAction(formData: FormData) {
 }
 
 export async function assignIssueReportAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const report = getIssueReportById(reportId);
   const staffMemberId =
@@ -1229,14 +1240,11 @@ export async function assignIssueReportAction(formData: FormData) {
 }
 
 export async function openAssignedCaseAction(formData: FormData) {
-  if (!(await hasStaffSession())) {
-    redirect("/staff/login");
-  }
+  const actor = await requireStaffActionActor();
 
   const reportId = readRequiredText(formData, "reportId");
   const report = getIssueReportById(reportId);
-  const session = await getStaffSession();
-  const actingStaffMemberId = session?.staffMemberId;
+  const actingStaffMemberId = actor.staffMemberId;
 
   if (!report) {
     throw new Error("Report not found");
@@ -1262,6 +1270,8 @@ export async function openAssignedCaseAction(formData: FormData) {
 }
 
 export async function refreshLocationIntelligenceAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const report = getIssueReportById(reportId);
 
@@ -1288,6 +1298,8 @@ export async function refreshLocationIntelligenceAction(formData: FormData) {
 }
 
 export async function addStaffNoteAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const body = readRequiredText(formData, "body");
   const report = getIssueReportById(reportId);
@@ -1303,6 +1315,8 @@ export async function addStaffNoteAction(formData: FormData) {
 }
 
 export async function addReferralAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const agencyId = String(formData.get("agencyId") ?? "").trim();
   const manualAgencyName = String(formData.get("agencyName") ?? "").trim();
@@ -1341,6 +1355,8 @@ export async function addReferralAction(formData: FormData) {
 }
 
 export async function updateReferralOutcomeAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const referralId = readRequiredText(formData, "referralId");
   const outcomeStatus = readRequiredText(formData, "outcomeStatus");
@@ -1371,6 +1387,8 @@ export async function updateReferralOutcomeAction(formData: FormData) {
 }
 
 export async function markDuplicateAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const masterReportId = readRequiredText(formData, "masterReportId");
   const note = String(formData.get("note") ?? "").trim();
@@ -1396,6 +1414,8 @@ export async function markDuplicateAction(formData: FormData) {
 }
 
 export async function markDistinctAction(formData: FormData) {
+  await requireStaffActionActor();
+
   const reportId = readRequiredText(formData, "reportId");
   const note = String(formData.get("note") ?? "").trim();
   const report = getIssueReportById(reportId);
@@ -1425,6 +1445,14 @@ export async function generateAiRoutingSuggestionAction(
   _previousState: GenerateAiSuggestionState,
   formData: FormData,
 ): Promise<GenerateAiSuggestionState> {
+  if (!(await getStaffActionActor())) {
+    return {
+      status: "error",
+      message: "Your staff session expired. Sign in again before generating a suggestion.",
+      suggestion: null,
+    };
+  }
+
   const reportId = readRequiredText(formData, "reportId");
 
   try {
@@ -1462,6 +1490,14 @@ export async function reviewAiSuggestionAction(
   _previousState: ReviewAiSuggestionState,
   formData: FormData,
 ): Promise<ReviewAiSuggestionState> {
+  if (!(await getStaffActionActor())) {
+    return {
+      status: "error",
+      message: "Your staff session expired. Sign in again before saving feedback.",
+      suggestion: null,
+    };
+  }
+
   const suggestionId = readRequiredText(formData, "suggestionId");
   const reportId = readRequiredText(formData, "reportId");
   const feedbackDisposition = readRequiredText(

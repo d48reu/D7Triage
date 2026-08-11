@@ -1165,45 +1165,37 @@ function applyStaffRosterAdditions(database: Database.Database) {
 function seedDemoData(database: Database.Database) {
   if (!isDemoMode()) return;
 
-  const staffCount = (
-    database.prepare("select count(*) as count from staff_members").get() as {
-      count: number;
-    }
-  ).count;
+  const insertStaffMember = database.prepare(`
+    insert into staff_members (
+      id, name, email, title, focus_areas, role_label, is_active, created_at, updated_at
+    ) values (
+      @id, @name, @email, @title, @focusAreas, @roleLabel, 1, @createdAt, @updatedAt
+    )
+    on conflict(id) do update set
+      name = excluded.name,
+      email = excluded.email,
+      title = excluded.title,
+      focus_areas = excluded.focus_areas,
+      role_label = excluded.role_label,
+      is_active = 1,
+      updated_at = excluded.updated_at
+  `);
 
-  if (staffCount === 0) {
-    const insertStaffMember = database.prepare(`
-      insert into staff_members (
-        id, name, email, title, focus_areas, role_label, is_active, created_at, updated_at
-      ) values (
-        @id, @name, @email, @title, @focusAreas, @roleLabel, 1, @createdAt, @updatedAt
-      )
-    `);
+  for (const staffMember of DEMO_STAFF_MEMBERS) {
+    const roleLabel = [staffMember.title, staffMember.focusAreas]
+      .filter(Boolean)
+      .join(" | ");
 
-    for (const staffMember of DEMO_STAFF_MEMBERS) {
-      const roleLabel = [staffMember.title, staffMember.focusAreas]
-        .filter(Boolean)
-        .join(" | ");
-
-      insertStaffMember.run({
-        ...staffMember,
-        roleLabel: roleLabel || null,
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      });
-    }
+    insertStaffMember.run({
+      ...staffMember,
+      roleLabel: roleLabel || null,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    });
   }
 
-  const reportCount = (
-    database.prepare("select count(*) as count from issue_reports").get() as {
-      count: number;
-    }
-  ).count;
-
-  if (reportCount > 0) return;
-
   const insertReport = database.prepare(`
-    insert into issue_reports (
+    insert or ignore into issue_reports (
       id, public_tracking_token, status, assigned_staff_id, assigned_at, category, description, address_text,
       latitude, longitude, location_source, geocoding_status, geocoded_address,
       geocoding_provider, geocoded_at, municipality_name, municipality_code,
@@ -1227,7 +1219,7 @@ function seedDemoData(database: Database.Database) {
   `);
 
   const insertStatusEvent = database.prepare(`
-    insert into issue_status_events (
+    insert or ignore into issue_status_events (
       id, report_id, status, public_note, created_at
     ) values (
       @id, @reportId, @status, @publicNote, @createdAt
@@ -1235,7 +1227,7 @@ function seedDemoData(database: Database.Database) {
   `);
 
   const insertStaffNote = database.prepare(`
-    insert into staff_notes (
+    insert or ignore into staff_notes (
       id, report_id, body, created_at
     ) values (
       @id, @reportId, @body, @createdAt
@@ -1243,7 +1235,7 @@ function seedDemoData(database: Database.Database) {
   `);
 
   const insertReferral = database.prepare(`
-    insert into referrals (
+    insert or ignore into referrals (
       id, report_id, agency_name, referral_method, outcome_status, external_reference,
       follow_up_date, notes, outcome_note, updated_at, created_at
     ) values (
@@ -1253,7 +1245,7 @@ function seedDemoData(database: Database.Database) {
   `);
 
   const insertNotificationEvent = database.prepare(`
-    insert into notification_events (
+    insert or ignore into notification_events (
       id, report_id, event_type, template_key, template_updated_at, recipient, subject, body, delivery_status, created_at
     ) values (
       @id, @reportId, @eventType, @templateKey, @templateUpdatedAt, @recipient, @subject, @body, @deliveryStatus, @createdAt
@@ -1556,6 +1548,10 @@ function getDb() {
 
 export function getIssuesDatabase() {
   return getDb();
+}
+
+export async function backupIssuesDatabase(destinationPath: string) {
+  return getDb().backup(destinationPath);
 }
 
 function mapReport(row: IssueReportRow): IssueReport {
@@ -3411,7 +3407,7 @@ export function acknowledgeAssignment(input: {
 
 export function addIssueAuditEvents(input: {
   reportId: string;
-  actorLabel?: string;
+  actorLabel: string;
   eventType?: string;
   changes: Array<{
     fieldName: string;
@@ -3421,6 +3417,14 @@ export function addIssueAuditEvents(input: {
   }>;
 }) {
   if (input.changes.length === 0) return;
+
+  const actorLabel = input.actorLabel.trim();
+  if (
+    !actorLabel ||
+    ["staff", "staff intake board"].includes(actorLabel.toLowerCase())
+  ) {
+    throw new Error("A named audit actor is required.");
+  }
 
   const database = getDb();
   const createdAt = nowIso();
@@ -3441,7 +3445,7 @@ export function addIssueAuditEvents(input: {
         change.fieldLabel,
         change.oldValue ?? null,
         change.newValue ?? null,
-        input.actorLabel?.trim() || "Staff",
+        actorLabel,
         createdAt,
       );
     }

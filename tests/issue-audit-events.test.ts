@@ -19,7 +19,7 @@ test("stores and lists field-level audit events for a report", async () => {
 
   repository.addIssueAuditEvents({
     reportId: report.id,
-    actorLabel: "Staff",
+    actorLabel: "Karl Eugene Boehm",
     changes: [
       {
         fieldName: "description",
@@ -39,6 +39,23 @@ test("stores and lists field-level audit events for a report", async () => {
   assert.equal(events[0].fieldLabel, "Description");
   assert.equal(events[0].oldValue, "Signal timing issue");
   assert.equal(events[0].newValue, "Signal timing issue near school zone");
-  assert.equal(events[0].actorLabel, "Staff");
+  assert.equal(events[0].actorLabel, "Karl Eugene Boehm");
   assert.match(events[0].createdAt, /^\d{4}-\d{2}-\d{2}T/);
+
+  assert.throws(
+    () =>
+      repository.addIssueAuditEvents({
+        reportId: report.id,
+        actorLabel: "Staff",
+        changes: [
+          {
+            fieldName: "category",
+            fieldLabel: "Category",
+            oldValue: "Traffic",
+            newValue: "Trees",
+          },
+        ],
+      }),
+    /named audit actor is required/,
+  );
 });

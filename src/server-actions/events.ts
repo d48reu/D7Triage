@@ -27,7 +27,10 @@ import {
   type LiveEventSubtaskStatus,
   type SaveLiveEventInput,
 } from "@/lib/live-events-repository";
-import { hasStaffSession } from "@/lib/staff-auth";
+import {
+  getStaffActionActor,
+  requireStaffActionActor,
+} from "@/lib/staff-action-auth";
 
 export type EventActionState = {
   status: "idle" | "error" | "success";
@@ -67,7 +70,7 @@ export async function createLiveEventAction(
   _previousState: EventActionState,
   formData: FormData,
 ): Promise<EventActionState> {
-  if (!(await hasStaffSession())) {
+  if (!(await getStaffActionActor())) {
     return sessionExpiredState();
   }
 
@@ -87,7 +90,7 @@ export async function updateLiveEventAction(
   _previousState: EventActionState,
   formData: FormData,
 ): Promise<EventActionState> {
-  if (!(await hasStaffSession())) {
+  if (!(await getStaffActionActor())) {
     return sessionExpiredState();
   }
 
@@ -110,7 +113,7 @@ export async function addLiveEventUpdateAction(
   _previousState: EventActionState,
   formData: FormData,
 ): Promise<EventActionState> {
-  if (!(await hasStaffSession())) {
+  if (!(await getStaffActionActor())) {
     return sessionExpiredState();
   }
 
@@ -144,7 +147,7 @@ export async function addLiveEventSubtaskAction(
   _previousState: EventActionState,
   formData: FormData,
 ): Promise<EventActionState> {
-  if (!(await hasStaffSession())) {
+  if (!(await getStaffActionActor())) {
     return sessionExpiredState();
   }
 
@@ -182,9 +185,7 @@ export async function updateLiveEventSubtaskAction(
   subtaskId: string,
   formData: FormData,
 ) {
-  if (!(await hasStaffSession())) {
-    redirect("/staff/login");
-  }
+  await requireStaffActionActor();
 
   const status = readSubtaskStatus(formData);
   const assignedStaffId =
@@ -214,7 +215,7 @@ export async function addLiveEventAttachmentsAction(
   _previousState: EventActionState,
   formData: FormData,
 ): Promise<EventActionState> {
-  if (!(await hasStaffSession())) {
+  if (!(await getStaffActionActor())) {
     return sessionExpiredState();
   }
 

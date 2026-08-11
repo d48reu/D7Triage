@@ -18,6 +18,14 @@ services:
         value: production
       - key: DATA_DIR
         value: /var/data
+      - key: AUTOMATED_BACKUPS_ENABLED
+        value: true
+      - key: AUTOMATED_BACKUP_INTERVAL_HOURS
+        value: 24
+      - key: AUTOMATED_BACKUP_RETENTION_COUNT
+        value: 3
+      - key: AUTOMATED_BACKUP_INITIAL_DELAY_SECONDS
+        value: 60
       - key: NEXT_PUBLIC_APP_URL
         sync: false
       - key: STAFF_PASSWORD

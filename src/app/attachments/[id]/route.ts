@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { getAttachmentById } from "@/lib/issues-repository";
+import { inlineContentDisposition } from "@/lib/http-content-disposition";
 import { hasStaffSession } from "@/lib/staff-auth";
 
 export const runtime = "nodejs";
@@ -25,7 +26,7 @@ export async function GET(
     return new NextResponse(file, {
       headers: {
         "Content-Type": attachment.mimeType || "application/octet-stream",
-        "Content-Disposition": `inline; filename="${attachment.fileName}"`,
+        "Content-Disposition": inlineContentDisposition(attachment.fileName),
         "Cache-Control": "private, max-age=60",
         "X-Content-Type-Options": "nosniff",
       },
