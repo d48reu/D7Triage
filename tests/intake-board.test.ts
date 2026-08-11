@@ -6,6 +6,7 @@ import {
   intakeDraftMatchesSavedCase,
   intakeCaseMatchesSearch,
   nextIntakeMonthLabel,
+  validateIntakeDraftForSave,
   type IntakeBoardCase,
 } from "../src/lib/intake-board";
 
@@ -84,5 +85,40 @@ test("recognizes a stale local draft that already exists as a saved case", () =>
       intakeCase,
     ),
     false,
+  );
+});
+
+test("explains why a new intake draft cannot be saved", () => {
+  assert.equal(
+    validateIntakeDraftForSave({
+      category: "TREES",
+      dateValue: "2026-08-11",
+      status: "received",
+      description: "Test",
+      addressText: "123 Main Street",
+    }),
+    "Call summary must be at least 12 characters before saving.",
+  );
+
+  assert.equal(
+    validateIntakeDraftForSave({
+      category: "",
+      dateValue: "2026-08-11",
+      status: "received",
+      description: "Tree blocks the sidewalk",
+      addressText: "",
+    }),
+    "Complete these required fields: category and address.",
+  );
+
+  assert.equal(
+    validateIntakeDraftForSave({
+      category: "TREES",
+      dateValue: "2026-08-11",
+      status: "received",
+      description: "Tree blocks the sidewalk",
+      addressText: "123 Main Street",
+    }),
+    null,
   );
 });

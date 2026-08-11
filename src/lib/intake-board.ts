@@ -26,6 +26,41 @@ export type IntakeDraftIdentity = {
   residentEmail: string;
 };
 
+export type IntakeDraftForSave = {
+  category: string;
+  dateValue: string;
+  status: string;
+  description: string;
+  addressText: string;
+};
+
+export function validateIntakeDraftForSave(draft: IntakeDraftForSave) {
+  const missingFields: string[] = [];
+
+  if (!draft.category.trim()) missingFields.push("category");
+  if (!draft.description.trim()) missingFields.push("call summary");
+  if (!draft.addressText.trim()) missingFields.push("address");
+  if (!draft.dateValue.trim()) missingFields.push("date");
+  if (!draft.status.trim()) missingFields.push("status");
+
+  if (missingFields.length > 0) {
+    if (missingFields.length === 1) {
+      return `Complete the required ${missingFields[0]} field before saving.`;
+    }
+
+    const lastField = missingFields.at(-1);
+    return `Complete these required fields: ${missingFields
+      .slice(0, -1)
+      .join(", ")} and ${lastField}.`;
+  }
+
+  if (draft.description.trim().length < 12) {
+    return "Call summary must be at least 12 characters before saving.";
+  }
+
+  return null;
+}
+
 function normalizeIdentityValue(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }

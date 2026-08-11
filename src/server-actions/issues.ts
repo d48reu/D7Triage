@@ -58,6 +58,7 @@ import {
 export type CreateIntakeCaseState = {
   status: "idle" | "error" | "success";
   message: string;
+  requiresReload?: boolean;
   reportId?: string;
   publicTrackingToken?: string;
   createdAt?: string;

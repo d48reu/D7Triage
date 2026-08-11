@@ -15,6 +15,7 @@
 
 # local app data
 /.data/
+/.codex-*-data/
 
 # next.js
 /.next/

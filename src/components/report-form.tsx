@@ -25,6 +25,7 @@ import {
   intakeDraftMatchesSavedCase,
   intakeCaseMatchesSearch,
   nextIntakeMonthLabel,
+  validateIntakeDraftForSave,
   type IntakeBoardCase,
 } from "@/lib/intake-board";
 import {
@@ -191,6 +192,23 @@ const AUTOSAVE_ACTION_STATE: UpdateIntakeCaseState = {
   status: "idle",
   message: "",
 };
+
+async function createStaffIntakeCaseWithRecovery(
+  previousState: CreateIntakeCaseState,
+  formData: FormData,
+): Promise<CreateIntakeCaseState> {
+  try {
+    return await createStaffIntakeCaseAction(previousState, formData);
+  } catch (error) {
+    console.error("[staff-intake:create] save request failed", error);
+    return {
+      status: "error",
+      message:
+        "The app was updated or the connection changed. Reload the page, then click Save case again. Your draft is safe.",
+      requiresReload: true,
+    };
+  }
+}
 
 export function ReportForm({
   demoMode = false,
@@ -1581,7 +1599,7 @@ function DraftCaseRow({
   onCreated: (createdCase: CreatedCaseMetadata) => void;
 }) {
   const [state, formAction, isPending] = useActionState(
-    createStaffIntakeCaseAction,
+    createStaffIntakeCaseWithRecovery,
     {
       status: "idle",
       message: "",
@@ -1589,6 +1607,7 @@ function DraftCaseRow({
   );
   const reportedCaseId = useRef<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [selectedPhotoNames, setSelectedPhotoNames] = useState<string[]>([]);
   const [locationState, setLocationState] = useState({
     latitude: "",
@@ -1623,6 +1642,13 @@ function DraftCaseRow({
   }, [onCreated, state]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    const nextValidationError = validateIntakeDraftForSave(row);
+    setValidationError(nextValidationError);
+    if (nextValidationError) {
+      event.preventDefault();
+      return;
+    }
+
     const categoryInput = event.currentTarget.elements.namedItem("category");
     if (categoryInput instanceof HTMLInputElement) {
       categoryInput.value = row.category;
@@ -1734,6 +1760,7 @@ function DraftCaseRow({
     <form
       action={formAction}
       onSubmit={handleSubmit}
+      noValidate
       className="grid min-h-24 bg-[#eaf5ff] text-sm text-[#323650] hover:bg-[#e1f0ff]"
       style={{ gridTemplateColumns }}
       aria-label={`Draft case for ${row.residentName || "new constituent"}`}
@@ -1931,13 +1958,25 @@ function DraftCaseRow({
           <span
             aria-live="polite"
             className={`max-w-36 text-center text-[10px] ${
-              state.status === "error" || photoError
+              state.status === "error" || photoError || validationError
                 ? "font-semibold text-[#9f1239]"
                 : "text-[#4d5672]"
             }`}
           >
-            {photoError || state.message || "Ctrl + Enter to save"}
+            {photoError ||
+              validationError ||
+              state.message ||
+              "Required: summary, address, category"}
           </span>
+          {state.requiresReload ? (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="w-full rounded border border-[#9f1239] bg-white px-2 py-1 text-[10px] font-semibold text-[#9f1239] hover:bg-[#fff1f4]"
+            >
+              Reload app
+            </button>
+          ) : null}
         </div>
       </Cell>
     </form>
