@@ -340,6 +340,10 @@ function applyCategoryBias(
     case "PARKING ENFORCEMENT":
       addScore("municipal", "Parking enforcement category context");
       break;
+    case "PERMITS":
+      addScore("municipal", "Building and zoning permit category context");
+      addScore("private_property", "Permit issue relates to a property");
+      break;
     case "NOISE":
       addScore("municipal", "Code/enforcement category context");
       break;

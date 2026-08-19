@@ -12,6 +12,7 @@ export const ISSUE_CATEGORIES = [
   "PARKING ENFORCEMENT",
   "PARKS",
   "PEACOCKS",
+  "PERMITS",
   "SIDEWALKS",
   "STREETLIGHTS",
   "TRAFFIC",
@@ -52,6 +53,8 @@ const LEGACY_CATEGORY_ALIASES: Record<string, IssueCategory> = {
   "streetlights and signage": "STREETLIGHTS",
   sidewalks: "SIDEWALKS",
   parks: "PARKS",
+  permit: "PERMITS",
+  permits: "PERMITS",
   tree: "TREES",
   trees: "TREES",
 };
@@ -109,6 +112,15 @@ const CATEGORY_INFERENCE_RULES: Array<{
       /\billegally parked\b/i,
       /\bblocked driveway\b/i,
       /\bparked (?:on|across) (?:the )?(?:sidewalk|driveway)\b/i,
+    ],
+  },
+  {
+    category: "PERMITS",
+    patterns: [
+      /\bpermits?\b/i,
+      /\bpermitting\b/i,
+      /\bbuilding permit\b/i,
+      /\bzoning approval\b/i,
     ],
   },
   {

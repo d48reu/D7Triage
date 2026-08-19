@@ -16,6 +16,7 @@ test("keeps staff categories alphabetical with Other / unsure last", () => {
     [...standardCategories].sort((left, right) => left.localeCompare(right)),
   );
   assert.equal(ISSUE_CATEGORIES.at(-1), "Other / unsure");
+  assert.equal(getRoutingRule("PERMITS")?.category, "PERMITS");
   assert.equal(getRoutingRule("TREES")?.category, "TREES");
 });
 
@@ -33,9 +34,19 @@ test("normalizes legacy category labels to the current staff category set", () =
     "PARKING ENFORCEMENT",
   );
   assert.equal(normalizeIssueCategory("Trees"), "TREES");
+  assert.equal(normalizeIssueCategory("Permit"), "PERMITS");
 });
 
-test("infers housing, storm-drain, parking, and tree categories from intake text", () => {
+test("infers housing, storm-drain, parking, permit, and tree categories from intake text", () => {
+  assert.equal(
+    inferIssueCategoryFromText({
+      category: "Other / unsure",
+      description: "Caller needs help checking the status of a building permit.",
+      addressText: "123 Main Street",
+    }),
+    "PERMITS",
+  );
+
   assert.equal(
     inferIssueCategoryFromText({
       category: "Other / unsure",

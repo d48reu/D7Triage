@@ -131,6 +131,17 @@ export const ROUTING_RULES: RoutingRule[] = [
       "Escalate aggressive behavior, traffic hazards, or repeated damage claims with documentation.",
   },
   {
+    category: "PERMITS",
+    likelyResponsibleParty:
+      "Miami-Dade County or municipal building and zoning department",
+    staffGuidance:
+      "Capture the property address, permit type or number if available, applicant or contractor, current status, deadline, and the specific assistance requested.",
+    residentExplanation:
+      "Permit concerns are routed to the building or zoning department responsible for the property and permit type.",
+    escalationNotes:
+      "Escalate unsafe active construction, stop-work issues, imminent deadlines, occupied-property impacts, or repeated unresolved permitting delays.",
+  },
+  {
     category: "PARKS",
     likelyResponsibleParty: "Parks department or facility operator",
     staffGuidance:
