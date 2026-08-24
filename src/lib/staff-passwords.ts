@@ -8,19 +8,19 @@ const HASH_LENGTH = 64;
 const STAFF_PASSWORD_HASHES = new Map<string, string>([
   [
     "alejandro servali",
-    "scrypt$iJgh5pEu2vHVr_V5CGiP4g$Sser50RT9Qyl2zftzb71aFbqN8SUNHuhS3wHBFHD3yW7zuleo6yRBcTy4hd7DYLJsAH6bdHoVwM_5ODDypkgRA",
+    "scrypt$wGwskssifGNTDP4PQBGS9w$ojooO6i7Eg-QToS8cpHrNQi5GXRKZLj0TreFWwMRXrg7uyd9F_y0OIJd2K37JUW8Bts7IhXhhpZyh72l4safyg",
   ],
   [
     "carol gustafson",
-    "scrypt$OzT5T077tCgeBQEMJ1Ee-Q$utrS-O5_oN9zajhIW0RIS_Ue1nEOVrv2gNaI-1GLQtDW_6gnKlNDBMiUF93mSGwLHWUosWUWsu8MkK5_n8Qy8A",
+    "scrypt$VqEcCjsMy8zdB4FhCb_VBg$4RQbIIYA7xry6gguCsSKsf__yKsIWyIhyuXuaOmOBdypln2GGYy0L2Ff3fyWiK9ryUTAN_qVf0TxCtSQ3OhqJw",
   ],
   [
     "david garcia",
-    "scrypt$pQeZSWvax0DPP80OA11mkQ$GNj8KJOTC_u9vDGH0NFJ1ChQ9tWAkAIxMYWT0Ir80UDV8b1h1UlxNibjqwZN4dkUIDosHw_R8vme1X7WFOOvHQ",
+    "scrypt$zuvujEkjXV8HoDYt0xtJDw$qzZqk-EgmUg4qL4dhdQ3ncdeW9OYF6yhpB_7KYwVGLbh8klAZC8zMw-6MrevcNXKjVHDtnyU2YMu2nO8Thr1Nw",
   ],
   [
     "diego abreu",
-    "scrypt$ZvcAUbLywGAb56ZJKCMEWw$Wa9D9hBASTeU3p8vBFwarYxqA3jhn-O8EtwrepqIi8NEvC0nIMBG2e8WOy_ba9qdL1WHPk8ew9ioV4K0v2y9WQ",
+    "scrypt$2fcsOAJrbPzbTVWE6_0rbQ$jWB-xAYYgKv6zfuOmwxqRsMes5dO7hve_cypJ4OFNKdiXwbi8wAncFAkuVweJ_bgsppWcBkjDCToMHYcQLI6wQ",
   ],
 ]);
 
