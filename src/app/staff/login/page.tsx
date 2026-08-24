@@ -36,16 +36,19 @@ export default function StaffLoginPage() {
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {demoMode
               ? "This demo uses lightweight password-based staff access. It is enough for review and walkthroughs, but not a production identity system."
-              : "This is local prototype auth. Set `STAFF_PASSWORD` in `.env.local` before sharing the staff views beyond your machine, and add `STAFF_SESSION_SECRET` before any broader pilot."}
+              : "Choose your name and enter the individual password issued to you."}
           </p>
           <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
             <div>
               Session length: {authConfig.sessionMaxAgeHours} hours
             </div>
             <div>
-              Password source:{" "}
-              {authConfig.usingDefaultPassword ? "development fallback" : ".env.local"}
+              Password access: {authConfig.individualPasswordCount} individual, {" "}
+              {authConfig.legacyPasswordStaffCount} existing password retained
             </div>
+            {authConfig.sharedPasswordFallbackEnabled ? (
+              <div>Development/demo shared-password fallback: enabled</div>
+            ) : null}
             <div>
               Session signing secret:{" "}
               {authConfig.usingDedicatedSessionSecret

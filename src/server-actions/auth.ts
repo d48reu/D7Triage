@@ -25,17 +25,13 @@ export async function loginStaffAction(
     ? getStaffMemberById(staffMemberId)
     : null;
 
-  if (!verifyStaffPassword(password)) {
+  if (
+    !staffMember?.isActive ||
+    !(await verifyStaffPassword(staffMember.name, password))
+  ) {
     return {
       status: "error",
-      message: "That password did not match the local staff password.",
-    };
-  }
-
-  if (!staffMember?.isActive) {
-    return {
-      status: "error",
-      message: "Choose your name before signing in.",
+      message: "The selected name and password did not match.",
     };
   }
 

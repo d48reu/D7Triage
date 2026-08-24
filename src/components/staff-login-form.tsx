@@ -5,7 +5,7 @@ import { loginStaffAction, type LoginState } from "@/server-actions/auth";
 
 const initialState: LoginState = {
   status: "idle",
-  message: "Use STAFF_PASSWORD from .env.local. The local fallback password is only meant for development.",
+  message: "Choose your name and enter your individual staff password.",
 };
 
 export function StaffLoginForm({
@@ -43,7 +43,7 @@ export function StaffLoginForm({
 
       <label className="block">
         <span className="mb-2 block text-sm font-medium text-slate-800">
-          Staff password
+          Your password
         </span>
         <input
           name="password"

@@ -2,7 +2,7 @@
 
 ## Already In Place
 
-- local staff login with configurable password
+- individual staff passwords stored as salted server-side hashes, with Karl's existing password retained through the protected deployment environment
 - optional dedicated session signing secret
 - configurable session lifetime
 - rate limiting for public report submissions by IP and email
@@ -16,7 +16,7 @@
 
 ## Still Needed Before A Broader Pilot
 
-1. replace local staff auth with a real identity provider
+1. replace local password auth with a county-managed identity provider
 2. keep using the Render persistent disk as the staff pilot source of truth
 3. confirm restore procedures for the Render data directory and downloaded pilot backup JSON
 4. confirm internal guidance for sensitive reports and data retention
@@ -26,7 +26,8 @@
 
 - database path: `.data/issues.db`
 - uploads path: `.data/uploads`
-- local staff password: `.env.local`
+- local/demo shared-password fallback: `.env.local`
+- production staff access: individual passwords issued to active users; Karl's existing password remains in `STAFF_PASSWORD`
 - session secret: `.env.local`
 - rate-limit values: `.env.local`
 - staff pilot operations: `docs/staff-pilot-operations.md`

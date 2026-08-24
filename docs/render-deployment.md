@@ -38,7 +38,7 @@ On Render, the app is configured to store data under:
 4. Render should detect [`render.yaml`](</C:/Users/d48re/OneDrive/Documents/New project 2/district-7-issue-reporter/render.yaml>).
 5. Before the first deploy, set:
    - `NEXT_PUBLIC_APP_URL` to the Render service URL once you know it
-   - `STAFF_PASSWORD` to a real password for the demo
+   - keep `STAFF_PASSWORD` set to Karl's existing password so his login remains unchanged
    - optionally `OPENAI_API_KEY` if you want AI routing live
 6. Deploy.
 
@@ -47,7 +47,7 @@ On Render, the app is configured to store data under:
 These must be set for a usable staff pilot:
 
 - `NEXT_PUBLIC_APP_URL`
-- `STAFF_PASSWORD`
+- `STAFF_PASSWORD` (Karl's retained password; do not rotate without coordinating with him)
 - `DEMO_MODE=false`
 - `NEXT_PUBLIC_DEMO_MODE=false`
 - `AUTOMATED_BACKUPS_ENABLED=true`

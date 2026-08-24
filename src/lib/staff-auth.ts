@@ -1,16 +1,22 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { isDemoMode } from "@/lib/demo-mode";
+import {
+  getConfiguredStaffCredentialNames,
+  verifyIndividualStaffPassword,
+} from "@/lib/staff-passwords";
 
 const STAFF_COOKIE_NAME = "district7_staff_session";
 const DEFAULT_STAFF_PASSWORD = "district7-local";
+const LEGACY_PASSWORD_STAFF_NAMES = new Set(["karl eugene boehm"]);
 
 export type StaffSession = {
   issuedAt: number;
   staffMemberId: string | null;
 };
 
-function getStaffPassword() {
+function getSharedStaffPassword() {
   const configuredPassword = process.env.STAFF_PASSWORD?.trim();
   if (configuredPassword) {
     return configuredPassword;
@@ -30,7 +36,7 @@ function getSessionSecret() {
   }
 
   if (process.env.NODE_ENV !== "production") {
-    return getStaffPassword();
+    return getSharedStaffPassword();
   }
 
   throw new Error("STAFF_SESSION_SECRET must be configured in production.");
@@ -46,12 +52,13 @@ function getSessionMaxAgeSeconds() {
 }
 
 export function getStaffAuthConfiguration() {
-  const configuredPassword = process.env.STAFF_PASSWORD?.trim();
   const configuredSecret = process.env.STAFF_SESSION_SECRET?.trim();
 
   return {
-    hasCustomPassword: Boolean(configuredPassword),
-    usingDefaultPassword: !configuredPassword,
+    individualPasswordCount: getConfiguredStaffCredentialNames().length,
+    legacyPasswordStaffCount: LEGACY_PASSWORD_STAFF_NAMES.size,
+    sharedPasswordFallbackEnabled:
+      isDemoMode() || process.env.NODE_ENV !== "production",
     usingDedicatedSessionSecret: Boolean(configuredSecret),
     sessionMaxAgeHours: getSessionMaxAgeSeconds() / 3600,
   };
@@ -180,6 +187,25 @@ export async function clearStaffSession() {
   cookieStore.delete(STAFF_COOKIE_NAME);
 }
 
-export function verifyStaffPassword(password: string) {
-  return password === getStaffPassword();
+export async function verifyStaffPassword(
+  staffMemberName: string,
+  password: string,
+) {
+  if (await verifyIndividualStaffPassword(staffMemberName, password)) {
+    return true;
+  }
+
+  if (
+    LEGACY_PASSWORD_STAFF_NAMES.has(
+      staffMemberName.trim().replace(/\s+/g, " ").toLowerCase(),
+    )
+  ) {
+    return password === getSharedStaffPassword();
+  }
+
+  if (isDemoMode() || process.env.NODE_ENV !== "production") {
+    return password === getSharedStaffPassword();
+  }
+
+  return false;
 }
