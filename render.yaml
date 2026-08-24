@@ -26,6 +26,26 @@ services:
         value: 3
       - key: AUTOMATED_BACKUP_INITIAL_DELAY_SECONDS
         value: 60
+      - key: OFFSITE_BACKUPS_ENABLED
+        value: true
+      - key: OFFSITE_BACKUP_BUCKET
+        sync: false
+      - key: OFFSITE_BACKUP_REGION
+        value: us-east-1
+      - key: OFFSITE_BACKUP_ENDPOINT
+        sync: false
+      - key: OFFSITE_BACKUP_ACCESS_KEY_ID
+        sync: false
+      - key: OFFSITE_BACKUP_SECRET_ACCESS_KEY
+        sync: false
+      - key: OFFSITE_BACKUP_ENCRYPTION_SECRET
+        sync: false
+      - key: OFFSITE_BACKUP_FORCE_PATH_STYLE
+        value: true
+      - key: OFFSITE_BACKUP_PREFIX
+        value: district-7
+      - key: OFFSITE_BACKUP_RETENTION_COUNT
+        value: 14
       - key: NEXT_PUBLIC_APP_URL
         sync: false
       - key: STAFF_PASSWORD

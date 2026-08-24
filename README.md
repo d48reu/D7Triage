@@ -64,6 +64,7 @@ For Render or other hosted environments that need persistent local storage, you 
 
 - `DATA_DIR`
 - `AUTOMATED_BACKUPS_ENABLED` and the backup interval/retention controls
+- `OFFSITE_BACKUPS_ENABLED` plus the S3-compatible storage and encryption variables
 
 ### Geocoding
 
@@ -91,6 +92,16 @@ The current prototype includes:
 - action-level staff identity checks for every staff mutation
 - named staff actors in case audit history
 - automatic database and attachment snapshots in the configured data directory
+- encrypted off-site backup upload, download, decryption, and integrity verification
+- privacy-safe staff reliability diagnostics with release identifiers
+
+### Verification
+
+Run the unit suite with `npm test`, lint with `npm run lint`, and the isolated
+front-desk browser workflow with `npm run test:e2e`. The browser test uses its
+own temporary database and covers blank-email intake, categories, autosave,
+assignments, attachments, horizontal scrolling, persistence after navigation,
+and stale-edit conflict protection.
 
 ## Important Local Paths
 
@@ -101,6 +112,7 @@ The current prototype includes:
 - Routing admin: `/staff/routing`
 - Analytics: `/staff/analytics`
 - Notifications: `/staff/notifications`
+- System health: `/staff/diagnostics`
 
 ## Current Auth
 

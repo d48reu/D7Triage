@@ -12,6 +12,7 @@ import {
 
 const intakeCase: IntakeBoardCase = {
   id: "report-1",
+  revision: 1,
   publicTrackingToken: "token-1",
   status: "received",
   assignedStaffId: null,

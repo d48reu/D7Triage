@@ -1,6 +1,6 @@
 # District 7 Issue Reporter Staff Pilot Operations
 
-Last updated: August 11, 2026
+Last updated: August 24, 2026
 
 This project is in an active staff pilot. Real cases are being entered, so the live Render data should be treated as operational data.
 
@@ -25,15 +25,49 @@ Each snapshot contains:
 - `historical-attachments`
 - `manifest.json`, with the timestamp, attachment count, and total attachment bytes
 
-Successful runs write `[backup] data snapshot completed` to the Render logs.
-Failures write `[backup] data snapshot failed` and must be investigated before
-assuming the data is protected.
+Every snapshot is opened read-only and checked with SQLite `PRAGMA
+integrity_check`. Attachment counts and byte totals are also compared with the
+manifest. Successful and failed runs write structured `backup_completed` or
+`backup_failed` events to the Render logs.
 
-These snapshots protect against an accidental record or file change, but they
-are stored on the same Render disk. Keep a separate off-platform copy for disk
-loss or account-level recovery.
+Local snapshots protect against an accidental record or file change, but they
+remain on the Render disk. The hosted configuration also supports encrypted
+off-site copies in any private S3-compatible bucket. For every snapshot, the app:
 
-## Off-Platform Backup
+1. verifies the local database and attachment manifest;
+2. creates an AES-256-GCM encrypted archive;
+3. uploads it to the configured private bucket;
+4. downloads that exact object again;
+5. decrypts and extracts it into a temporary directory; and
+6. repeats the database and attachment integrity checks before recording success.
+
+The **Tools → System Health** screen shows the current release, latest local
+verification, latest off-site restore check, and recent save failures.
+
+## Off-Site Backup Setup
+
+Provision a private S3-compatible bucket outside the Render service, then set
+these Render environment variables:
+
+- `OFFSITE_BACKUPS_ENABLED=true`
+- `OFFSITE_BACKUP_BUCKET`
+- `OFFSITE_BACKUP_REGION`
+- `OFFSITE_BACKUP_ENDPOINT` when the provider is not AWS S3
+- `OFFSITE_BACKUP_ACCESS_KEY_ID`
+- `OFFSITE_BACKUP_SECRET_ACCESS_KEY`
+- `OFFSITE_BACKUP_ENCRYPTION_SECRET` (at least 24 characters)
+- `OFFSITE_BACKUP_FORCE_PATH_STYLE=true` for providers that require it
+- `OFFSITE_BACKUP_PREFIX=district-7`
+- `OFFSITE_BACKUP_RETENTION_COUNT=14`
+
+Give the storage key access only to this one bucket. Store the encryption secret
+in a District-controlled password manager outside Render; losing it makes the
+encrypted backups unusable. Never place credentials or the encryption secret in
+Git. After redeploying, wait for the scheduled backup and confirm **Off-site
+backup: Verified** on **System Health**. A configured job is not considered
+healthy until the uploaded object has passed the download-and-restore check.
+
+## Manual Off-Platform Export
 
 At least weekly, and after any large import:
 
@@ -55,17 +89,19 @@ The pilot backup JSON includes:
 - jurisdiction/routing configuration
 - staff member and agency metadata
 
-The JSON does not include attachment file bytes. The automatic snapshots contain
-those bytes, but remain on the Render persistent disk. Store the JSON somewhere
-staff-controlled and periodically copy a complete snapshot off Render.
+The JSON does not include attachment file bytes. It is an additional portable
+export, not a replacement for the encrypted full snapshots.
 
 ## Restore Check
 
-Before using a snapshot, confirm that its `manifest.json`, `issues.db`, `uploads`,
-and `historical-attachments` entries are present. Open a copy of `issues.db` and
-run `PRAGMA integrity_check`; it must return `ok`. Restore only while the web
-service is stopped, and preserve the current `/var/data` directory until the
-restored app has been verified.
+The automated off-site job performs a full download, decrypt, extract, SQLite
+integrity check, and attachment-manifest check on each new object. For an actual
+recovery, stop the web service, download the selected encrypted object, preserve
+the current `/var/data` directory, and decrypt into a separate recovery location.
+Confirm that `manifest.json`, `issues.db`, `uploads`, and
+`historical-attachments` are present and that `PRAGMA integrity_check` returns
+`ok` before replacing live data. Keep the encryption secret and at least one
+verified backup outside the Render account.
 
 ## Weekly Case Quality Review
 

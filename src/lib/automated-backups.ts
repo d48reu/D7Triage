@@ -1,7 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+  verifyDataBackupSnapshot,
+  type BackupVerificationResult,
+} from "@/lib/backup-verification";
 import { getDataDir, getDbPath, getUploadsDir } from "@/lib/data-paths";
 import { backupIssuesDatabase } from "@/lib/issues-repository";
+import {
+  uploadDataBackupOffsite,
+  type OffsiteBackupResult,
+} from "@/lib/offsite-backups";
 
 const DEFAULT_INTERVAL_HOURS = 24;
 const DEFAULT_RETENTION_COUNT = 3;
@@ -10,7 +18,7 @@ const SNAPSHOT_PREFIX = "backup-";
 
 type BackupSchedulerGlobal = typeof globalThis & {
   __district7BackupSchedulerStarted?: boolean;
-  __district7BackupInFlight?: Promise<DataBackupResult> | null;
+  __district7BackupInFlight?: Promise<ScheduledDataBackupResult> | null;
 };
 
 export type DataBackupResult = {
@@ -19,6 +27,11 @@ export type DataBackupResult = {
   databasePath: string;
   attachmentFileCount: number;
   attachmentBytes: number;
+};
+
+export type ScheduledDataBackupResult = DataBackupResult & {
+  verification: BackupVerificationResult;
+  offsite: OffsiteBackupResult;
 };
 
 export async function createDataBackup(input?: {
@@ -105,7 +118,15 @@ export async function runAutomatedBackupIfDue() {
   );
   if (!(await isBackupDue(intervalHours))) return null;
 
-  const backupPromise = createDataBackup();
+  const backupPromise = (async () => {
+    const backup = await createDataBackup();
+    const verification = await verifyDataBackupSnapshot(backup.snapshotDir);
+    if (!verification.ok) {
+      throw new Error("Automated backup failed its SQLite or attachment verification.");
+    }
+    const offsite = await uploadDataBackupOffsite(backup);
+    return { ...backup, verification, offsite };
+  })();
   schedulerGlobal.__district7BackupInFlight = backupPromise;
   try {
     return await backupPromise;
@@ -133,17 +154,27 @@ export function startAutomatedBackupScheduler() {
     try {
       const result = await runAutomatedBackupIfDue();
       if (result) {
-        console.info("[backup] data snapshot completed", {
-          createdAt: result.createdAt,
-          snapshotDir: result.snapshotDir,
-          attachmentFileCount: result.attachmentFileCount,
-          attachmentBytes: result.attachmentBytes,
-        });
+        console.info(
+          JSON.stringify({
+            level: "info",
+            event: "backup_completed",
+            createdAt: result.createdAt,
+            attachmentFileCount: result.attachmentFileCount,
+            attachmentBytes: result.attachmentBytes,
+            databaseIntegrity: result.verification.databaseIntegrity,
+            offsiteStatus: result.offsite.status,
+          }),
+        );
       }
     } catch (error) {
-      console.error("[backup] data snapshot failed", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "backup_failed",
+          errorCode:
+            error instanceof Error ? error.name || "Error" : "unknown",
+        }),
+      );
     }
   };
 
@@ -155,6 +186,20 @@ export function startAutomatedBackupScheduler() {
 
 export function getBackupsDir() {
   return path.join(getDataDir(), "backups");
+}
+
+export async function getLatestDataBackupStatus() {
+  const backupsDir = getBackupsDir();
+  const snapshotNames = await listSnapshotNames(backupsDir);
+  if (snapshotNames.length === 0) return null;
+
+  const snapshotDir = path.join(backupsDir, snapshotNames[0]);
+  const stats = await fs.stat(snapshotDir);
+  return {
+    snapshotName: snapshotNames[0],
+    createdAt: stats.mtime.toISOString(),
+    verification: await verifyDataBackupSnapshot(snapshotDir),
+  };
 }
 
 function isAutomatedBackupEnabled() {

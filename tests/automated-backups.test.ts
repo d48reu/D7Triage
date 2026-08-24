@@ -12,6 +12,8 @@ test("automatic snapshots include a consistent database and all attachment trees
 
   const repository = await import("../src/lib/issues-repository");
   const backups = await import("../src/lib/automated-backups");
+  const verification = await import("../src/lib/backup-verification");
+  const offsite = await import("../src/lib/offsite-backups");
   const report = repository.createIssueReport({
     category: "Trees",
     description: "Tree branch blocking sidewalk",
@@ -47,6 +49,32 @@ test("automatic snapshots include a consistent database and all attachment trees
     .get(report.id) as { category: string } | undefined;
   snapshotDatabase.close();
   assert.equal(backedUpReport?.category, "Trees");
+
+  const verifiedSnapshot = await verification.verifyDataBackupSnapshot(
+    first.snapshotDir,
+  );
+  assert.equal(verifiedSnapshot.ok, true);
+  assert.equal(verifiedSnapshot.databaseIntegrity, "ok");
+  assert.equal(verifiedSnapshot.attachmentFileCount, 3);
+
+  const encryptedPath = path.join(dataDir, "encrypted-backup.tar.gz.enc");
+  const encryptionSecret = "test-only-backup-encryption-secret-2026";
+  await offsite.createEncryptedBackupBundle({
+    snapshotDir: first.snapshotDir,
+    outputPath: encryptedPath,
+    encryptionSecret,
+  });
+  assert.ok(fs.existsSync(encryptedPath));
+
+  const restoredSnapshot = await offsite.verifyEncryptedBackupBundle({
+    encryptedPath,
+    encryptionSecret,
+    expectedSnapshotName: path.basename(first.snapshotDir),
+    workDir: path.join(dataDir, "restore-work"),
+  });
+  assert.equal(restoredSnapshot.ok, true);
+  assert.equal(restoredSnapshot.databaseIntegrity, "ok");
+  assert.equal(restoredSnapshot.attachmentFileCount, 3);
 
   await backups.createDataBackup({
     now: new Date("2026-08-12T07:00:00.000Z"),

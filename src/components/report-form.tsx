@@ -13,6 +13,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { reportStaffClientEvent } from "@/components/staff-client-monitor";
 import {
   ISSUE_CATEGORIES,
   ISSUE_STATUSES,
@@ -179,7 +180,7 @@ type CreatedCaseMetadata = {
 };
 
 type AutosaveIndicator = {
-  status: "saved" | "saving" | "error";
+  status: "saved" | "saving" | "error" | "conflict";
   message: string;
 };
 
@@ -201,6 +202,13 @@ async function createStaffIntakeCaseWithRecovery(
     return await createStaffIntakeCaseAction(previousState, formData);
   } catch (error) {
     console.error("[staff-intake:create] save request failed", error);
+    reportStaffClientEvent({
+      eventType: "intake_save",
+      severity: "error",
+      action: "create_case",
+      outcome: "failed",
+      errorCode: "server_action_transport",
+    });
     return {
       status: "error",
       message:
@@ -245,21 +253,16 @@ export function ReportForm({
   useEffect(() => {
     if (draftsLoadedRef.current) return;
 
-    const loadTimer = window.setTimeout(() => {
-      if (draftsLoadedRef.current) return;
-
-      const loadedGroups = loadStoredGroups(
-        currentGroupLabel,
-        existingCases,
-        todayDateValue,
-      );
-      groupsRef.current = loadedGroups;
-      draftsLoadedRef.current = true;
-      setGroups(loadedGroups);
-      setDraftsLoaded(true);
-    }, 0);
-
-    return () => window.clearTimeout(loadTimer);
+    const loadedGroups = loadStoredGroups(
+      currentGroupLabel,
+      existingCases,
+      todayDateValue,
+    );
+    groupsRef.current = loadedGroups;
+    draftsLoadedRef.current = true;
+    // Draft restoration must complete as one state transition before editing.
+    setGroups(loadedGroups);
+    setDraftsLoaded(true);
   }, [currentGroupLabel, existingCases, todayDateValue]);
 
   useEffect(() => {
@@ -356,6 +359,13 @@ export function ReportForm({
       setNavigationSaveMessage(
         "A change could not be saved. You are still on this page so you can retry.",
       );
+      reportStaffClientEvent({
+        eventType: "intake_navigation",
+        severity: "error",
+        action: "flush_before_navigation",
+        outcome: "failed",
+        errorCode: "pending_save_failed",
+      });
     }
 
     function handleBeforeUnload(event: BeforeUnloadEvent) {
@@ -561,6 +571,18 @@ export function ReportForm({
         nextSavedCases,
         currentGroupLabel,
       ),
+    );
+  }
+
+  if (!draftsLoaded) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="mx-8 my-5 rounded border border-[#c9d3e8] bg-white px-4 py-5 text-sm font-semibold text-[#4d5672] max-md:mx-4"
+      >
+        Preparing the intake board…
+      </div>
     );
   }
 
@@ -954,6 +976,7 @@ function BoardScrollArea({
           aria-disabled={scrollMetrics.max <= 0}
           tabIndex={scrollMetrics.max > 0 ? 0 : -1}
           data-horizontal-scroll-track
+          data-testid="intake-horizontal-scroll-track"
           title="Drag to move left or right"
           className="relative h-5 min-w-24 flex-1 touch-none cursor-ew-resize rounded border border-[#c9d3e8] bg-[#f7f8fc] outline-none focus-visible:ring-2 focus-visible:ring-[#0073ea]"
           onPointerDown={(event) => {
@@ -1012,6 +1035,7 @@ function BoardScrollArea({
       </div>
       <div
         ref={boardScrollerRef}
+        data-testid="intake-board-scroller"
         onPointerDown={(event) => {
           if (event.target === event.currentTarget) {
             focusScrollControl(event.currentTarget);
@@ -1130,6 +1154,7 @@ function SavedCaseRow({
   const latestDraftRef = useRef(intakeCase);
   const explicitlySelectedCategoryRef = useRef<string | null>(null);
   const lastSavedSnapshotRef = useRef(savedCaseSnapshot(intakeCase));
+  const currentRevisionRef = useRef(intakeCase.revision);
   const queuedSnapshotsRef = useRef(new Set<string>());
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const queueAutosaveRef = useRef<
@@ -1207,15 +1232,38 @@ function SavedCaseRow({
 
     async function save(): Promise<boolean> {
       try {
+        const caseForSave = {
+          ...nextDraft,
+          revision: currentRevisionRef.current,
+        };
         const result = await updateStaffIntakeCaseAction(
           AUTOSAVE_ACTION_STATE,
           buildSavedCaseFormData(
-            nextDraft,
+            caseForSave,
             explicitlySelectedCategoryRef.current === nextDraft.category,
           ),
         );
 
+        if (result.status === "conflict") {
+          if (requestVersion === requestVersionRef.current) {
+            setSaveIndicator({
+              status: "conflict",
+              message:
+                result.message ||
+                "This case changed elsewhere. Reload before continuing.",
+            });
+          }
+          return false;
+        }
+
         if (result.status !== "success" || !result.updatedCase) {
+          reportStaffClientEvent({
+            eventType: "intake_save",
+            severity: "error",
+            action: "autosave_case",
+            outcome: "failed",
+            errorCode: "server_action_rejected",
+          });
           if (requestVersion === requestVersionRef.current) {
             setSaveIndicator({
               status: "error",
@@ -1226,6 +1274,7 @@ function SavedCaseRow({
         }
 
         const savedCase = result.updatedCase;
+        currentRevisionRef.current = savedCase.revision;
         if (explicitlySelectedCategoryRef.current === savedCase.category) {
           explicitlySelectedCategoryRef.current = null;
         }
@@ -1246,6 +1295,13 @@ function SavedCaseRow({
         }
         return true;
       } catch {
+        reportStaffClientEvent({
+          eventType: "intake_save",
+          severity: "error",
+          action: "autosave_case",
+          outcome: "failed",
+          errorCode: "server_action_transport",
+        });
         if (requestVersion === requestVersionRef.current) {
           setSaveIndicator({
             status: "error",
@@ -1340,6 +1396,13 @@ function SavedCaseRow({
     try {
       const result = await addStaffIntakeCaseAttachmentsAction(formData);
       if (result.status !== "success" || result.attachmentCount === undefined) {
+        reportStaffClientEvent({
+          eventType: "attachment_upload",
+          severity: "error",
+          action: "upload_case_files",
+          outcome: "failed",
+          errorCode: "server_action_rejected",
+        });
         setAttachmentMessage({
           status: "error",
           message: result.message || "Upload failed.",
@@ -1356,6 +1419,13 @@ function SavedCaseRow({
       onUpdated(updatedCase);
       setAttachmentMessage({ status: "success", message: result.message });
     } catch {
+      reportStaffClientEvent({
+        eventType: "attachment_upload",
+        severity: "error",
+        action: "upload_case_files",
+        outcome: "failed",
+        errorCode: "server_action_transport",
+      });
       setAttachmentMessage({
         status: "error",
         message: "Upload failed. Try again.",
@@ -1367,6 +1437,8 @@ function SavedCaseRow({
 
   return (
     <div
+      data-testid="intake-saved-row"
+      data-case-id={draft.id}
       className="grid min-h-24 bg-[#f7fbff] text-sm text-[#323650] hover:bg-[#eef7ff]"
       style={{ gridTemplateColumns }}
       aria-label={`Saved case for ${draft.residentName || "unnamed constituent"}`}
@@ -1557,7 +1629,8 @@ function SavedCaseRow({
             role="status"
             aria-live="polite"
             className={`max-w-36 text-center text-[10px] ${
-              saveIndicator.status === "error"
+              saveIndicator.status === "error" ||
+              saveIndicator.status === "conflict"
                 ? "font-semibold text-[#9f1239]"
                 : saveIndicator.status === "saved"
                   ? "font-semibold text-[#087f49]"
@@ -1573,6 +1646,15 @@ function SavedCaseRow({
               className="rounded border border-[#9f1239] bg-white px-2 py-1 text-[10px] font-semibold text-[#9f1239] hover:bg-[#fff1f4]"
             >
               Retry
+            </button>
+          ) : null}
+          {saveIndicator.status === "conflict" ? (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded border border-[#9f1239] bg-white px-2 py-1 text-[10px] font-semibold text-[#9f1239] hover:bg-[#fff1f4]"
+            >
+              Reload latest
             </button>
           ) : null}
         </div>
@@ -1758,6 +1840,7 @@ function DraftCaseRow({
 
   return (
     <form
+      data-testid="intake-draft-row"
       action={formAction}
       onSubmit={handleSubmit}
       noValidate
@@ -2384,6 +2467,7 @@ function validatePhotos(
 function savedCaseSnapshot(intakeCase: IntakeBoardCase) {
   return JSON.stringify([
     intakeCase.id,
+    intakeCase.revision,
     intakeCase.residentName,
     dateInputValue(intakeCase.createdAt),
     intakeCase.status,
@@ -2404,6 +2488,7 @@ function buildSavedCaseFormData(
 ) {
   const formData = new FormData();
   formData.set("reportId", intakeCase.id);
+  formData.set("revision", String(intakeCase.revision));
   formData.set("residentName", intakeCase.residentName);
   formData.set("createdDate", dateInputValue(intakeCase.createdAt));
   formData.set("status", intakeCase.status);

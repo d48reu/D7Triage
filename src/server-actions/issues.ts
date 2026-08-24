@@ -27,6 +27,7 @@ import { generateAiRoutingSuggestion } from "@/lib/ai-routing";
 import { isEmailAddress } from "@/lib/contact-details";
 import { getUploadsDir } from "@/lib/data-paths";
 import { resolveReportLocationIntelligence } from "@/lib/report-location-intelligence";
+import { recordOperationalEvent } from "@/lib/operational-events";
 import { sendStaffAssignmentNotification } from "@/lib/staff-assignment-notifications";
 import { canStaffMemberMarkAssignmentSeen } from "@/lib/staff-inbox";
 import {
@@ -47,12 +48,16 @@ import {
   listReferrals,
   markIssueAsDistinct,
   markIssueAsDuplicate,
+  IssueRevisionConflictError,
+  requireIssueRevision,
+  runIssueMutationTransaction,
   updateIssueLocationIntelligence,
   updateIssueCreatedAt,
   updateIssueDetails,
   updateAiSuggestionFeedback,
   updateReferralOutcome,
   updateIssueStatus,
+  type IssueReport,
 } from "@/lib/issues-repository";
 
 export type CreateIntakeCaseState = {
@@ -67,7 +72,7 @@ export type CreateIntakeCaseState = {
 };
 
 export type UpdateIntakeCaseState = {
-  status: "idle" | "error" | "success";
+  status: "idle" | "error" | "success" | "conflict";
   message: string;
   updatedCase?: IntakeBoardCase;
 };
@@ -585,28 +590,7 @@ export async function createStaffIntakeCaseAction(
     publicTrackingToken: report.publicTrackingToken,
     createdAt: report.createdAt,
     attachmentCount,
-    createdCase: {
-      id: createdReport.id,
-      publicTrackingToken: createdReport.publicTrackingToken,
-      status: createdReport.status,
-      assignedStaffId: createdReport.assignedStaffId,
-      category: createdReport.category,
-      description: createdReport.description,
-      intakeNotes: createdReport.intakeNotes,
-      resolutionNotes: createdReport.resolutionNotes,
-      addressText: createdReport.addressText,
-      residentName: createdReport.residentName ?? "",
-      residentEmail: createdReport.residentEmail,
-      residentPhone: createdReport.residentPhone ?? "",
-      createdAt: createdReport.createdAt,
-      districtLabel: formatDistrictHintStatus(
-        analyzeReportJurisdiction(
-          createdReport,
-          getJurisdictionConfig(),
-        ).districtHintStatus,
-      ),
-      attachmentCount,
-    },
+    createdCase: toIntakeBoardCase(createdReport, attachmentCount),
   };
 }
 
@@ -622,6 +606,32 @@ function parseStaffCreatedDate(value: string) {
   }
 
   return createdAt.toISOString();
+}
+
+function toIntakeBoardCase(
+  report: IssueReport,
+  attachmentCount = listAttachments(report.id).length,
+): IntakeBoardCase {
+  return {
+    id: report.id,
+    revision: report.revision,
+    publicTrackingToken: report.publicTrackingToken,
+    status: report.status,
+    assignedStaffId: report.assignedStaffId,
+    category: report.category,
+    description: report.description,
+    intakeNotes: report.intakeNotes,
+    resolutionNotes: report.resolutionNotes,
+    addressText: report.addressText,
+    residentName: report.residentName ?? "",
+    residentEmail: report.residentEmail,
+    residentPhone: report.residentPhone ?? "",
+    createdAt: report.createdAt,
+    districtLabel: formatDistrictHintStatus(
+      analyzeReportJurisdiction(report, getJurisdictionConfig()).districtHintStatus,
+    ),
+    attachmentCount,
+  };
 }
 
 export async function updateStaffIntakeCaseAction(
@@ -647,6 +657,13 @@ export async function updateStaffIntakeCaseAction(
   const report = reportId ? getIssueReportById(reportId) : null;
   if (!report) {
     return { status: "error", message: "Case not found." };
+  }
+  const expectedRevision = Number(formData.get("revision"));
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+    return {
+      status: "error",
+      message: "Reload this page before editing this case.",
+    };
   }
 
   const submittedCategory = String(formData.get("category") ?? "").trim();
@@ -784,65 +801,123 @@ export async function updateStaffIntakeCaseAction(
     ),
   ].filter((change): change is CaseDetailAuditChange => Boolean(change));
 
-  updateIssueDetails({
-    reportId,
-    category,
-    description,
-    intakeNotes,
-    resolutionNotes,
-    addressText,
-    residentName,
-    residentEmail,
-    residentPhone,
-    preferredLanguage: report.preferredLanguage,
-    contactConsent: report.contactConsent,
-    newsletterOptIn: report.newsletterOptIn,
-  });
+  const locationIntelligence = addressChanged
+    ? await resolveReportLocationIntelligence({
+        addressText,
+        latitude: null,
+        longitude: null,
+      })
+    : null;
+  const detailFields = new Set([
+    "category",
+    "description",
+    "intakeNotes",
+    "resolutionNotes",
+    "addressText",
+    "residentName",
+    "residentEmail",
+    "residentPhone",
+  ]);
+  const detailsChanged = detailChanges.some((change) =>
+    detailFields.has(change.fieldName),
+  );
 
-  if (report.createdAt.slice(0, 10) !== createdDate) {
-    updateIssueCreatedAt({ reportId, createdAt });
-  }
+  try {
+    runIssueMutationTransaction(() => {
+      requireIssueRevision(reportId, expectedRevision);
 
-  if (addressChanged) {
-    const locationIntelligence = await resolveReportLocationIntelligence({
-      addressText,
-      latitude: null,
-      longitude: null,
+      if (detailsChanged) {
+        updateIssueDetails({
+          reportId,
+          category,
+          description,
+          intakeNotes,
+          resolutionNotes,
+          addressText,
+          residentName,
+          residentEmail,
+          residentPhone,
+          preferredLanguage: report.preferredLanguage,
+          contactConsent: report.contactConsent,
+          newsletterOptIn: report.newsletterOptIn,
+        });
+      }
+
+      if (report.createdAt.slice(0, 10) !== createdDate) {
+        updateIssueCreatedAt({ reportId, createdAt });
+      }
+
+      if (locationIntelligence) {
+        updateIssueLocationIntelligence({
+          reportId,
+          ...locationIntelligence,
+        });
+      }
+
+      if (report.status !== nextStatus) {
+        updateIssueStatus({ reportId, status: nextStatus });
+      }
+
+      if (assignmentChanged) {
+        assignIssueReport({
+          reportId,
+          staffMemberId: submittedStaffMemberId,
+        });
+      }
+
+      if (detailChanges.length > 0) {
+        addIssueAuditEvents({
+          reportId,
+          actorLabel: actor.actorLabel,
+          changes: detailChanges,
+        });
+        addStaffNote({
+          reportId,
+          body: `Case updated from the intake board. Updated fields: ${detailChanges
+            .map((change) => change.fieldLabel.toLowerCase())
+            .join(", ")}.`,
+        });
+      }
     });
-    updateIssueLocationIntelligence({
-      reportId,
-      ...locationIntelligence,
+  } catch (error) {
+    if (error instanceof IssueRevisionConflictError) {
+      const currentReport = getIssueReportById(reportId);
+      recordOperationalEvent({
+        eventType: "intake_save",
+        severity: "warning",
+        action: "autosave_case",
+        outcome: "conflict",
+        errorCode: "stale_revision",
+        route: "/staff/intake-board",
+        staffMemberId: actor.staffMemberId,
+      });
+      return {
+        status: "conflict",
+        message:
+          "Someone else changed this case. Reload before continuing so their work is not overwritten.",
+        updatedCase: currentReport ? toIntakeBoardCase(currentReport) : undefined,
+      };
+    }
+
+    recordOperationalEvent({
+      eventType: "intake_save",
+      severity: "error",
+      action: "autosave_case",
+      outcome: "failed",
+      errorCode: error instanceof Error ? error.name : "unknown",
+      route: "/staff/intake-board",
+      staffMemberId: actor.staffMemberId,
     });
+    return {
+      status: "error",
+      message: "Changes could not be saved. Try again or reload the page.",
+    };
   }
 
-  if (report.status !== nextStatus) {
-    updateIssueStatus({ reportId, status: nextStatus });
-  }
-
-  if (assignmentChanged) {
-    assignIssueReport({
+  if (assignmentChanged && submittedStaffMemberId) {
+    await notifyAssignedStaff({
       reportId,
       staffMemberId: submittedStaffMemberId,
-    });
-    if (submittedStaffMemberId) {
-      await notifyAssignedStaff({
-        reportId,
-        staffMemberId: submittedStaffMemberId,
-      });
-    }
-  }
-
-  if (detailChanges.length > 0) {
-    addIssueAuditEvents({
-      reportId,
-      actorLabel: actor.actorLabel,
-      changes: detailChanges,
-    });
-    addStaffNote({
-      reportId,
-      body: `Case updated from the intake board. Updated fields: ${detailChanges
-        .map((change) => change.fieldLabel.toLowerCase())
-        .join(", ")}.`,
     });
   }
 
@@ -862,28 +937,7 @@ export async function updateStaffIntakeCaseAction(
     status: "success",
     message:
       detailChanges.length > 0 ? "Changes saved." : "No changes to save.",
-    updatedCase: {
-      id: updatedReport.id,
-      publicTrackingToken: updatedReport.publicTrackingToken,
-      status: updatedReport.status,
-      assignedStaffId: updatedReport.assignedStaffId,
-      category: updatedReport.category,
-      description: updatedReport.description,
-      intakeNotes: updatedReport.intakeNotes,
-      resolutionNotes: updatedReport.resolutionNotes,
-      addressText: updatedReport.addressText,
-      residentName: updatedReport.residentName ?? "",
-      residentEmail: updatedReport.residentEmail,
-      residentPhone: updatedReport.residentPhone ?? "",
-      createdAt: updatedReport.createdAt,
-      districtLabel: formatDistrictHintStatus(
-        analyzeReportJurisdiction(
-          updatedReport,
-          getJurisdictionConfig(),
-        ).districtHintStatus,
-      ),
-      attachmentCount: listAttachments(reportId).length,
-    },
+    updatedCase: toIntakeBoardCase(updatedReport),
   };
 }
 

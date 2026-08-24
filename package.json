@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/**/*.test.ts"
+    "test": "tsx --test tests/**/*.test.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1116.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "better-sqlite3": "^12.9.0",
@@ -18,9 +21,11 @@
     "openai": "^6.34.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "resend": "^6.12.2"
+    "resend": "^6.12.2",
+    "tar": "^7.5.22"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
@@ -29,7 +34,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^16.2.7",
-    "playwright": "^1.60.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5"

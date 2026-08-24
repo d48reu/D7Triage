@@ -46,6 +46,7 @@ let db: Database.Database | null = null;
 
 export type IssueReport = {
   id: string;
+  revision: number;
   publicTrackingToken: string;
   status: IssueStatus;
   assignedStaffId: string | null;
@@ -275,6 +276,7 @@ export type ManagedRoutingRule = {
 
 type IssueReportRow = {
   id: string;
+  revision: number;
   public_tracking_token: string;
   status: IssueStatus;
   assigned_staff_id: string | null;
@@ -942,6 +944,12 @@ function ensureSchemaMigrations(database: Database.Database) {
     database.exec("alter table jurisdiction_settings add column county_commission_districts_geojson text;");
   }
 
+  if (!hasColumn(database, "issue_reports", "revision")) {
+    database.exec(
+      "alter table issue_reports add column revision integer not null default 1;",
+    );
+  }
+
   database.exec("create unique index if not exists idx_routing_rules_category_municipality on routing_rules(category, ifnull(municipality_name, ''));");
 
   database.exec(`
@@ -1292,6 +1300,7 @@ function getDb() {
   db.exec(`
     create table if not exists issue_reports (
       id text primary key,
+      revision integer not null default 1,
       public_tracking_token text not null unique,
       status text not null,
       assigned_staff_id text references staff_members(id) on delete set null,
@@ -1550,6 +1559,26 @@ export function getIssuesDatabase() {
   return getDb();
 }
 
+export class IssueRevisionConflictError extends Error {
+  constructor() {
+    super("This case changed after it was loaded.");
+    this.name = "IssueRevisionConflictError";
+  }
+}
+
+export function runIssueMutationTransaction<T>(callback: () => T) {
+  return getDb().transaction(callback).immediate();
+}
+
+export function requireIssueRevision(reportId: string, expectedRevision: number) {
+  const row = getDb()
+    .prepare("select revision from issue_reports where id = ?")
+    .get(reportId) as { revision: number } | undefined;
+  if (!row || row.revision !== expectedRevision) {
+    throw new IssueRevisionConflictError();
+  }
+}
+
 export async function backupIssuesDatabase(destinationPath: string) {
   return getDb().backup(destinationPath);
 }
@@ -1557,6 +1586,7 @@ export async function backupIssuesDatabase(destinationPath: string) {
 function mapReport(row: IssueReportRow): IssueReport {
   return {
     id: row.id,
+    revision: row.revision,
     publicTrackingToken: row.public_tracking_token,
     status: row.status,
     assignedStaffId: row.assigned_staff_id,
@@ -2546,7 +2576,8 @@ export function updateIssueLocationIntelligence(input: {
            municipality_name = ?, municipality_code = ?, municipality_lookup_status = ?,
            municipality_source = ?, municipality_matched_at = ?,
            parcel_lookup_status = ?, parcel_folio = ?, parcel_address = ?, parcel_owner = ?,
-           right_of_way_hint = ?, parcel_matched_at = ?, updated_at = ?
+           right_of_way_hint = ?, parcel_matched_at = ?, revision = revision + 1,
+           updated_at = ?
        where id = ?`,
     )
     .run(
@@ -2606,7 +2637,7 @@ export function updateIssueDetails(input: {
        set category = ?, description = ?, intake_notes = ?, resolution_notes = ?, address_text = ?,
            resident_name = ?, resident_email = ?, resident_phone = ?,
            preferred_language = ?, contact_consent = ?, newsletter_opt_in = ?,
-           newsletter_opt_in_at = ?, updated_at = ?
+           newsletter_opt_in_at = ?, revision = revision + 1, updated_at = ?
        where id = ?`,
     )
     .run(
@@ -2636,7 +2667,7 @@ export function updateIssueCreatedAt(input: {
   getDb()
     .prepare(
       `update issue_reports
-       set created_at = ?, updated_at = ?
+       set created_at = ?, revision = revision + 1, updated_at = ?
        where id = ?`,
     )
     .run(input.createdAt, nowIso(), input.reportId);
@@ -2653,7 +2684,8 @@ export function assignIssueReport(input: {
   getDb()
     .prepare(
       `update issue_reports
-       set assigned_staff_id = ?, assigned_at = ?, updated_at = ?
+       set assigned_staff_id = ?, assigned_at = ?, revision = revision + 1,
+           updated_at = ?
        where id = ?`,
     )
     .run(staffMemberId, staffMemberId ? now : null, now, input.reportId);
@@ -2919,7 +2951,7 @@ export function updateNotificationReview(input: {
     .prepare(
       `update issue_reports
        set notification_review_status = ?, notification_review_note = ?,
-           notification_reviewed_at = ?, updated_at = ?
+           notification_reviewed_at = ?, revision = revision + 1, updated_at = ?
        where id = ?`,
     )
     .run(
@@ -3242,7 +3274,8 @@ export function markIssueAsDuplicate(input: {
       .prepare(
         `update issue_reports
          set status = ?, duplicate_of_report_id = ?, duplicate_review_decision = ?,
-             duplicate_reviewed_at = ?, duplicate_review_note = ?, updated_at = ?
+             duplicate_reviewed_at = ?, duplicate_review_note = ?,
+             revision = revision + 1, updated_at = ?
          where id = ?`,
       )
       .run(
@@ -3300,7 +3333,8 @@ export function markIssueAsDistinct(input: {
       .prepare(
         `update issue_reports
          set status = ?, duplicate_of_report_id = null, duplicate_review_decision = ?,
-             duplicate_reviewed_at = ?, duplicate_review_note = ?, updated_at = ?
+             duplicate_reviewed_at = ?, duplicate_review_note = ?,
+             revision = revision + 1, updated_at = ?
          where id = ?`,
       )
       .run(
@@ -3345,7 +3379,9 @@ export function updateIssueStatus(input: {
 
   database.transaction(() => {
     database
-      .prepare("update issue_reports set status = ?, updated_at = ? where id = ?")
+      .prepare(
+        "update issue_reports set status = ?, revision = revision + 1, updated_at = ? where id = ?",
+      )
       .run(input.status, updatedAt, input.reportId);
 
     database
@@ -3495,7 +3531,9 @@ export function addReferral(input: {
       );
 
     database
-      .prepare("update issue_reports set status = ?, updated_at = ? where id = ?")
+      .prepare(
+        "update issue_reports set status = ?, revision = revision + 1, updated_at = ? where id = ?",
+      )
       .run("routed", createdAt, input.reportId);
 
     database

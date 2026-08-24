@@ -8,6 +8,7 @@ const ACTION_FILES = [
   "events.ts",
   "issues.ts",
   "notifications.ts",
+  "operations.ts",
   "routing.ts",
 ];
 

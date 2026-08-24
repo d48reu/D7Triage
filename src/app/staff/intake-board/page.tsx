@@ -36,6 +36,7 @@ export default async function StaffIntakeBoardPage() {
   }));
   const existingCases: IntakeBoardCase[] = listIssueReports().map((report) => ({
     id: report.id,
+    revision: report.revision,
     publicTrackingToken: report.publicTrackingToken,
     status: report.status,
     assignedStaffId: report.assignedStaffId,

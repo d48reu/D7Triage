@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { StaffClientMonitor } from "@/components/staff-client-monitor";
 import { logoutStaffAction } from "@/server-actions/auth";
 
 type StaffSection =
@@ -11,7 +12,8 @@ type StaffSection =
   | "routing"
   | "analytics"
   | "notifications"
-  | "history";
+  | "history"
+  | "diagnostics";
 
 export function StaffHeader({
   current,
@@ -24,6 +26,7 @@ export function StaffHeader({
 }) {
   return (
     <header className="border-b border-slate-200 bg-white">
+      <StaffClientMonitor />
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between">
         <div>
           <Link href="/staff" className="text-sm font-medium text-sky-700">
@@ -69,7 +72,8 @@ export function StaffHeader({
                 current === "routing" ||
                   current === "analytics" ||
                   current === "notifications" ||
-                  current === "history",
+                  current === "history" ||
+                  current === "diagnostics",
               )} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
             >
               Tools
@@ -89,6 +93,12 @@ export function StaffHeader({
               </ToolLink>
               <ToolLink href="/staff/history" active={current === "history"}>
                 Historical Archive
+              </ToolLink>
+              <ToolLink
+                href="/staff/diagnostics"
+                active={current === "diagnostics"}
+              >
+                System Health
               </ToolLink>
             </div>
           </details>

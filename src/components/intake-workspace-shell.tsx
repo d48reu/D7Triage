@@ -12,6 +12,7 @@ const STAFF_LINKS = [
   { href: "/staff/analytics", label: "Analytics", shortLabel: "AN" },
   { href: "/staff/notifications", label: "Notifications", shortLabel: "NT" },
   { href: "/staff/history", label: "Historical Archive", shortLabel: "HA" },
+  { href: "/staff/diagnostics", label: "System Health", shortLabel: "SH" },
 ] as const;
 
 export function IntakeWorkspaceShell({ children }: { children: ReactNode }) {

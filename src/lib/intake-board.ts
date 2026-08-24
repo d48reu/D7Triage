@@ -1,5 +1,6 @@
 export type IntakeBoardCase = {
   id: string;
+  revision: number;
   publicTrackingToken: string;
   status: string;
   assignedStaffId: string | null;
