@@ -24,11 +24,11 @@ export default async function EditStaffReportPage({
     notFound();
   }
 
-  const suggestedCategory = inferIssueCategoryFromText({
-    category: report.category,
-    description: report.description,
-    addressText: report.addressText,
-  });
+  const savedCategory = ISSUE_CATEGORIES.find((category) => category === report.category);
+  const suggestedCategory =
+    savedCategory && savedCategory !== "Other / unsure"
+      ? savedCategory
+      : inferIssueCategoryFromText(report);
   const hasLegacyCategory = report.category !== suggestedCategory;
 
   return (

@@ -90,6 +90,16 @@ export const ROUTING_RULES: RoutingRule[] = [
       "Flag accessibility barriers, trip hazards near senior facilities, school routes, and blocked sidewalks.",
   },
   {
+    category: "POTHOLES",
+    likelyResponsibleParty: "Public Works / roadway maintenance",
+    staffGuidance:
+      "Record the nearest address or cross streets, direction of travel, and affected lane. Confirm who maintains the road before referring the repair.",
+    residentExplanation:
+      "Staff will use the location to identify the road maintenance team responsible for the repair.",
+    escalationNotes:
+      "Flag potholes that force vehicles into another lane or pose an immediate hazard to cyclists or drivers.",
+  },
+  {
     category: "TRAFFIC",
     likelyResponsibleParty: "Transportation planning / traffic engineering",
     staffGuidance:

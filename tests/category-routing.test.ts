@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   ISSUE_CATEGORIES,
   inferIssueCategoryFromText,
+  isKnownIssueCategoryInput,
   normalizeIssueCategory,
   resolveIntakeBoardCategory,
 } from "../src/lib/issue-types";
@@ -35,6 +36,59 @@ test("normalizes legacy category labels to the current staff category set", () =
   );
   assert.equal(normalizeIssueCategory("Trees"), "TREES");
   assert.equal(normalizeIssueCategory("Permit"), "PERMITS");
+});
+
+test("accepts pothole reports and gives them their own routing rule", () => {
+  assert.ok(ISSUE_CATEGORIES.includes("POTHOLES"));
+  for (const label of ["POTHOLES", "Pothole", "Potholes"]) {
+    assert.ok(isKnownIssueCategoryInput(label));
+    assert.equal(normalizeIssueCategory(label), "POTHOLES");
+  }
+  assert.equal(getRoutingRule("POTHOLES").category, "POTHOLES");
+});
+
+test("recognizes pothole descriptions even when they mention traffic", () => {
+  for (const description of [
+    "A pothole in the roadway is slowing traffic.",
+    "Drivers are swerving around several potholes.",
+  ]) {
+    assert.equal(
+      inferIssueCategoryFromText({
+        category: "TRAFFIC",
+        description,
+        addressText: "",
+      }),
+      "POTHOLES",
+    );
+  }
+});
+
+test("keeps general road reports under traffic when the legacy label includes potholes", () => {
+  assert.equal(
+    inferIssueCategoryFromText({
+      category: "Roads and potholes",
+      description: "Drivers are speeding through the intersection.",
+      addressText: "",
+    }),
+    "TRAFFIC",
+  );
+});
+
+test("changes a traffic case to potholes only after staff confirm the edit", () => {
+  const edit = {
+    currentCategory: "TRAFFIC",
+    submittedCategory: "POTHOLES",
+    description: "Cars are swerving across lanes.",
+    addressText: "",
+  };
+  assert.equal(
+    resolveIntakeBoardCategory({ ...edit, categoryChangeConfirmed: false }),
+    "TRAFFIC",
+  );
+  assert.equal(
+    resolveIntakeBoardCategory({ ...edit, categoryChangeConfirmed: true }),
+    "POTHOLES",
+  );
 });
 
 test("infers housing, storm-drain, parking, permit, and tree categories from intake text", () => {

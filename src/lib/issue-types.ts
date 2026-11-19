@@ -13,6 +13,7 @@ export const ISSUE_CATEGORIES = [
   "PARKS",
   "PEACOCKS",
   "PERMITS",
+  "POTHOLES",
   "SIDEWALKS",
   "STREETLIGHTS",
   "TRAFFIC",
@@ -43,7 +44,8 @@ const ISSUE_CATEGORY_SET = new Set<string>(ISSUE_CATEGORIES);
 const LEGACY_CATEGORY_ALIASES: Record<string, IssueCategory> = {
   "roads and potholes": "TRAFFIC",
   "road and potholes": "TRAFFIC",
-  potholes: "TRAFFIC",
+  pothole: "POTHOLES",
+  potholes: "POTHOLES",
   "traffic safety": "TRAFFIC",
   parking: "PARKING ENFORCEMENT",
   "parking enforcement": "PARKING ENFORCEMENT",
@@ -134,13 +136,16 @@ const CATEGORY_INFERENCE_RULES: Array<{
     ],
   },
   {
+    category: "POTHOLES",
+    patterns: [/\bpotholes?\b/i],
+  },
+  {
     category: "TRAFFIC",
     patterns: [
       /\btraffic\b/i,
       /\bspeed(?:ing)?\b/i,
       /\bfour-way stop\b/i,
       /\bstop sign\b/i,
-      /\bpothole\b/i,
       /\broadway\b/i,
     ],
   },
@@ -173,7 +178,11 @@ export function inferIssueCategoryFromText(input: {
   description: string;
   addressText: string;
 }): IssueCategory {
-  const text = `${input.category}\n${input.description}\n${input.addressText}`;
+  // Use the current label so a broad legacy category like "Roads and potholes"
+  // does not by itself identify a specific road defect.
+  const categoryLabel =
+    LEGACY_CATEGORY_ALIASES[input.category.trim().toLowerCase()] ?? input.category;
+  const text = `${categoryLabel}\n${input.description}\n${input.addressText}`;
 
   for (const rule of CATEGORY_INFERENCE_RULES) {
     if (rule.patterns.some((pattern) => pattern.test(text))) {
